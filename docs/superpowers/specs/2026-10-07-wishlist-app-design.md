@@ -155,6 +155,9 @@ wishlist-app/
 | Package manager | pnpm (pinned via the `packageManager` field) | Workspaces. Installed through npm rather than corepack, because Node 25+ doesn't bundle corepack |
 | Monorepo | Turborepo | Affected-only builds and tests, plus Vercel's free remote cache |
 | Runtime | Node 24 LTS (`.nvmrc`, `engines`, Vercel project setting) | The current LTS that Vercel supports |
+| Module system | ESM everywhere: `"type": "module"` in every package | NestJS 12 ships its packages as ESM only. Nest's own generator pairs ESM projects with Vitest |
+| TypeScript | Pinned to 6.0.x. **Not 7** | TS 7, the native Go port, no longer exports the JavaScript compiler API. `@nestjs/cli` (which pins `~6.0.2`), typescript-eslint (`<6.1`) and Next's build-time typecheck all depend on that API. Renovate is capped at `<7` |
+| Linting | ESLint 9.x. **Not 10** | eslint-config-next's plugins (`react`, `import`, `jsx-a11y`) declare peer support only up to ESLint 9. Renovate is capped at `<10` |
 | Web | Next.js, latest stable, App Router | Required by the brief |
 | API | NestJS, latest stable, Express adapter | Required by the brief. Vercel deploys it with zero configuration as one Function on Fluid compute |
 | Contract | Shared Zod schemas in `packages/contracts` | One source of truth: a breaking change fails typecheck in both apps in the same PR. OpenAPI is generated *from* the schemas. Rejected: class-validator DTOs plus OpenAPI codegen, which adds a codegen step and lets generated files drift, and only pays off for external consumers |
@@ -164,7 +167,7 @@ wishlist-app/
 | Email | Resend (free tier) on the owned domain | Real verification and reset emails |
 | CAPTCHA | Cloudflare Turnstile | Free and unobtrusive |
 | Errors | Sentry (free tier), both apps | Vercel Hobby keeps runtime logs for only 1 hour |
-| Tests | Jest, Testcontainers, supertest, Playwright, axe | §8 |
+| Tests | Vitest (with `unplugin-swc` for Nest's decorator metadata), Testcontainers, supertest, Playwright, axe | §8. Vitest instead of Jest because Jest's native ESM mode is still experimental, while Vitest is native ESM and is what Nest 12 generates for ESM projects. Its API mirrors Jest's |
 | UI | Tailwind, shadcn/ui (Radix primitives), react-hook-form, TanStack Query, dnd-kit | §7 |
 
 Only `apps/api` has database credentials. The web app has no database connection.
@@ -492,8 +495,8 @@ These are the initial values. They're configurable, and every limited endpoint r
 
 | Layer | Scope | Tooling |
 |---|---|---|
-| Unit | `projectWishlist` (full table); the SSRF address classifier (every blocked range, mapped and odd encodings); unfurl parsers against saved retailer HTML fixtures; token, remaining and rate-window arithmetic | Jest |
-| API integration | Every endpoint against real Postgres with real migrations. The database is never mocked | Jest, Nest testing module, supertest, Testcontainers (`postgres:17`) |
+| Unit | `projectWishlist` (full table); the SSRF address classifier (every blocked range, mapped and odd encodings); unfurl parsers against saved retailer HTML fixtures; token, remaining and rate-window arithmetic | Vitest |
+| API integration | Every endpoint against real Postgres with real migrations. The database is never mocked | Vitest, Nest testing module, supertest, Testcontainers (`postgres:17`) |
 | E2E | Golden paths: signup → read verification mail → verify → build list → reorder → share → claim in a second browser context → manage claim → spoiler toggle. Axe on every page | Playwright against production builds, with Postgres and Mailpit in docker compose |
 | Preview smoke | `/api/health` through the web origin, which proves the rewrite works; the landing page renders; an unknown share token returns 404. **Read-only**: nothing is written to the prod-cloned branch | Playwright against the PR's Vercel preview, using the automation-bypass token |
 
@@ -623,7 +626,7 @@ As of 2026-10-07 on the development machine:
 | pnpm | missing | `npm i -g pnpm@latest` |
 | vercel CLI | missing | `npm i -g vercel@latest` (≥ 48.4.0 is required for zero-config NestJS) |
 | gh | 2.99.0 | `gh extension install github/gh-stack` |
-| git | 2.43.0 | Works. Upgrading via `ppa:git-core/ppa` is optional |
+| git | 2.43.0 | Works (`gh stack` needs ≥ 2.36). Upgrading via `ppa:git-core/ppa` is optional |
 | docker | 29.8.2 | Keep |
 
 ## 12. Delivery
@@ -664,3 +667,4 @@ As of 2026-10-07 on the development machine:
 | D20 | No claim-link emails to gifters | Optional claimer email (spam-relay risk) |
 | D21 | Plain `<img>` for retailer images | `next/image` with any remote host allowed |
 | D22 | Nightly encrypted dump to R2 | Neon's 6-hour restore window only; Actions artifacts |
+| D23 | ESM with Vitest; TypeScript pinned to 6.0.x; ESLint pinned to 9.x (amended 2026-10-07 while planning) | CommonJS API with Jest; ESM with experimental Jest; TS 7; ESLint 10 |
