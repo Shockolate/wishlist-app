@@ -1,0 +1,9 @@
+{
+  "extends": "@wishlist/config/tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["tests", "playwright.config.ts", "playwright.smoke.config.ts"]
+}

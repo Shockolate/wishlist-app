@@ -9,3 +9,7 @@ A wishlist app for family and friends. Owners keep one list of gifts they'd like
 ## Stack
 
 Next.js (web) · NestJS (API) · Postgres on Neon · Vercel · GitHub Actions. TypeScript and ESM throughout, in a pnpm + Turborepo monorepo.
+
+## Local development
+
+See [docs/development.md](docs/development.md).

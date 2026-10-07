@@ -8,10 +8,12 @@
   },
   "scripts": {
     "build": "turbo run build",
+    "dev": "docker compose up -d --wait && turbo run dev",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:integration": "turbo run test:integration",
+    "test:e2e": "./scripts/e2e.sh",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
