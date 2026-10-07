@@ -16,6 +16,9 @@ jobs:
     name: checks
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      # The web build refuses to run without it; any bare origin works for a build-only check.
+      API_ORIGIN: http://localhost:3001
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
