@@ -1,0 +1,22 @@
+# Local development services. Postgres matches production's major version (Neon, Postgres 17).
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: wishlist
+      POSTGRES_PASSWORD: wishlist
+      POSTGRES_DB: wishlist
+    ports:
+      - '54329:5432' # not 5432, so it never collides with a Postgres already on this machine
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Init scripts only run against an empty data volume. Reset with `docker compose down -v`.
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U wishlist -d wishlist']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  pgdata:

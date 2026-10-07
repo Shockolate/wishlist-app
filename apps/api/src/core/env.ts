@@ -5,6 +5,7 @@ const EnvSchema = z.object({
   PORT: z.coerce.number().int().min(0).max(65_535).default(3001),
   /** Commit the deployment was built from; set by the deploy pipelines. */
   GIT_SHA: z.string().min(1).default('dev'),
+  DATABASE_URL: z.string().regex(/^postgres(ql)?:\/\//, 'must be a postgres:// connection string'),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

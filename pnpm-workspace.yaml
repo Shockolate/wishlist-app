@@ -3,3 +3,8 @@ packages:
   - packages/*
 allowBuilds:
   '@swc/core': true
+  esbuild: true
+  # Pulled in by Testcontainers' Docker client; none need their install scripts here.
+  cpu-features: false
+  protobufjs: false
+  ssh2: false
