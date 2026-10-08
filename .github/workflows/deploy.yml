@@ -3,6 +3,10 @@ name: Deploy
 # Production deploys run only from main, one at a time. A deploy already running is never
 # cancelled (it may be mid-migration). GitHub keeps only the newest *queued* run, so merging a
 # stack of N PRs ships the tip without deploying every intermediate commit.
+#
+# Trust model (spec addendum 2026-10-08 §2): `build` and `smoke` run workspace code and hold no
+# secrets. `settings`, `migrate`, `deploy-api` and `deploy-web` hold secrets and run only the
+# pinned Vercel CLI, pinned actions, or a --prod --ignore-scripts install for the built migrator.
 on:
   push:
     branches: [main]
@@ -20,16 +24,147 @@ defaults:
     shell: bash
 
 jobs:
-  deploy:
-    name: deploy
-    # Belt and braces with the environment's branch policy: workflow_dispatch from any other
-    # branch would otherwise migrate production and deploy unreviewed code.
+  guard:
+    name: guard
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    environment:
-      name: production
-      url: ${{ vars.APP_PRODUCTION_ORIGIN }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: scripts/assert-main-tip.sh
+
+  settings:
+    name: settings
+    needs: guard
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: scripts/assert-main-tip.sh
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Pin the Vercel CLI to the repo's version
+        run: echo "VERCEL_CLI_VERSION=$(jq -r '.devDependencies.vercel' package.json)" >> "$GITHUB_ENV"
+      - name: Pull project settings (IDs and settings only, never env files)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          API_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_API }}
+          WEB_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_WEB }}
+          npm_config_ignore_scripts: 'true'
+        run: |
+          for app in api web; do
+            id_var="${app^^}_PROJECT_ID"
+            VERCEL_PROJECT_ID="${!id_var}" npx --yes vercel@"$VERCEL_CLI_VERSION" pull --yes --environment=production
+            mkdir -p "vercel-settings/$app"
+            cp .vercel/project.json "vercel-settings/$app/project.json"
+            rm -rf .vercel
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: vercel-settings
+          path: vercel-settings/
+          retention-days: 1
+
+  build:
+    name: build
+    needs: settings
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      API_ORIGIN: ${{ vars.API_PRODUCTION_ORIGIN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Runs cold: there is no remote Turborepo cache (Plan 1 review M-2).
+      - name: Gates
+        run: pnpm turbo run lint typecheck test
+      - name: Build the migrator
+        run: pnpm turbo run build --filter=@wishlist/api
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: vercel-settings
+          path: vercel-settings
+      - name: Build both apps (no secrets in this job)
+        run: |
+          for app in api web; do
+            rm -rf .vercel && mkdir -p .vercel
+            cp "vercel-settings/$app/project.json" .vercel/project.json
+            pnpm exec vercel build --prod
+            mv .vercel/output "$app-output"
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: api-output
+          path: api-output
+          include-hidden-files: true
+          retention-days: 1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-output
+          path: web-output
+          include-hidden-files: true
+          retention-days: 1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: migrator
+          path: apps/api/dist
+          retention-days: 1
+
+  migrate:
+    name: migrate
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: scripts/assert-main-tip.sh
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      # Production dependencies only, and no install scripts: the only code that runs next to the
+      # database secret is ours plus drizzle-orm and pg.
+      - run: pnpm install --prod --frozen-lockfile --ignore-scripts --filter @wishlist/api
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: migrator
+          path: apps/api/dist
+      # Before the new API ships. Migrations must be backward-compatible with the API that is
+      # currently live (expand/contract, spec §10).
+      - name: Migrate production database
+        env:
+          DATABASE_URL_DIRECT: ${{ secrets.DATABASE_URL_DIRECT }}
+        run: node apps/api/dist/db/migrate-cli.js
+
+  deploy-api:
+    name: deploy-api
+    needs: migrate
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       API_ORIGIN: ${{ vars.API_PRODUCTION_ORIGIN }}
@@ -37,64 +172,89 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
-      # A re-run of an older deploy (e.g. after a transient failure) must not roll production back.
-      - name: Refuse to deploy a stale commit
+      - run: scripts/assert-main-tip.sh
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Pin the Vercel CLI to the repo's version
+        run: echo "VERCEL_CLI_VERSION=$(jq -r '.devDependencies.vercel' package.json)" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: vercel-settings
+          path: vercel-settings
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: api-output
+          path: .vercel/output
+      - run: scripts/check-vercel-output.sh .vercel/output
+      - name: Deploy API
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_API }}
+          npm_config_ignore_scripts: 'true'
         run: |
-          git fetch --no-tags --depth=1 origin main
-          tip=$(git rev-parse FETCH_HEAD)
-          if [[ "$tip" != "$GITHUB_SHA" ]]; then
-            echo "::error::main is at $tip but this run is for $GITHUB_SHA; refusing to deploy a stale commit."
-            exit 1
-          fi
+          cp vercel-settings/api/project.json .vercel/project.json
+          npx --yes vercel@"$VERCEL_CLI_VERSION" deploy --prebuilt --prod --env GIT_SHA="$GITHUB_SHA"
+      - name: Wait for the new API to serve traffic
+        run: scripts/wait-for-health.sh "$API_ORIGIN/api/health" "$GITHUB_SHA" 180
 
+  # After the API, so the new web app never talks to an older API.
+  deploy-web:
+    name: deploy-web
+    needs: deploy-api
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
+      url: ${{ vars.APP_PRODUCTION_ORIGIN }}
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: scripts/assert-main-tip.sh
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Pin the Vercel CLI to the repo's version
+        run: echo "VERCEL_CLI_VERSION=$(jq -r '.devDependencies.vercel' package.json)" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: vercel-settings
+          path: vercel-settings
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: web-output
+          path: .vercel/output
+      - run: scripts/check-vercel-output.sh .vercel/output
+      - name: Deploy web
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_WEB }}
+          npm_config_ignore_scripts: 'true'
+        run: |
+          cp vercel-settings/web/project.json .vercel/project.json
+          npx --yes vercel@"$VERCEL_CLI_VERSION" deploy --prebuilt --prod
+
+  smoke:
+    name: smoke
+    needs: deploy-web
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-
-      # Cheap with Turborepo's cache when the commit was already tested on its PR; a real check
-      # when it wasn't (e.g. a squash that differs from the tested PR head).
-      - name: Gates
-        run: pnpm turbo run lint typecheck test
-
-      # Before the new API ships. Migrations must be backward-compatible with the API that is
-      # currently live (expand/contract, spec §10).
-      - name: Migrate production database
-        run: pnpm --filter @wishlist/api db:migrate
-        env:
-          DATABASE_URL_DIRECT: ${{ secrets.DATABASE_URL_DIRECT }}
-
-      - name: Deploy API
-        env:
-          # The Vercel CLI reads VERCEL_TOKEN from the environment; never pass it as a flag, and
-          # only expose it to the steps that deploy.
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_API }}
-        run: |
-          pnpm exec vercel pull --yes --environment=production
-          pnpm exec vercel build --prod
-          pnpm exec vercel deploy --prebuilt --prod --env GIT_SHA="$GITHUB_SHA"
-
-      - name: Wait for the new API to serve traffic
-        run: scripts/wait-for-health.sh "$API_ORIGIN/api/health" "$GITHUB_SHA" 180
-
-      # After the API, so the new web app never talks to an older API.
-      - name: Deploy web
-        env:
-          # The Vercel CLI reads VERCEL_TOKEN from the environment; never pass it as a flag, and
-          # only expose it to the steps that deploy.
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_WEB }}
-        run: |
-          pnpm exec vercel pull --yes --environment=production
-          pnpm exec vercel build --prod
-          pnpm exec vercel deploy --prebuilt --prod
-
       - run: pnpm --filter @wishlist/e2e exec playwright install --with-deps chromium
-
       - name: Smoke test production
         run: pnpm --filter @wishlist/e2e test:smoke
         env:

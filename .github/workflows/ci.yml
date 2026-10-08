@@ -40,6 +40,8 @@ jobs:
           scripts/neon-sweep.test.sh
           scripts/vercel-url.test.sh
           scripts/preview-seed.test.sh
+          scripts/assert-main-tip.test.sh
+          scripts/check-vercel-output.test.sh
           node scripts/workflow-policy.test.mjs
       - run: pnpm turbo run lint typecheck test build
 

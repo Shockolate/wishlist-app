@@ -1,6 +1,11 @@
 name: Preview
 
 # No `branches:` filter: every layer of a stack gets its own preview.
+#
+# Trust model (spec addendum 2026-10-08 §2): `build-api`, `build-web` and `comment` hold no
+# secrets; `smoke` holds only the preview bypass secret; `settings`, `provision` and `deploy-web`
+# hold deploy or database secrets and run only the pinned Vercel CLI, pinned actions, or a
+# --prod --ignore-scripts install for the built migrator.
 on:
   pull_request:
     types: [opened, synchronize, reopened]
@@ -11,30 +16,66 @@ concurrency:
 
 permissions:
   contents: read
-  pull-requests: write
 
 defaults:
   run:
     shell: bash
 
+env:
+  PR_NUMBER: ${{ github.event.pull_request.number }}
+  HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+  # Deterministic, so the API can be told the web origin before the web preview exists
+  # (spec §10; spike C).
+  WEB_ALIAS: ${{ vars.PREVIEW_ALIAS_PREFIX }}${{ github.event.pull_request.number }}.vercel.app
+
 jobs:
-  preview:
-    name: preview
+  settings:
+    name: settings
     # Fork PRs receive no secrets, and bot PRs (Renovate) must not run unreviewed dependency code
-    # next to deploy credentials: both get CI but no preview.
+    # next to deploy credentials: both get CI but no preview. Every other job needs this one, so
+    # the skip propagates.
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.type != 'Bot'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
     environment: preview
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      PR_NUMBER: ${{ github.event.pull_request.number }}
-      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-      # Deterministic, so the API can be told the web origin before the web preview exists
-      # (spec §10; spike C).
-      WEB_ALIAS: ${{ vars.PREVIEW_ALIAS_PREFIX }}${{ github.event.pull_request.number }}.vercel.app
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Pin the Vercel CLI to the repo's version
+        run: echo "VERCEL_CLI_VERSION=$(jq -r '.devDependencies.vercel' package.json)" >> "$GITHUB_ENV"
+      - name: Pull project settings (IDs and settings only, never env files)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          API_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_API }}
+          WEB_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_WEB }}
+          npm_config_ignore_scripts: 'true'
+        run: |
+          for app in api web; do
+            id_var="${app^^}_PROJECT_ID"
+            VERCEL_PROJECT_ID="${!id_var}" npx --yes vercel@"$VERCEL_CLI_VERSION" pull --yes --environment=preview
+            mkdir -p "vercel-settings/$app"
+            cp .vercel/project.json "vercel-settings/$app/project.json"
+            rm -rf .vercel
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: vercel-settings
+          path: vercel-settings/
+          retention-days: 1
+
+  build-api:
+    name: build-api
+    needs: settings
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -45,14 +86,82 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Build the migrator
+        run: pnpm turbo run build --filter=@wishlist/api
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: vercel-settings
+          path: vercel-settings
+      - name: Build the API preview (no secrets in this job)
+        run: |
+          mkdir -p .vercel
+          cp vercel-settings/api/project.json .vercel/project.json
+          pnpm exec vercel build
+          mv .vercel/output api-output
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: api-output
+          path: api-output
+          include-hidden-files: true
+          retention-days: 1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: migrator
+          path: apps/api/dist
+          retention-days: 1
 
-      - name: Create or reuse the PR's database branch
+  # One job for everything that needs the branch's connection string: GitHub drops job outputs
+  # that contain masked values, so the URL can't be handed to another job.
+  provision:
+    name: provision
+    needs: build-api
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: preview
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+    outputs:
+      api_url: ${{ steps.api.outputs.url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      # Production dependencies only, and no install scripts (spec addendum §2).
+      - run: pnpm install --prod --frozen-lockfile --ignore-scripts --filter @wishlist/api
+      - name: Pin the Vercel CLI to the repo's version
+        run: echo "VERCEL_CLI_VERSION=$(jq -r '.devDependencies.vercel' package.json)" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: migrator
+          path: apps/api/dist
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: vercel-settings
+          path: vercel-settings
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: api-output
+          path: .vercel/output
+
+      - name: Check preview-seed exists
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+        run: scripts/preview-seed.sh check
+
+      - name: Create or reuse the PR's database branch (from preview-seed)
         id: db
         uses: neondatabase/create-branch-action@fb620d43d4c565abaf088b848a4e28e5c4ea4d9c # 6.3.1
         with:
           project_id: ${{ secrets.NEON_PROJECT_ID }}
           api_key: ${{ secrets.NEON_API_KEY }}
           branch_name: pr-${{ github.event.pull_request.number }}
+          parent_branch: preview-seed
 
       - name: Mask database credentials
         env:
@@ -62,24 +171,32 @@ jobs:
           echo "::add-mask::$DB_URL"
           echo "::add-mask::$DB_URL_POOLED"
 
+      # Review Focus #1: a pr-* branch created before previews switched to preview-seed is a
+      # production clone, and the action above reuses existing branches.
+      - name: Refuse a branch that descends from production
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+        run: scripts/preview-seed.sh assert-child "pr-$PR_NUMBER" preview-seed
+
       - name: Migrate the PR's database branch
-        run: pnpm --filter @wishlist/api db:migrate
         env:
           DATABASE_URL_DIRECT: ${{ steps.db.outputs.db_url }}
+        run: node apps/api/dist/db/migrate-cli.js
+
+      - run: scripts/check-vercel-output.sh .vercel/output
 
       - name: Deploy API preview
         id: api
         env:
-          # Read by the Vercel CLI from the environment; only the deploy steps get it.
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_API }}
           DATABASE_URL: ${{ steps.db.outputs.db_url_pooled }}
+          npm_config_ignore_scripts: 'true'
         run: |
-          pnpm exec vercel pull --yes --environment=preview
-          pnpm exec vercel build
-          # EMAIL_TRANSPORT=log: preview data is cloned from production, so it must never email
-          # real people (spec §10).
-          url=$(pnpm exec vercel deploy --prebuilt \
+          cp vercel-settings/api/project.json .vercel/project.json
+          # EMAIL_TRANSPORT=log: a preview never emails anyone, whatever data it holds (spec §10).
+          url=$(npx --yes vercel@"$VERCEL_CLI_VERSION" deploy --prebuilt \
             --env DATABASE_URL="$DATABASE_URL" \
             --env APP_ORIGIN="https://$WEB_ALIAS" \
             --env EMAIL_TRANSPORT=log \
@@ -91,20 +208,95 @@ jobs:
           API_URL: ${{ steps.api.outputs.url }}
         run: scripts/wait-for-health.sh "$API_URL/api/health" "$HEAD_SHA" 180
 
-      - name: Deploy web preview
+  build-web:
+    name: build-web
+    needs: provision
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      API_ORIGIN: ${{ needs.provision.outputs.api_url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: vercel-settings
+          path: vercel-settings
+      - name: Build the web preview (no secrets in this job)
+        run: |
+          mkdir -p .vercel
+          cp vercel-settings/web/project.json .vercel/project.json
+          pnpm exec vercel build
+          mv .vercel/output web-output
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-output
+          path: web-output
+          include-hidden-files: true
+          retention-days: 1
+
+  deploy-web:
+    name: deploy-web
+    needs: build-web
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: preview
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Pin the Vercel CLI to the repo's version
+        run: echo "VERCEL_CLI_VERSION=$(jq -r '.devDependencies.vercel' package.json)" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: vercel-settings
+          path: vercel-settings
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: web-output
+          path: .vercel/output
+      - run: scripts/check-vercel-output.sh .vercel/output
+      - name: Deploy the web preview and alias it
         env:
-          # Read by the Vercel CLI from the environment; only the deploy steps get it.
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_WEB }}
-          API_ORIGIN: ${{ steps.api.outputs.url }}
+          npm_config_ignore_scripts: 'true'
         run: |
-          pnpm exec vercel pull --yes --environment=preview
-          pnpm exec vercel build
-          url=$(pnpm exec vercel deploy --prebuilt | scripts/vercel-url.sh)
-          pnpm exec vercel alias set "$url" "$WEB_ALIAS"
+          cp vercel-settings/web/project.json .vercel/project.json
+          url=$(npx --yes vercel@"$VERCEL_CLI_VERSION" deploy --prebuilt | scripts/vercel-url.sh)
+          npx --yes vercel@"$VERCEL_CLI_VERSION" alias set "$url" "$WEB_ALIAS"
 
+  smoke:
+    name: smoke
+    needs: deploy-web
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: preview
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @wishlist/e2e exec playwright install --with-deps chromium
-
+      # The one exception to "no secrets next to a full install" (spec addendum §3.4): the bypass
+      # secret only unlocks viewing protected previews, which hold seed data, never production data.
       - name: Smoke test the preview
         run: pnpm --filter @wishlist/e2e test:smoke
         env:
@@ -112,6 +304,14 @@ jobs:
           EXPECTED_SHA: ${{ env.HEAD_SHA }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
 
+  comment:
+    name: comment
+    needs: smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
       - name: Comment preview links
         uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
         with:
@@ -120,5 +320,4 @@ jobs:
             **Preview** for ${{ env.HEAD_SHA }}
 
             - Web: https://${{ env.WEB_ALIAS }} (Vercel login required)
-            - API health: ${{ steps.api.outputs.url }}/api/health
-            - Database: Neon branch `pr-${{ env.PR_NUMBER }}`, cloned from production. Email is log-only.
+            - Database: Neon branch `pr-${{ env.PR_NUMBER }}`, created from `preview-seed` (seed data only, never production). Email is log-only.
