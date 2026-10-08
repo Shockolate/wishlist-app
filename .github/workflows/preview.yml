@@ -1,0 +1,113 @@
+name: Preview
+
+# No `branches:` filter: every layer of a stack gets its own preview.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  preview:
+    name: preview
+    # Fork PRs receive no secrets; they get CI but no preview.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: preview
+    env:
+      # The Vercel CLI reads VERCEL_TOKEN from the environment; never pass it as a flag.
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      # Deterministic, so the API can be told the web origin before the web preview exists
+      # (spec §10; spike C).
+      WEB_ALIAS: ${{ vars.PREVIEW_ALIAS_PREFIX }}${{ github.event.pull_request.number }}.vercel.app
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Create or reuse the PR's database branch
+        id: db
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+          branch_name: pr-${{ github.event.pull_request.number }}
+
+      - name: Mask database credentials
+        env:
+          DB_URL: ${{ steps.db.outputs.db_url }}
+          DB_URL_POOLED: ${{ steps.db.outputs.db_url_pooled }}
+        run: |
+          echo "::add-mask::$DB_URL"
+          echo "::add-mask::$DB_URL_POOLED"
+
+      - name: Migrate the PR's database branch
+        run: pnpm --filter @wishlist/api db:migrate
+        env:
+          DATABASE_URL_DIRECT: ${{ steps.db.outputs.db_url }}
+
+      - name: Deploy API preview
+        id: api
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_API }}
+          DATABASE_URL: ${{ steps.db.outputs.db_url_pooled }}
+        run: |
+          pnpm exec vercel pull --yes --environment=preview
+          pnpm exec vercel build
+          # EMAIL_TRANSPORT=log: preview data is cloned from production, so it must never email
+          # real people (spec §10).
+          url=$(pnpm exec vercel deploy --prebuilt \
+            --env DATABASE_URL="$DATABASE_URL" \
+            --env APP_ORIGIN="https://$WEB_ALIAS" \
+            --env EMAIL_TRANSPORT=log \
+            --env GIT_SHA="$HEAD_SHA" | scripts/vercel-url.sh)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for the API preview
+        env:
+          API_URL: ${{ steps.api.outputs.url }}
+        run: scripts/wait-for-health.sh "$API_URL/api/health" "$HEAD_SHA" 180
+
+      - name: Deploy web preview
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_WEB }}
+          API_ORIGIN: ${{ steps.api.outputs.url }}
+        run: |
+          pnpm exec vercel pull --yes --environment=preview
+          pnpm exec vercel build
+          url=$(pnpm exec vercel deploy --prebuilt | scripts/vercel-url.sh)
+          pnpm exec vercel alias set "$url" "$WEB_ALIAS"
+
+      - run: pnpm --filter @wishlist/e2e exec playwright install --with-deps chromium
+
+      - name: Smoke test the preview
+        run: pnpm --filter @wishlist/e2e test:smoke
+        env:
+          BASE_URL: https://${{ env.WEB_ALIAS }}
+          EXPECTED_SHA: ${{ env.HEAD_SHA }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+
+      - name: Comment preview links
+        uses: marocchino/sticky-pull-request-comment@v3
+        with:
+          header: preview
+          message: |
+            **Preview** for ${{ env.HEAD_SHA }}
+
+            - Web: https://${{ env.WEB_ALIAS }} (Vercel login required)
+            - API health: ${{ steps.api.outputs.url }}/api/health
+            - Database: Neon branch `pr-${{ env.PR_NUMBER }}`, cloned from production. Email is log-only.

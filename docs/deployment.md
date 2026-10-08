@@ -104,6 +104,21 @@ A deploy that's already running is never cancelled. Of the runs queued behind it
 
 If a deploy fails after the migration step, production still runs the previous code against the new schema. That's safe by construction, because every migration is backward-compatible (expand/contract). Fix forward, or roll back the code (see Rollback).
 
+## Previews
+
+Each PR, including each layer of a stack, gets (`.github/workflows/preview.yml`):
+
+1. A Neon branch `pr-<n>`, a copy-on-write clone of production, with migrations applied.
+2. An API preview using that branch. `EMAIL_TRANSPORT=log` means no real email is ever sent.
+3. A web preview built against that API, aliased to `<PREVIEW_ALIAS_PREFIX><n>.vercel.app` (currently `shockolate-wishlist-pr-<n>.vercel.app`).
+4. Read-only smoke tests and a sticky PR comment with the links.
+
+Web previews require a Vercel login (previews-only deployment protection). Automation uses the bypass secret. `scripts/vercel-url.sh` reads each deployment URL from `vercel deploy` output in either form, plain or agent JSON.
+
+Cleanup (`.github/workflows/cleanup.yml`): closing a PR deletes its Neon branch, and a nightly sweep deletes any `pr-*` branch whose PR is closed. Neon Free allows only 10 branches per project, so at most about 9 PRs can have previews at once.
+
+To check the sweep by hand: Actions → "Cleanup previews" → Run workflow (dry run defaults to on).
+
 ## Manual deploy (bootstrap or emergency only)
 
 This is exactly what CI runs. It works from the repo root with the org and project IDs in the environment, so no link files need switching.

@@ -1,0 +1,55 @@
+name: Cleanup previews
+
+on:
+  pull_request:
+    types: [closed]
+  schedule:
+    - cron: '23 6 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: List the branches that would be deleted without deleting them
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  delete-pr-branch:
+    name: delete-pr-branch
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: preview
+    steps:
+      - uses: neondatabase/delete-branch-action@v3
+        # The branch may never have existed (e.g. the preview failed before creating it). Real
+        # failures here are caught by the nightly sweep below.
+        continue-on-error: true
+        with:
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+          branch: pr-${{ github.event.pull_request.number }}
+
+  sweep:
+    name: sweep
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: preview
+    steps:
+      - uses: actions/checkout@v7
+      - name: Delete database branches of closed PRs
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: |
+          if [[ "$DRY_RUN" == "true" ]]; then
+            scripts/neon-sweep.sh --dry-run
+          else
+            scripts/neon-sweep.sh
+          fi
