@@ -10,4 +10,12 @@ if ! find "$dir" -name .vc-config.json -print -quit | grep -q .; then
   echo "::error::$dir has no .vc-config.json; hidden files were dropped from the artifact (include-hidden-files)" >&2
   exit 1
 fi
+# A filePathMap makes `vercel deploy --prebuilt` read files from the workspace (node_modules), which
+# deploy jobs deliberately don't install. `vercel build --standalone` inlines them instead.
+while IFS= read -r -d '' config; do
+  if [[ "$(jq '.filePathMap // {} | length' "$config")" != 0 ]]; then
+    echo "::error::$config reads files from the workspace (filePathMap); build with vercel build --standalone" >&2
+    exit 1
+  fi
+done < <(find "$dir" -name .vc-config.json -print0)
 echo "build output complete: $dir"

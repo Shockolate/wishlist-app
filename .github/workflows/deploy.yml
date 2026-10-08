@@ -106,7 +106,8 @@ jobs:
           for app in api web; do
             rm -rf .vercel && mkdir -p .vercel
             cp "vercel-settings/$app/project.json" .vercel/project.json
-            pnpm exec vercel build --prod
+            # --standalone inlines dependencies, so deploy jobs need no node_modules.
+            pnpm exec vercel build --prod --standalone
             mv .vercel/output "$app-output"
           done
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

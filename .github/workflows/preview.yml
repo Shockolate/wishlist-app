@@ -96,7 +96,8 @@ jobs:
         run: |
           mkdir -p .vercel
           cp vercel-settings/api/project.json .vercel/project.json
-          pnpm exec vercel build
+          # --standalone inlines dependencies, so deploy jobs need no node_modules.
+          pnpm exec vercel build --standalone
           mv .vercel/output api-output
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -233,7 +234,8 @@ jobs:
         run: |
           mkdir -p .vercel
           cp vercel-settings/web/project.json .vercel/project.json
-          pnpm exec vercel build
+          # --standalone inlines dependencies, so deploy jobs need no node_modules.
+          pnpm exec vercel build --standalone
           mv .vercel/output web-output
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
