@@ -1,0 +1,11 @@
+{
+  "extends": "@wishlist/config/tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "types": ["node"]
+  },
+  "include": ["src", "test"]
+}
