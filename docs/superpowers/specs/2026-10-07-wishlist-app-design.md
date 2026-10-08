@@ -399,7 +399,7 @@ These are the initial values. They're configurable, and every limited endpoint r
 | `POST …/claims`, `PATCH /claims/*` | 30 per hour per share token, and 20 per hour per IP |
 | `POST /wishlist/unfurl` | 60 per hour per user |
 
-**Open question (spike):** do requests forwarded by the Next.js rewrite carry the browser's real IP, and in which header? If there's no reliable answer, the per-IP limits are dropped and the endpoints are limited on their other keys only.
+**Client IP (resolved by [Spike B](../spikes/2026-10-07-vercel-rewrite-headers-and-alias.md)):** on Vercel, the API reads the client IP from **`x-real-ip`**. Requests forwarded by the Next.js rewrite carry the browser's real IP, and Vercel's edge overwrites client-supplied `x-real-ip`, `x-forwarded-for` and `x-vercel-forwarded-for`, both through the rewrite and on direct calls. The header is trusted **only when `VERCEL` is set**; elsewhere (local, CI) it is client-controlled, so the API falls back to the socket address. Per-IP limits stay in.
 
 ### 6.7 Tokens in URLs
 
@@ -559,7 +559,7 @@ When a dependency fails, the behavior is fixed per service:
 **Ordering that isn't obvious:**
 
 - **The web build waits for the API preview URL.** Next.js compiles rewrite destinations into its build output, so the web app can't be built until `API_ORIGIN` is known.
-- **The API needs the web URL before the web app exists.** The API's CSRF guard (§6.2) checks `Origin` against `APP_ORIGIN`, but the API preview is deployed *before* the web preview. The fix is a deterministic alias computed from the PR number, `wishlist-web-pr-<n>.vercel.app`:
+- **The API needs the web URL before the web app exists.** The API's CSRF guard (§6.2) checks `Origin` against `APP_ORIGIN`, but the API preview is deployed *before* the web preview. The fix is a deterministic alias computed from the PR number, `<PREVIEW_ALIAS_PREFIX><n>.vercel.app` (repo variable; currently `shockolate-wishlist-pr-`, verified by [Spike C](../spikes/2026-10-07-vercel-rewrite-headers-and-alias.md)):
   1. The alias is passed to the API as `APP_ORIGIN` when the API preview deploys.
   2. Once the web preview deploys, it's attached to that alias.
 
