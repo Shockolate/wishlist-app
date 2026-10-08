@@ -89,6 +89,21 @@ printf '%s' '{"generate":{"note":"GitHub Actions smoke tests (wishlist-app)"}}' 
 
 The Vercel token (`github-actions-wishlist`, scoped to the `shockolate` team) expires after one year; rotate it before then.
 
+## Continuous deployment
+
+`.github/workflows/deploy.yml` runs on every push to `main`, one at a time:
+
+1. Gates: lint, typecheck, unit tests.
+2. `drizzle-kit migrate` against production (direct connection).
+3. Build and deploy the API (`--prod`, with `GIT_SHA` set to the commit).
+4. Wait until `/api/health` reports that commit (`scripts/wait-for-health.sh`).
+5. Build the web app with `API_ORIGIN` set to the API production origin, then deploy it.
+6. Playwright smoke tests against the web production origin.
+
+A deploy that's already running is never cancelled. Of the runs queued behind it, only the newest is kept, so merging a stack ships its tip once. The Vercel token reaches the CLI only through the `VERCEL_TOKEN` environment variable, never as a command-line flag.
+
+If a deploy fails after the migration step, production still runs the previous code against the new schema. That's safe by construction, because every migration is backward-compatible (expand/contract). Fix forward, or roll back the code (see Rollback).
+
 ## Manual deploy (bootstrap or emergency only)
 
 This is exactly what CI runs. It works from the repo root with the org and project IDs in the environment, so no link files need switching.

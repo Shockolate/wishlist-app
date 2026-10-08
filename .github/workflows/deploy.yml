@@ -1,0 +1,78 @@
+name: Deploy
+
+# Production deploys run only from main, one at a time. A deploy already running is never
+# cancelled (it may be mid-migration). GitHub keeps only the newest *queued* run, so merging a
+# stack of N PRs ships the tip without deploying every intermediate commit.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: production
+      url: ${{ vars.APP_PRODUCTION_ORIGIN }}
+    env:
+      # The Vercel CLI reads VERCEL_TOKEN from the environment; never pass it as a flag.
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      API_ORIGIN: ${{ vars.API_PRODUCTION_ORIGIN }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # Cheap with Turborepo's cache when the commit was already tested on its PR; a real check
+      # when it wasn't (e.g. a squash that differs from the tested PR head).
+      - name: Gates
+        run: pnpm turbo run lint typecheck test
+
+      # Before the new API ships. Migrations must be backward-compatible with the API that is
+      # currently live (expand/contract, spec §10).
+      - name: Migrate production database
+        run: pnpm --filter @wishlist/api db:migrate
+        env:
+          DATABASE_URL_DIRECT: ${{ secrets.DATABASE_URL_DIRECT }}
+
+      - name: Deploy API
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_API }}
+        run: |
+          pnpm exec vercel pull --yes --environment=production
+          pnpm exec vercel build --prod
+          pnpm exec vercel deploy --prebuilt --prod --env GIT_SHA="$GITHUB_SHA"
+
+      - name: Wait for the new API to serve traffic
+        run: scripts/wait-for-health.sh "$API_ORIGIN/api/health" "$GITHUB_SHA" 180
+
+      # After the API, so the new web app never talks to an older API.
+      - name: Deploy web
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_WEB }}
+        run: |
+          pnpm exec vercel pull --yes --environment=production
+          pnpm exec vercel build --prod
+          pnpm exec vercel deploy --prebuilt --prod
+
+      - run: pnpm --filter @wishlist/e2e exec playwright install --with-deps chromium
+
+      - name: Smoke test production
+        run: pnpm --filter @wishlist/e2e test:smoke
+        env:
+          BASE_URL: ${{ vars.APP_PRODUCTION_ORIGIN }}
+          EXPECTED_SHA: ${{ github.sha }}
