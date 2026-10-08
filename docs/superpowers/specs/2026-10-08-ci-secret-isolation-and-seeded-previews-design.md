@@ -43,6 +43,11 @@ Two properties are required, and the workflow policy test enforces both:
 
 **What crosses between jobs:** only explicit artifacts and non-secret outputs. That means each `project.json` (IDs and settings, never env files), each `.vercel/output`, the migrator (`apps/api/dist` plus `apps/api/drizzle`), and `api_url`.
 
+**How build output crosses (found while implementing, 2026-10-08).**
+- **It's built standalone.** `vercel build --standalone` inlines dependencies, because the default output points back into the workspace's `node_modules`, which deploy jobs never install.
+- **It travels as a tarball.** Standalone output keeps pnpm's layout as relative symlinks, and `upload-artifact` would replace them with copies, which breaks module resolution at runtime.
+- **Its symlinks are checked before deploy.** They're followed inside the token-holding deploy job, so `scripts/check-vercel-output.sh` refuses any symlink that is absolute or resolves outside the output. The policy test requires that check before every `vercel deploy --prebuilt`.
+
 **Shell:** every workflow sets `defaults: run: shell: bash`. GitHub runs that as `bash --noprofile --norc -eo pipefail`, so a failure anywhere in a pipeline (for example `vercel deploy | scripts/vercel-url.sh`) fails the step. This resolves review finding M-1.
 
 **Never shared between jobs: `node_modules`.** Restoring a tree that an untrusted job produced into a trusted job would undo the isolation. Installing jobs restore only the **pnpm store** cache (`setup-node`, `cache: pnpm`), which is safe because pnpm verifies the integrity of store files before linking them, and GitHub scopes caches written by PRs to that PR.

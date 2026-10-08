@@ -91,33 +91,56 @@ The Vercel token (`github-actions-wishlist`, scoped to the `shockolate` team) ex
 
 ## Continuous deployment
 
-`.github/workflows/deploy.yml` runs on every push to `main`, one at a time:
+`.github/workflows/deploy.yml` runs on every push to `main`, one at a time, as separate jobs split by trust level ([addendum 2026-10-08](superpowers/specs/2026-10-08-ci-secret-isolation-and-seeded-previews-design.md)):
 
-1. Gates: lint, typecheck, unit tests.
-2. `drizzle-kit migrate` against production (direct connection).
-3. Build and deploy the API (`--prod`, with `GIT_SHA` set to the commit).
-4. Wait until `/api/health` reports that commit (`scripts/wait-for-health.sh`).
-5. Build the web app with `API_ORIGIN` set to the API production origin, then deploy it.
-6. Playwright smoke tests against the web production origin.
+| Job          | Secrets               | Does                                                                                                                              |
+| ------------ | --------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `guard`      | none                  | Refuses a stale commit (`scripts/assert-main-tip.sh`)                                                                             |
+| `settings`   | `VERCEL_TOKEN`        | `vercel pull` for both projects; passes on only each `project.json`                                                               |
+| `build`      | **none**              | Gates, then `vercel build --prod --standalone` for the API and the web app (each output passed on as a tarball), and the migrator |
+| `migrate`    | `DATABASE_URL_DIRECT` | `--prod --ignore-scripts` install, then `node apps/api/dist/db/migrate-cli.js`                                                    |
+| `deploy-api` | `VERCEL_TOKEN`        | `deploy --prebuilt --prod`, then waits until `/api/health` reports the commit                                                     |
+| `deploy-web` | `VERCEL_TOKEN`        | `deploy --prebuilt --prod`                                                                                                        |
+| `smoke`      | none                  | Playwright smoke tests against the production origin                                                                              |
 
-A deploy that's already running is never cancelled. Of the runs queued behind it, only the newest is kept, so merging a stack ships its tip once. The Vercel token reaches the CLI only through the `VERCEL_TOKEN` environment variable, never as a command-line flag.
+**How the jobs are kept safe:**
 
-If a deploy fails after the migration step, production still runs the previous code against the new schema. That's safe by construction, because every migration is backward-compatible (expand/contract). Fix forward, or roll back the code (see Rollback).
+- **Secret-holding jobs run almost nothing.** Only the pinned Vercel CLI runs, through `npx`, at the version in the root `package.json`; never `pnpm exec`.
+- **Every job that touches production re-checks the commit.** It confirms it's deploying `main`'s tip, because "Re-run failed jobs" skips `guard`.
+- **Every deploy job checks its build output first** (`scripts/check-vercel-output.sh`). The output must be complete and self-contained, and no symlink in it may point outside it, because the deploy job holds `VERCEL_TOKEN` and `vercel deploy` uploads whatever a symlink points to.
+
+A deploy that's already running is never cancelled. Of the runs queued behind it, only the newest is kept, so merging a stack ships its tip once.
+
+If a deploy fails after `migrate`, production still runs the previous code against the new schema. That's safe by construction, because every migration is backward-compatible (expand/contract). Fix forward, or roll back the code (see Rollback).
 
 ## Previews
 
 Each PR, including each layer of a stack, gets (`.github/workflows/preview.yml`):
 
-1. A Neon branch `pr-<n>`, a copy-on-write clone of production, with migrations applied.
-2. An API preview using that branch. `EMAIL_TRANSPORT=log` means no real email is ever sent.
+1. A Neon branch `pr-<n>` created from **`preview-seed`**, never from production. The job checks the branch really descends from `preview-seed`, then migrates it.
+2. An API preview using that branch. `EMAIL_TRANSPORT=log` means no email is ever sent.
 3. A web preview built against that API, aliased to `<PREVIEW_ALIAS_PREFIX><n>.vercel.app` (currently `shockolate-wishlist-pr-<n>.vercel.app`).
-4. Read-only smoke tests and a sticky PR comment with the links.
+4. Read-only smoke tests and a sticky PR comment with the **web** link only.
 
-Web previews require a Vercel login (previews-only deployment protection). Automation uses the bypass secret. `scripts/vercel-url.sh` reads each deployment URL from `vercel deploy` output in either form, plain or agent JSON.
+The jobs follow the same trust split as deploys: `build-api` and `build-web` hold no secrets, and `smoke` holds only the bypass secret. Bot (Renovate) and fork PRs get CI but no preview.
 
-Cleanup (`.github/workflows/cleanup.yml`): closing a PR deletes its Neon branch, and a nightly sweep deletes any `pr-*` branch whose PR is closed. Neon Free allows only 10 branches per project, so at most about 9 PRs can have previews at once.
+**Fixing an old preview branch.** If `provision` fails with "does not descend from preview-seed", the PR's branch was cloned from production before this change. Close and reopen the PR: cleanup deletes the old branch, and the next run creates a fresh one from `preview-seed`.
+
+Cleanup (`.github/workflows/cleanup.yml`): closing a PR deletes its Neon branch, and a nightly sweep deletes any `pr-*` branch whose PR is closed. Neon Free allows 10 branches per project. `main` and `preview-seed` take two, so at most 8 PRs can have previews at once.
 
 To check the sweep by hand: Actions → "Cleanup previews" → Run workflow (dry run defaults to on).
+
+## Preview seed branch
+
+`preview-seed` is the parent of every preview database. It never holds production data.
+
+- **Created** by `.github/workflows/preview-seed.yml` as a **schema-only** root branch of `main`. It's then wiped and rebuilt by replaying every migration from zero. The schema-only copy has drizzle's journal table but not its rows, so the rebuild is required.
+- **Kept current** by the same workflow on every push to `main` that touches `apps/api/drizzle/**`, which migrates it incrementally.
+- **Reset** with Actions → "Preview seed" → Run workflow with `reset` checked.
+- **Fallback** (approved, only if schema-only branches stop working): run with `init_source = parent-data`. That creates it as a normal child of `main` and wipes it in the same job, before its connection string is used for anything else.
+- **Safety:** `scripts/preview-seed.sh` refuses to resolve the seed to the production branch, and the workflow only runs on `main`.
+- **Never delete it.** Neon won't delete a branch that has children, and every open preview is one; refresh it in place instead.
+- **Root-branch budget:** `main` plus `preview-seed` use 2 of Neon Free's 3 root branches. A production restore can create backup root branches, so delete old backups if a restore is refused.
 
 ## Manual deploy (bootstrap or emergency only)
 
@@ -169,7 +192,7 @@ These came out of Plan 1's final review. `scripts/workflow-policy.test.mjs` enfo
 - **Bot PRs (Renovate) get CI but no preview.** Unreviewed dependency code never runs next to deploy credentials, and bot PRs don't use up Neon's 10-branch cap.
 - **Renovate waits 3 days after a release** (`minimumReleaseAge`) and **never automerges**. That holds at least until builds run in a job with no deploy credentials.
 
-**Still open (needs a decision):** splitting each pipeline into a secret-free build job that uploads `.vercel/output` and a deploy-only job that runs `vercel deploy --prebuilt`. Scoping secrets to steps limits accidental exposure, but job secrets still sit in runner memory.
+**Done (2026-10-08):** each pipeline is split into secret-free build jobs and deploy-only jobs (see Continuous deployment and Previews).
 
 ## Repository settings
 
