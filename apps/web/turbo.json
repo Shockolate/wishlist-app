@@ -3,6 +3,9 @@
   "extends": ["//"],
   "tasks": {
     "build": {
+      // `next build` and `next typegen` (run by typecheck) both write .next/types. Run them in
+      // order, never concurrently, or typegen intermittently fails with ENOENT on routes.d.ts.
+      "dependsOn": ["^build", "typecheck"],
       "outputs": [".next/**", "!.next/cache/**"],
       "env": ["API_ORIGIN"]
     }
