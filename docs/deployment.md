@@ -157,6 +157,20 @@ Data: Neon point-in-time restore (6-hour window) from the Neon console.
 
 - **CLI output changes when an AI agent runs it.** When the Vercel CLI detects an agent, `vercel deploy` prints a JSON object on stdout instead of a bare deployment URL. Scripts must read the URL from either form.
 
+## CI/CD supply-chain hardening
+
+These came out of Plan 1's final review. `scripts/workflow-policy.test.mjs` enforces them in CI.
+
+- **The `production` environment only accepts `main`** (a custom deployment branch policy), and the deploy job also checks `github.ref == 'refs/heads/main'`. Without both, a `workflow_dispatch` from any branch could migrate production or read `DATABASE_URL_DIRECT`.
+- **Stale deploys are refused.** The deploy job stops before migrating if `GITHUB_SHA` is no longer the tip of `main`, so re-running an old failed deploy can't roll production back.
+- **Every action is pinned to a commit SHA** (version in a trailing comment), and the actionlint image is pinned by digest. Renovate's `helpers:pinGitHubActionDigests` keeps them current.
+- **Checkouts use `persist-credentials: false`**, so later steps (dependency install scripts included) can't read the `GITHUB_TOKEN` from `.git/config`.
+- **`VERCEL_TOKEN` is scoped to the steps that deploy**, not the whole job.
+- **Bot PRs (Renovate) get CI but no preview.** Unreviewed dependency code never runs next to deploy credentials, and bot PRs don't use up Neon's 10-branch cap.
+- **Renovate waits 3 days after a release** (`minimumReleaseAge`) and **never automerges**. That holds at least until builds run in a job with no deploy credentials.
+
+**Still open (needs a decision):** splitting each pipeline into a secret-free build job that uploads `.vercel/output` and a deploy-only job that runs `vercel deploy --prebuilt`. Scoping secrets to steps limits accidental exposure, but job secrets still sit in runner memory.
+
 ## Repository settings
 
 Applied once, from the files in this repo:
