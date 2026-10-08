@@ -535,11 +535,12 @@ When a dependency fails, the behavior is fixed per service:
 |---|---|---|---|---|
 | Local | `next dev` on :3000, rewrites to :3001 | `nest start --watch` on :3001 | docker compose Postgres 17 | Mailpit |
 | CI | Production build | Production build | Testcontainers or compose | Mailpit |
-| Preview (per PR) | Vercel preview, **protected** | Vercel preview, unprotected | Neon branch `pr-<n>`, cloned from prod | **Log only, never sent** |
+| Preview (per PR) | Vercel preview, **protected** | Vercel preview, unprotected | Neon branch `pr-<n>`, created from `preview-seed` (never holds production data) | **Log only, never sent** |
 | Production | `https://<domain>` | `wishlist-api` production | Neon `main` | Resend |
 
 - **Why the API preview is unprotected.** A Next.js rewrite can't attach Vercel's protection-bypass header. An unprotected API preview exposes the same surface as the production API: the same auth, and no secrets in responses.
-- **Why preview email is log-only.** The preview database is cloned from production, so sending would mean real people get emails triggered by tests.
+- **Why preview email is log-only.** Preview databases hold only seed data, but log-only email means a preview can never send mail to anyone, whatever data it holds.
+- **Why previews never clone production.** API previews are public and run unreviewed PR code, so preview databases branch from `preview-seed`, a schema-only root branch rebuilt from the migrations ([addendum 2026-10-08](2026-10-08-ci-secret-isolation-and-seeded-previews-design.md)).
 
 ### Deployment model
 
@@ -551,9 +552,10 @@ When a dependency fails, the behavior is fixed per service:
 | File | Trigger | Steps |
 |---|---|---|
 | `ci.yml` | `pull_request` | install → `turbo lint typecheck test build` (affected) → API integration → E2E (compose) → `squawk` on new migrations. Its jobs are the ruleset's required checks |
-| `preview.yml` | PR opened, synchronized or reopened | Create or reuse Neon branch `pr-<n>` → run migrations → deploy the API preview (`DATABASE_URL`, `APP_ORIGIN=https://<web alias>`, and `EMAIL_TRANSPORT=log` set for this deployment) → build the web app with `API_ORIGIN=<api preview URL>` → deploy the web preview → `vercel alias set` it to the PR's deterministic web alias → smoke test → upsert a PR comment with the URLs. Concurrency `preview-<n>`, cancel-in-progress |
+| `preview.yml` | PR opened, synchronized or reopened | `settings` (pull project settings) → `build-api` (no secrets) → `provision` (check `preview-seed` → create or reuse `pr-<n>` from it → assert it descends from `preview-seed` → migrate with the migrator from source → deploy the API preview → wait for health) → `build-web` (no secrets) → `deploy-web` (deploy, alias) → `smoke` → `comment` (web alias only). Concurrency `preview-<n>`, cancel-in-progress |
 | `cleanup.yml` | PR closed; nightly | Delete Neon branch `pr-<n>`. The nightly sweep deletes `pr-*` branches whose PR is closed, a safety net for Neon's free cap of 10 branches |
-| `deploy.yml` | Push to `main` | Fast gates (cached) → `drizzle-kit migrate` on prod → deploy the API to production → poll `/api/health` → deploy the web app to production → smoke test prod → upload Sentry source maps. Concurrency `production`, `cancel-in-progress: false` |
+| `preview-seed.yml` | Manual (`reset`, `init_source`); push to `main` touching migrations | Ensure `preview-seed` exists (schema-only root branch, never `main`) → wipe and replay migrations from zero when created or reset → migrate incrementally otherwise |
+| `deploy.yml` | Push to `main` | `guard` (stale-commit check) → `settings` → `build` (gates and `vercel build` for both apps, no secrets) → `migrate` (migrator from source) → `deploy-api` → health → `deploy-web` → `smoke` → upload Sentry source maps (Plan 5). Every production job re-checks it is deploying `main`'s tip. Concurrency `production`, `cancel-in-progress: false` |
 | `backup.yml` | Nightly | `pg_dump` prod → encrypt with `age` → upload to Cloudflare R2. An R2 lifecycle rule keeps 30 days |
 
 **Ordering that isn't obvious:**
@@ -656,7 +658,7 @@ As of 2026-10-07 on the development machine:
 | D9 | Best-effort unfurl with SSRF hardening | No unfurl; price refresh |
 | D10 | Secret, rotatable share token | Friendly slug; multiple named links |
 | D11 | Public repo with rulesets | Private repo (unprotected on GitHub Free) |
-| D12 | Per-PR previews with Neon branches | Shared staging; prod only |
+| D12 | Per-PR previews on Neon branches created from `preview-seed`, which never holds production data (amended 2026-10-08) | Clone production (the original D12, superseded by review finding I-4); shared staging; prod only |
 | D13 | Two Vercel projects, one origin via rewrites | Nest inside Next; subdomains with CORS |
 | D14 | Zod contracts package | class-validator with OpenAPI codegen |
 | D15 | Drizzle with `pg` over TCP | Prisma; Neon HTTP driver |
@@ -668,3 +670,5 @@ As of 2026-10-07 on the development machine:
 | D21 | Plain `<img>` for retailer images | `next/image` with any remote host allowed |
 | D22 | Nightly encrypted dump to R2 | Neon's 6-hour restore window only; Actions artifacts |
 | D23 | ESM with Vitest; TypeScript pinned to 6.0.x; ESLint pinned to 9.x (amended 2026-10-07 while planning) | CommonJS API with Jest; ESM with experimental Jest; TS 7; ESLint 10 |
+| D24 | Secret-free build jobs; secrets only in jobs that run the pinned Vercel CLI, pinned actions, or a `--prod --ignore-scripts` install (2026-10-08) | One job with step-scoped secrets |
+| D25 | `preview-seed` as a schema-only root branch, wiped and migrated from zero, refreshed in place (2026-10-08) | Clone of production then anonymized; a schema-only root branch per PR (exceeds Neon Free's 3 root branches) |
