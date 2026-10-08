@@ -97,9 +97,54 @@ describe('createApiClient', () => {
     expect((error as ContractMismatchError).endpoint).toBe('GET /things/t1');
   });
 
-  it('raises ContractMismatchError when a success body is not JSON', async () => {
-    const { client } = clientReturning(new Response('not json', { status: 200 }));
+  it('raises ContractMismatchError when a body labelled JSON does not parse', async () => {
+    const { client } = clientReturning(
+      new Response('{"id": ', { status: 200, headers: { 'content-type': 'application/json' } }),
+    );
     await expect(client.get('/things/t1', Thing)).rejects.toBeInstanceOf(ContractMismatchError);
+  });
+
+  it('does not follow redirects, and treats one (e.g. to the Vercel login page) as UNEXPECTED_RESPONSE', async () => {
+    const toLogin = new Response(null, {
+      status: 302,
+      headers: { location: 'https://vercel.com/login?next=x', 'x-request-id': 'edge-2' },
+    });
+    const { client, calls } = clientReturning(toLogin);
+    const error = (await client.get('/x', Thing).catch((e: unknown) => e)) as ApiError;
+    expect(calls[0]?.init.redirect).toBe('manual');
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.problem).toMatchObject({
+      code: ErrorCode.UNEXPECTED_RESPONSE,
+      status: 502,
+      requestId: 'edge-2',
+    });
+    expect(error.problem.detail).toContain('302');
+  });
+
+  it('treats a browser opaque redirect as UNEXPECTED_RESPONSE with a valid error status', async () => {
+    const opaque = {
+      type: 'opaqueredirect',
+      status: 0,
+      ok: false,
+      statusText: '',
+      headers: new Headers(),
+      json: () => Promise.reject(new Error('opaque')),
+    } as unknown as Response;
+    const { client } = clientReturning(opaque);
+    const error = (await client.get('/x', Thing).catch((e: unknown) => e)) as ApiError;
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.problem).toMatchObject({ code: ErrorCode.UNEXPECTED_RESPONSE, status: 502 });
+  });
+
+  it('treats a non-JSON success page as UNEXPECTED_RESPONSE, not version skew', async () => {
+    const page = new Response('<html>Log in to Vercel</html>', {
+      status: 200,
+      headers: { 'content-type': 'text/html; charset=utf-8' },
+    });
+    const { client } = clientReturning(page);
+    const error = (await client.get('/things/t1', Thing).catch((e: unknown) => e)) as ApiError;
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.problem).toMatchObject({ code: ErrorCode.UNEXPECTED_RESPONSE, status: 502 });
   });
 
   it('resolves 204 responses as undefined', async () => {
