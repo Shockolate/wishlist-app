@@ -26,3 +26,38 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm format:check
       - run: pnpm turbo run lint typecheck test build
+
+  integration:
+    name: integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run test:integration
+
+  migrations-lint:
+    name: migrations-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Lint new or changed migrations
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          files=$(git diff --name-only --diff-filter=AM "$BASE_SHA"...HEAD -- 'apps/api/drizzle/*.sql')
+          if [ -z "$files" ]; then
+            echo "No migration changes."
+            exit 0
+          fi
+          echo "$files"
+          # shellcheck disable=SC2086 # one argument per file is intended
+          npx --yes squawk-cli@2.67.0 $files

@@ -17,6 +17,20 @@ export default defineConfig({
   ],
   test: {
     environment: 'node',
-    projects: [{ extends: true, test: { name: 'unit', include: ['src/**/*.spec.ts'] } }],
+    projects: [
+      { extends: true, test: { name: 'unit', include: ['src/**/*.spec.ts'] } },
+      {
+        extends: true,
+        test: {
+          name: 'integration',
+          include: ['test/**/*.int-spec.ts'],
+          globalSetup: ['test/support/global-setup.ts'],
+          testTimeout: 30_000,
+          hookTimeout: 120_000,
+          // Files share one database and truncate between tests, so they must not run in parallel.
+          fileParallelism: false,
+        },
+      },
+    ],
   },
 });

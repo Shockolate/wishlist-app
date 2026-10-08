@@ -1,0 +1,7 @@
+# Squawk lints migration SQL for operations that lock or break a live database (spec §10).
+# Every excluded rule needs a reason here.
+excluded_rules = [
+  "prefer-bigint-over-int", # ints are deliberate: quantities, positions and counters are small and bounded
+  "prefer-robust-stmts",    # drizzle runs each migration in a transaction; IF NOT EXISTS would hide drift
+]
+assume_in_transaction = true
