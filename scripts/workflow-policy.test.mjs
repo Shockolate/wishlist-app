@@ -209,6 +209,27 @@ if (!wipeIf.includes("steps.seed.outputs.root != 'true'"))
     "preview-seed.yml#seed: wipe whenever the seed isn't a root branch (steps.seed.outputs.root != 'true')",
   );
 
+// Rule 7: GitHub logs a deployment for every job that names an environment. Jobs that only need
+// the preview environment's secrets opt out, so a PR shows one "deployed to preview" per run:
+// deploy-web's, linked to the web alias.
+for (const file of ['preview.yml', 'cleanup.yml']) {
+  for (const [jobName, job] of Object.entries(byFile[file]?.jobs ?? {})) {
+    if (envName(job) !== 'preview') continue;
+    const where = `${file}#${jobName}`;
+    if (file === 'preview.yml' && jobName === 'deploy-web') {
+      if (
+        job.environment?.deployment === false ||
+        !String(job.environment?.url).includes('WEB_ALIAS')
+      )
+        fail(`${where}: the one preview deployment; link it with environment.url to the web alias`);
+    } else if (job.environment?.deployment !== false) {
+      fail(
+        `${where}: only deploy-web logs a preview deployment; set environment.deployment: false`,
+      );
+    }
+  }
+}
+
 // Secret jobs run `npx vercel@<this version>`; a range would float in token-holding jobs.
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 if (!/^\d+\.\d+\.\d+$/.test(pkg.devDependencies?.vercel ?? ''))

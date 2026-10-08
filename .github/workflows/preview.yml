@@ -39,7 +39,9 @@ jobs:
       github.event.pull_request.user.type != 'Bot'
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    environment: preview
+    environment:
+      name: preview
+      deployment: false
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
     steps:
@@ -115,7 +117,9 @@ jobs:
     needs: build-api
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    environment: preview
+    environment:
+      name: preview
+      deployment: false
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
     outputs:
@@ -246,7 +250,11 @@ jobs:
     needs: build-web
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment: preview
+    # The PR's one "deployed to preview" entry, linked to the web preview. The other jobs use
+    # the environment only for its secrets (deployment: false).
+    environment:
+      name: preview
+      url: https://${{ env.WEB_ALIAS }}
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
     steps:
@@ -285,7 +293,9 @@ jobs:
     needs: deploy-web
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment: preview
+    environment:
+      name: preview
+      deployment: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
