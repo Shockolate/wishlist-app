@@ -93,21 +93,22 @@ The Vercel token (`github-actions-wishlist`, scoped to the `shockolate` team) ex
 
 `.github/workflows/deploy.yml` runs on every push to `main`, one at a time, as separate jobs split by trust level ([addendum 2026-10-08](superpowers/specs/2026-10-08-ci-secret-isolation-and-seeded-previews-design.md)):
 
-| Job          | Secrets               | Does                                                                                                                              |
-| ------------ | --------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `guard`      | none                  | Refuses a stale commit (`scripts/assert-main-tip.sh`)                                                                             |
-| `settings`   | `VERCEL_TOKEN`        | `vercel pull` for both projects; passes on only each `project.json`                                                               |
-| `build`      | **none**              | Gates, then `vercel build --prod --standalone` for the API and the web app (each output passed on as a tarball), and the migrator |
-| `migrate`    | `DATABASE_URL_DIRECT` | `--prod --ignore-scripts` install, then `node apps/api/dist/db/migrate-cli.js`                                                    |
-| `deploy-api` | `VERCEL_TOKEN`        | `deploy --prebuilt --prod`, then waits until `/api/health` reports the commit                                                     |
-| `deploy-web` | `VERCEL_TOKEN`        | `deploy --prebuilt --prod`                                                                                                        |
-| `smoke`      | none                  | Playwright smoke tests against the production origin                                                                              |
+| Job          | Secrets               | Does                                                                                                            |
+| ------------ | --------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `guard`      | none                  | Refuses a stale commit (`scripts/assert-main-tip.sh`)                                                           |
+| `settings`   | `VERCEL_TOKEN`        | `vercel pull` for both projects; passes on only each `project.json`                                             |
+| `build`      | **none**              | Gates, then `vercel build --prod --standalone` for the API and the web app (each output passed on as a tarball) |
+| `migrate`    | `DATABASE_URL_DIRECT` | Cache-free `--prod --ignore-scripts` install, then `node apps/api/src/db/migrate-cli.ts` from the checkout      |
+| `deploy-api` | `VERCEL_TOKEN`        | `deploy --prebuilt --prod`, then waits until `/api/health` reports the commit                                   |
+| `deploy-web` | `VERCEL_TOKEN`        | `deploy --prebuilt --prod`                                                                                      |
+| `smoke`      | none                  | Playwright smoke tests against the production origin                                                            |
 
 **How the jobs are kept safe:**
 
 - **Secret-holding jobs run almost nothing.** Only the pinned Vercel CLI runs, through `npx`, at the version in the root `package.json`; never `pnpm exec`.
+- **Nothing a build job wrote is executed next to a secret.** Secret-holding jobs restore no cache and run the migrator from the checkout, because a job that ran install scripts could tamper with any cache or artifact it saves.
 - **Every job that touches production re-checks the commit.** It confirms it's deploying `main`'s tip, because "Re-run failed jobs" skips `guard`.
-- **Every deploy job checks its build output first** (`scripts/check-vercel-output.sh`). The output must be complete and self-contained, and no symlink in it may point outside it, because the deploy job holds `VERCEL_TOKEN` and `vercel deploy` uploads whatever a symlink points to.
+- **Every deploy job checks its build output first** (`scripts/check-vercel-output.sh`). The output must be complete and self-contained, and no symlink in it may point outside it. The symlink check is defence in depth: the Vercel CLI uploads a symlink's link text, not its target.
 
 A deploy that's already running is never cancelled. Of the runs queued behind it, only the newest is kept, so merging a stack ships its tip once.
 
@@ -138,7 +139,7 @@ To check the sweep by hand: Actions → "Cleanup previews" → Run workflow (dry
 - **Kept current** by the same workflow on every push to `main` that touches `apps/api/drizzle/**`, which migrates it incrementally.
 - **Reset** with Actions → "Preview seed" → Run workflow with `reset` checked.
 - **Fallback** (approved, only if schema-only branches stop working): run with `init_source = parent-data`. That creates it as a normal child of `main` and wipes it in the same job, before its connection string is used for anything else.
-- **Safety:** `scripts/preview-seed.sh` refuses to resolve the seed to the production branch, and the workflow only runs on `main`.
+- **Safety:** `scripts/preview-seed.sh` refuses to resolve the seed to the production branch, and the workflow only runs on `main`. A seed that isn't a root branch (the fallback, or one made by hand) may hold production rows, so the workflow wipes it on every run. Don't create `preview-seed` by hand.
 - **Never delete it.** Neon won't delete a branch that has children, and every open preview is one; refresh it in place instead.
 - **Root-branch budget:** `main` plus `preview-seed` use 2 of Neon Free's 3 root branches. A production restore can create backup root branches, so delete old backups if a restore is refused.
 

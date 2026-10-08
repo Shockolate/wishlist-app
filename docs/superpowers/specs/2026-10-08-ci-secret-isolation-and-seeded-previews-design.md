@@ -37,20 +37,20 @@ Two properties are required, and the workflow policy test enforces both:
 |---|---|---|
 | **Build** | none | Full `pnpm install`, gates, `vercel build` (proven to work with only `.vercel/project.json` and no login) |
 | **Settings / deploy** | `VERCEL_TOKEN` | The pinned Vercel CLI through `npx`, with its version read from the root `package.json`; pinned actions; repo scripts (git, curl, jq). **No `pnpm install`** |
-| **Database** | DB URLs and `NEON_API_KEY` | `pnpm install --prod --frozen-lockfile --ignore-scripts` (API only) to run the **built migrator**; pinned Neon actions; `psql`, curl, jq |
+| **Database** | DB URLs and `NEON_API_KEY` | `pnpm install --prod --frozen-lockfile --ignore-scripts` (API only, no cache), then the **migrator from source** (§4); pinned Neon actions; `psql`, curl, jq |
 | **Smoke (preview)** | `VERCEL_AUTOMATION_BYPASS_SECRET` only | Full install (Playwright). This is the named exception: the secret only unlocks *viewing* protected previews |
 | **Smoke (production)** | none | Full install |
 
-**What crosses between jobs:** only explicit artifacts and non-secret outputs. That means each `project.json` (IDs and settings, never env files), each `.vercel/output`, the migrator (`apps/api/dist` plus `apps/api/drizzle`), and `api_url`.
+**What crosses between jobs:** only explicit artifacts and non-secret outputs. That means each `project.json` (IDs and settings, never env files), each `.vercel/output`, and `api_url`. **Nothing a secret job executes crosses:** a build job's install scripts could tamper with anything it uploads, so the migrator runs from the checkout instead (§4; final review C-1, amended 2026-10-08).
 
 **How build output crosses (found while implementing, 2026-10-08).**
 - **It's built standalone.** `vercel build --standalone` inlines dependencies, because the default output points back into the workspace's `node_modules`, which deploy jobs never install.
 - **It travels as a tarball.** Standalone output keeps pnpm's layout as relative symlinks, and `upload-artifact` would replace them with copies, which breaks module resolution at runtime.
-- **Its symlinks are checked before deploy.** They're followed inside the token-holding deploy job, so `scripts/check-vercel-output.sh` refuses any symlink that is absolute or resolves outside the output. The policy test requires that check before every `vercel deploy --prebuilt`.
+- **Its symlinks are checked before deploy.** `scripts/check-vercel-output.sh` refuses any symlink that is absolute or resolves outside the output, and the policy test requires that check before every `vercel deploy --prebuilt`. This is defence in depth: Vercel CLI 62.5.0 uploads a symlink's link text, never its target.
 
 **Shell:** every workflow sets `defaults: run: shell: bash`. GitHub runs that as `bash --noprofile --norc -eo pipefail`, so a failure anywhere in a pipeline (for example `vercel deploy | scripts/vercel-url.sh`) fails the step. This resolves review finding M-1.
 
-**Never shared between jobs: `node_modules`.** Restoring a tree that an untrusted job produced into a trusted job would undo the isolation. Installing jobs restore only the **pnpm store** cache (`setup-node`, `cache: pnpm`), which is safe because pnpm verifies the integrity of store files before linking them, and GitHub scopes caches written by PRs to that PR.
+**Never shared between jobs: `node_modules`.** Restoring a tree that an untrusted job produced into a trusted job would undo the isolation. **Secret-holding jobs restore no cache at all** (`package-manager-cache: false`, no `cache:`). pnpm 12 links a store file that was modified with its mtime restored, so a store cache written by a job that ran install scripts can carry tampered files into a later install (final review C-2, reproduced on 12.10.1). Only the secret-free build and smoke jobs use the pnpm store cache.
 
 **Why secret outputs can't be passed between jobs:** GitHub drops any job output that contains a masked value. That's why §3.2's `provision` job keeps the branch connection string, the migration, and the API deploy in one job.
 
@@ -68,8 +68,8 @@ guard ──► settings ──┐
 |---|---|---|
 | `guard` | none | Refuses to run if `GITHUB_SHA` isn't the tip of `main` |
 | `settings` | `production`: `VERCEL_TOKEN` | `vercel pull --environment=production` for both projects; uploads each `project.json` |
-| `build` | none | Install, then lint, typecheck and unit tests. `vercel build --prod` runs for the API, then for the web app with `API_ORIGIN` set to the API production alias, each into its own output folder. Uploads both outputs and the migrator |
-| `migrate` | `production`: `DATABASE_URL_DIRECT` | `--prod --ignore-scripts` install of the API, then `node apps/api/dist/db/migrate-cli.js` |
+| `build` | none | Install, then lint, typecheck and unit tests. `vercel build --prod --standalone` runs for the API, then for the web app with `API_ORIGIN` set to the API production alias. Uploads both outputs as tarballs |
+| `migrate` | `production`: `DATABASE_URL_DIRECT` | Cache-free `--prod --ignore-scripts` install of the API, then `node apps/api/src/db/migrate-cli.ts` from the checkout |
 | `deploy-api` | `production`: `VERCEL_TOKEN` | `vercel deploy --prebuilt --prod --env GIT_SHA=<sha>`, then `scripts/wait-for-health.sh` |
 | `deploy-web` | `production`: `VERCEL_TOKEN` | `vercel deploy --prebuilt --prod` |
 | `smoke` | none | Playwright smoke test (`BASE_URL` set to the web production origin, `EXPECTED_SHA`) |
@@ -85,7 +85,7 @@ settings ──► build-api ──► provision ──► build-web ──► d
 | Job | Environment / secrets | Does |
 |---|---|---|
 | `settings` | `preview`: `VERCEL_TOKEN` | `vercel pull --environment=preview` for both projects |
-| `build-api` | none | `vercel build` for the API; uploads the output and the migrator |
+| `build-api` | none | `vercel build --standalone` for the API; uploads the output as a tarball |
 | `provision` | `preview`: `NEON_API_KEY`, `VERCEL_TOKEN` | Create or reuse `pr-<n>` with **`parent_branch: preview-seed`**, mask both database URLs, migrate with the direct URL, deploy the API preview (`DATABASE_URL` pooled, `APP_ORIGIN=https://<alias>`, `EMAIL_TRANSPORT=log`, `GIT_SHA`), wait for health. Outputs `api_url` |
 | `build-web` | none | `vercel build` with `API_ORIGIN=<api_url>` |
 | `deploy-web` | `preview`: `VERCEL_TOKEN` | `deploy --prebuilt`, then `alias set` to `<PREVIEW_ALIAS_PREFIX><n>.vercel.app` |
@@ -101,13 +101,13 @@ settings ──► build-api ──► provision ──► build-web ──► d
 ### 3.3 Seed branch (`preview-seed.yml`)
 
 - **Triggers:** `workflow_dispatch`, with input `reset` (boolean, default false), and `push` to `main` with `paths: apps/api/drizzle/**`. This workflow isn't a required check, so a path filter is fine.
-- **Jobs:** `build`, with no secrets, builds the migrator, then `seed` (environment `preview`, `NEON_API_KEY`, `if: github.ref == 'refs/heads/main'`) does the following:
+- **Job:** `seed` (environment `preview`, `NEON_API_KEY`, `if: github.ref == 'refs/heads/main'`) does the following:
   1. **Look up** the branches `main` and `preview-seed` by name (Neon API).
   2. **If `preview-seed` is missing, create it** through `POST /projects/{id}/branches` with `{"branch": {"name": "preview-seed", "parent_id": <main id>, "init_source": "schema-only"}, "endpoints": [{"type": "read_write"}]}`. This makes a root branch with no rows copied.
   3. **Refuse to continue unless the target is safe:** the target's branch ID must not be `main`'s ID, and its name must be `preview-seed`.
   4. **Fetch its direct connection string**, unpooled, through the API's connection-URI endpoint, and mask it.
-  5. **Wipe it if the branch was just created or `reset` is true:** `DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE; CREATE SCHEMA public;`, run with `psql -v ON_ERROR_STOP=1`. The wipe is required: a schema-only copy has drizzle's journal *table* but not its rows, so migrating it unwiped would try to re-create every table.
-  6. **Migrate** with the built migrator: from zero after a wipe, incrementally otherwise.
+  5. **Wipe it if the branch was just created, `reset` is true, or it isn't a root branch:** `DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE; CREATE SCHEMA public;`, run with `psql -v ON_ERROR_STOP=1`. The wipe is required: a schema-only copy has drizzle's journal *table* but not its rows, so migrating it unwiped would try to re-create every table. A seed with a parent (the fallback, a run that failed before its wipe, or a branch made by hand) may hold production rows, so it's wiped on every run (final review I-2).
+  6. **Migrate** with the migrator from source: from zero after a wipe, incrementally otherwise.
   7. **Seed:** nothing yet. Plan 2 adds `db:seed` here.
 - **Refresh in place; never delete.** Neon refuses to delete a branch that has children, and every `pr-*` branch is a child. Existing previews keep their copy-on-write snapshot.
 - **Branch budget:** `main` plus `preview-seed` uses 2 of the 3 root branches Neon Free allows. Restores create backup root branches, so restoring production may require deleting old backups first. That leaves up to 8 `pr-*` branches under the 10-branch cap.
@@ -122,7 +122,7 @@ The preview `smoke` job holds `VERCEL_AUTOMATION_BYPASS_SECRET` and runs a full 
 
 ## 4. The migrator
 
-`apps/api/src/db/migrate-cli.ts` compiles to `apps/api/dist/db/migrate-cli.js`:
+`apps/api/src/db/migrate-cli.ts`, run from the checkout as `node apps/api/src/db/migrate-cli.ts`. Node 24 strips its types, so there is no build step and no artifact for a build job to tamper with (final review C-1):
 
 - **Input:** `DATABASE_URL_DIRECT`, which must match `^postgres(ql)?://`.
 - **Behavior:** calls the existing `runMigrations(url)`, which uses the same `drizzle` folder and journal as `drizzle-kit` and the test harness. On success it prints `migrations applied`.
@@ -135,7 +135,7 @@ The preview `smoke` job holds `VERCEL_AUTOMATION_BYPASS_SECRET` and runs a full 
 **`scripts/workflow-policy.test.mjs`** gains these rules, each written to fail against the workflows as they are today:
 
 1. **No secrets beside a full install.** A job that runs `pnpm install` without both `--prod` and `--ignore-scripts` references no `secrets.*` anywhere: workflow, job or step `env`, or `with:` inputs. The only exception is `VERCEL_AUTOMATION_BYPASS_SECRET` in the `preview.yml` job `smoke`.
-2. **Secret-holding jobs stay minimal.** A job that references `VERCEL_TOKEN`, `NEON_API_KEY` or a `DATABASE_URL*` secret runs `vercel` only as `npx --yes vercel@"$VERCEL_CLI_VERSION"`. That variable is taken from the root `package.json`, so there's one version to update.
+2. **Secret-holding jobs stay minimal.** A job that references any secret (case-insensitive, including whole-context access such as `toJSON(secrets)`) or a deployment environment runs `vercel` only as `npx --yes vercel@"$VERCEL_CLI_VERSION"` (an exact version in the root `package.json`), installs only with the exact `--prod --ignore-scripts` line, runs `node` only on the migrator source, downloads only data artifacts, and restores no cache. These are allowlists, and `scripts/workflow-policy.mutations.test.mjs` proves 15 ways of breaking them are caught (final review I-1).
 3. **Production environment discipline.** In `deploy.yml`, only `settings`, `migrate`, `deploy-api` and `deploy-web` use `environment: production`, and every job has `if: github.ref == 'refs/heads/main'`.
 4. **Preview data and comment.** `preview.yml` uses `parent_branch: preview-seed`, and the comment step contains no API URL.
 5. **Seed workflow safety.** `preview-seed.yml`'s `seed` job is gated to `main` and contains the "not main" check before the wipe.
@@ -145,7 +145,7 @@ The existing rules stay: actions pinned to SHAs, `persist-credentials: false`, t
 
 **Migrator tests:**
 - **Unit:** a missing URL, or a non-postgres URL, exits 1 with a message that doesn't contain the input, and never calls `runMigrations`.
-- **Integration** (Testcontainers): the built CLI applies every migration to an empty database, and a second run applies nothing.
+- **Integration** (Testcontainers): the CLI, run from source, applies every migration to an empty database, and a second run applies nothing.
 
 **Live verification**, recorded in the PR bodies:
 - **PR 1** (migrator and `preview-seed.yml`): after it merges, run `preview-seed.yml` with `reset=true`. The log must show the branch created schema-only (or the fallback, stated plainly), the not-`main` check passing, the wipe, and migrating from zero. The Neon API must then show `preview-seed` with no `parent_id`, and `rate_limits` must have 0 rows.

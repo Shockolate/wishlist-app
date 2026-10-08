@@ -552,10 +552,10 @@ When a dependency fails, the behavior is fixed per service:
 | File | Trigger | Steps |
 |---|---|---|
 | `ci.yml` | `pull_request` | install → `turbo lint typecheck test build` (affected) → API integration → E2E (compose) → `squawk` on new migrations. Its jobs are the ruleset's required checks |
-| `preview.yml` | PR opened, synchronized or reopened | `settings` (pull project settings) → `build-api` (no secrets) → `provision` (check `preview-seed` → create or reuse `pr-<n>` from it → assert it descends from `preview-seed` → migrate with the built migrator → deploy the API preview → wait for health) → `build-web` (no secrets) → `deploy-web` (deploy, alias) → `smoke` → `comment` (web alias only). Concurrency `preview-<n>`, cancel-in-progress |
+| `preview.yml` | PR opened, synchronized or reopened | `settings` (pull project settings) → `build-api` (no secrets) → `provision` (check `preview-seed` → create or reuse `pr-<n>` from it → assert it descends from `preview-seed` → migrate with the migrator from source → deploy the API preview → wait for health) → `build-web` (no secrets) → `deploy-web` (deploy, alias) → `smoke` → `comment` (web alias only). Concurrency `preview-<n>`, cancel-in-progress |
 | `cleanup.yml` | PR closed; nightly | Delete Neon branch `pr-<n>`. The nightly sweep deletes `pr-*` branches whose PR is closed, a safety net for Neon's free cap of 10 branches |
 | `preview-seed.yml` | Manual (`reset`, `init_source`); push to `main` touching migrations | Ensure `preview-seed` exists (schema-only root branch, never `main`) → wipe and replay migrations from zero when created or reset → migrate incrementally otherwise |
-| `deploy.yml` | Push to `main` | `guard` (stale-commit check) → `settings` → `build` (gates and `vercel build` for both apps, no secrets) → `migrate` (built migrator) → `deploy-api` → health → `deploy-web` → `smoke` → upload Sentry source maps (Plan 5). Every production job re-checks it is deploying `main`'s tip. Concurrency `production`, `cancel-in-progress: false` |
+| `deploy.yml` | Push to `main` | `guard` (stale-commit check) → `settings` → `build` (gates and `vercel build` for both apps, no secrets) → `migrate` (migrator from source) → `deploy-api` → health → `deploy-web` → `smoke` → upload Sentry source maps (Plan 5). Every production job re-checks it is deploying `main`'s tip. Concurrency `production`, `cancel-in-progress: false` |
 | `backup.yml` | Nightly | `pg_dump` prod → encrypt with `age` → upload to Cloudflare R2. An R2 lifecycle rule keeps 30 days |
 
 **Ordering that isn't obvious:**
