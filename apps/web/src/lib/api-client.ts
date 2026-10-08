@@ -52,6 +52,9 @@ export function createApiClient({
     const res = await fetchFn(`${baseUrl}/api${path}`, {
       method,
       cache: 'no-store',
+      // Our API never redirects. A redirect means something in front of it answered instead
+      // (e.g. Vercel's login page for a protected preview), so surface it rather than follow it.
+      redirect: 'manual',
       headers: {
         ...headers,
         accept: 'application/json, application/problem+json',
@@ -60,7 +63,24 @@ export function createApiClient({
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
 
+    if (isRedirect(res)) {
+      const location = res.headers.get('location');
+      throw new ApiError(
+        unexpectedResponse(
+          res,
+          `Unexpected redirect (${res.status || 'opaque'})${location ? ` to ${location}` : ''}`,
+        ),
+      );
+    }
     if (!res.ok) throw new ApiError(await readProblem(res));
+    if (res.status !== 204 && !isJson(res)) {
+      throw new ApiError(
+        unexpectedResponse(
+          res,
+          `Expected JSON, got ${res.headers.get('content-type') ?? 'no content type'}`,
+        ),
+      );
+    }
 
     let payload: unknown;
     if (res.status !== 204) {
@@ -88,6 +108,30 @@ export function createApiClient({
 }
 
 export type ApiClient = ReturnType<typeof createApiClient>;
+
+function isRedirect(res: Response): boolean {
+  return res.type === 'opaqueredirect' || (res.status >= 300 && res.status < 400);
+}
+
+function isJson(res: Response): boolean {
+  const type = res.headers.get('content-type') ?? '';
+  return type.includes('application/json') || type.includes('+json');
+}
+
+/**
+ * A response that isn't from our API but isn't an error status either (a redirect, an HTML page).
+ * Reported as 502, so the Problem keeps its 4xx/5xx invariant; the original status is in `detail`.
+ */
+function unexpectedResponse(res: Response, detail: string): Problem {
+  return {
+    type: 'about:blank',
+    title: 'Unexpected response',
+    status: 502,
+    code: ErrorCode.UNEXPECTED_RESPONSE,
+    requestId: res.headers.get('x-request-id') ?? 'unknown',
+    detail,
+  };
+}
 
 /**
  * Errors that didn't come from our API (Vercel edge pages, deployment-protection 401s) have no
