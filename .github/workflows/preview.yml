@@ -302,6 +302,8 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The smoke test imports @wishlist/contracts, which has to be built first.
+      - run: pnpm turbo run build --filter=@wishlist/e2e^...
       - run: pnpm --filter @wishlist/e2e exec playwright install --with-deps chromium
       # The one exception to "no secrets next to a full install" (spec addendum §3.4): the bypass
       # secret only unlocks viewing protected previews, which hold seed data, never production data.

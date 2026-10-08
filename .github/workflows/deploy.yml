@@ -260,6 +260,8 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The smoke test imports @wishlist/contracts, which has to be built first.
+      - run: pnpm turbo run build --filter=@wishlist/e2e^...
       - run: pnpm --filter @wishlist/e2e exec playwright install --with-deps chromium
       - name: Smoke test production
         run: pnpm --filter @wishlist/e2e test:smoke
