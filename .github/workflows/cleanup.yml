@@ -26,7 +26,9 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    environment: preview
+    environment:
+      name: preview
+      deployment: false
     steps:
       - uses: neondatabase/delete-branch-action@4468d825d5a88ef4012f1705a82f02ec3072f776 # v3.2.1
         # The branch may never have existed (e.g. the preview failed before creating it). Real
@@ -42,7 +44,9 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    environment: preview
+    environment:
+      name: preview
+      deployment: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
