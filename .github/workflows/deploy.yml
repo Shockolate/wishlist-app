@@ -18,20 +18,34 @@ permissions:
 jobs:
   deploy:
     name: deploy
+    # Belt and braces with the environment's branch policy: workflow_dispatch from any other
+    # branch would otherwise migrate production and deploy unreviewed code.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment:
       name: production
       url: ${{ vars.APP_PRODUCTION_ORIGIN }}
     env:
-      # The Vercel CLI reads VERCEL_TOKEN from the environment; never pass it as a flag.
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       API_ORIGIN: ${{ vars.API_PRODUCTION_ORIGIN }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # A re-run of an older deploy (e.g. after a transient failure) must not roll production back.
+      - name: Refuse to deploy a stale commit
+        run: |
+          git fetch --no-tags --depth=1 origin main
+          tip=$(git rev-parse FETCH_HEAD)
+          if [[ "$tip" != "$GITHUB_SHA" ]]; then
+            echo "::error::main is at $tip but this run is for $GITHUB_SHA; refusing to deploy a stale commit."
+            exit 1
+          fi
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -51,6 +65,9 @@ jobs:
 
       - name: Deploy API
         env:
+          # The Vercel CLI reads VERCEL_TOKEN from the environment; never pass it as a flag, and
+          # only expose it to the steps that deploy.
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_API }}
         run: |
           pnpm exec vercel pull --yes --environment=production
@@ -63,6 +80,9 @@ jobs:
       # After the API, so the new web app never talks to an older API.
       - name: Deploy web
         env:
+          # The Vercel CLI reads VERCEL_TOKEN from the environment; never pass it as a flag, and
+          # only expose it to the steps that deploy.
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_WEB }}
         run: |
           pnpm exec vercel pull --yes --environment=production

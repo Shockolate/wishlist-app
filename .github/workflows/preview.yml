@@ -16,14 +16,15 @@ permissions:
 jobs:
   preview:
     name: preview
-    # Fork PRs receive no secrets; they get CI but no preview.
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    # Fork PRs receive no secrets, and bot PRs (Renovate) must not run unreviewed dependency code
+    # next to deploy credentials: both get CI but no preview.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.type != 'Bot'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: preview
     env:
-      # The Vercel CLI reads VERCEL_TOKEN from the environment; never pass it as a flag.
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
       HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -31,9 +32,11 @@ jobs:
       # (spec §10; spike C).
       WEB_ALIAS: ${{ vars.PREVIEW_ALIAS_PREFIX }}${{ github.event.pull_request.number }}.vercel.app
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -41,7 +44,7 @@ jobs:
 
       - name: Create or reuse the PR's database branch
         id: db
-        uses: neondatabase/create-branch-action@v6
+        uses: neondatabase/create-branch-action@fb620d43d4c565abaf088b848a4e28e5c4ea4d9c # 6.3.1
         with:
           project_id: ${{ secrets.NEON_PROJECT_ID }}
           api_key: ${{ secrets.NEON_API_KEY }}
@@ -63,6 +66,8 @@ jobs:
       - name: Deploy API preview
         id: api
         env:
+          # Read by the Vercel CLI from the environment; only the deploy steps get it.
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_API }}
           DATABASE_URL: ${{ steps.db.outputs.db_url_pooled }}
         run: |
@@ -84,6 +89,8 @@ jobs:
 
       - name: Deploy web preview
         env:
+          # Read by the Vercel CLI from the environment; only the deploy steps get it.
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_WEB }}
           API_ORIGIN: ${{ steps.api.outputs.url }}
         run: |
@@ -102,7 +109,7 @@ jobs:
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
 
       - name: Comment preview links
-        uses: marocchino/sticky-pull-request-comment@v3
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
         with:
           header: preview
           message: |

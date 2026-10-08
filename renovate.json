@@ -1,14 +1,15 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", ":semanticCommits", "group:monorepos", "schedule:weekly"],
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    "group:monorepos",
+    "schedule:weekly",
+    "helpers:pinGitHubActionDigests"
+  ],
   "rangeStrategy": "pin",
+  "minimumReleaseAge": "3 days",
   "packageRules": [
-    {
-      "description": "Low-risk: automerge devDependency patches once CI is green",
-      "matchDepTypes": ["devDependencies"],
-      "matchUpdateTypes": ["patch"],
-      "automerge": true
-    },
     {
       "description": "TS 7 drops the JS compiler API that Nest CLI, typescript-eslint and Next's typecheck use (spec §3)",
       "matchPackageNames": ["typescript"],

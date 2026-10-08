@@ -24,7 +24,7 @@ jobs:
     timeout-minutes: 5
     environment: preview
     steps:
-      - uses: neondatabase/delete-branch-action@v3
+      - uses: neondatabase/delete-branch-action@4468d825d5a88ef4012f1705a82f02ec3072f776 # v3.2.1
         # The branch may never have existed (e.g. the preview failed before creating it). Real
         # failures here are caught by the nightly sweep below.
         continue-on-error: true
@@ -40,7 +40,9 @@ jobs:
     timeout-minutes: 5
     environment: preview
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Delete database branches of closed PRs
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
