@@ -19,9 +19,10 @@ while IFS= read -r -d '' config; do
   fi
 done < <(find "$dir" -name .vc-config.json -print0)
 
-# The output is built by a job that runs untrusted code but deployed by one that holds
-# VERCEL_TOKEN, which follows symlinks when it uploads. Every symlink (pnpm's layout) must stay
-# inside the output, or a crafted one could publish that job's files (e.g. /proc/self/environ).
+# Defence in depth: the output is built by a job that runs untrusted code and deployed by one that
+# holds VERCEL_TOKEN. Vercel CLI 62.5.0 uploads a symlink as its link text, never its target, but
+# nothing legitimate (pnpm's layout) points outside the output, so refuse it rather than rely on
+# that staying true.
 root=$(realpath "$dir")
 while IFS= read -r -d '' link; do
   target=$(readlink "$link")

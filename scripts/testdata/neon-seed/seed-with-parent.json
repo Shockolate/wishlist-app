@@ -1,0 +1,6 @@
+{
+  "branches": [
+    { "id": "br-main", "name": "main", "default": true },
+    { "id": "br-seed", "name": "preview-seed", "default": false, "parent_id": "br-main" }
+  ]
+}

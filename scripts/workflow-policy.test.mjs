@@ -5,7 +5,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 
-const root = new URL('..', import.meta.url).pathname;
+// POLICY_ROOT lets scripts/workflow-policy.mutations.test.mjs check mutated copies.
+const root = process.env.POLICY_ROOT ?? new URL('..', import.meta.url).pathname;
 const dir = join(root, '.github/workflows');
 const failures = [];
 const fail = (msg) => failures.push(msg);
@@ -16,14 +17,34 @@ const workflows = readdirSync(dir)
 const byFile = Object.fromEntries(workflows.map(({ file, wf }) => [file, wf]));
 
 const VERCEL_CLI = 'npx --yes vercel@"$VERCEL_CLI_VERSION"';
-const PROD_INSTALL = 'pnpm install --prod --frozen-lockfile --ignore-scripts';
-const DEPLOY_SECRET = /^(VERCEL_TOKEN|NEON_API_KEY|DATABASE_URL\w*)$/;
-const secretsIn = (value) => [
-  ...new Set([...JSON.stringify(value ?? {}).matchAll(/secrets\.([A-Z0-9_]+)/g)].map((m) => m[1])),
-];
-const runsOf = (job) => (job.steps ?? []).map((s) => s.run ?? '').join('\n');
-const isFullInstall = (runs) =>
-  runs.split('\n').some((l) => /\bpnpm install\b/.test(l) && !l.includes(PROD_INSTALL));
+const PROD_INSTALL =
+  'pnpm install --prod --frozen-lockfile --ignore-scripts --filter @wishlist/api';
+const MIGRATOR = 'apps/api/src/db/migrate-cli.ts';
+// Data a secret job may download. Never anything it executes (final review C-1).
+const SAFE_ARTIFACTS = ['vercel-settings', 'api-output', 'web-output'];
+const PACKAGE_RUNNER = /\b(pnpm|pnpx|npm|npx|yarn|bun|bunx|corepack)\b/;
+
+// Secret names used in ${{ }} expressions, case-insensitive. '*' means the whole context
+// (toJSON(secrets), a computed secrets[...] key), which no job may use.
+function secretsIn(value) {
+  const names = new Set();
+  const named = /\bsecrets\s*(?:\.\s*([\w-]+)|\[\s*'([^']+)'\s*\])/gi;
+  for (const [, expr] of JSON.stringify(value ?? {}).matchAll(/\$\{\{([\s\S]*?)\}\}/g)) {
+    for (const m of expr.matchAll(named)) names.add((m[1] ?? m[2]).toUpperCase());
+    if (/\bsecrets\b/i.test(expr.replace(named, ''))) names.add('*');
+  }
+  return [...names];
+}
+// One entry per shell command line, with backslash continuations joined and comments dropped.
+const commandLines = (job) =>
+  (job.steps ?? [])
+    .flatMap((s) =>
+      String(s.run ?? '')
+        .replace(/\\\n/g, ' ')
+        .split('\n'),
+    )
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('#'));
 const envName = (job) =>
   typeof job.environment === 'string' ? job.environment : job.environment?.name;
 
@@ -36,7 +57,7 @@ for (const { file, wf } of workflows) {
   for (const [jobName, job] of Object.entries(wf.jobs ?? {})) {
     const where = `${file}#${jobName}`;
     const secrets = secretsIn(job);
-    const runs = runsOf(job);
+    if (job.secrets !== undefined) secrets.push('*'); // `secrets: inherit` on a reusable call
 
     if (job.env && 'VERCEL_TOKEN' in job.env)
       fail(`${where}: VERCEL_TOKEN at job level; scope it to the steps that deploy`);
@@ -61,21 +82,46 @@ for (const { file, wf } of workflows) {
       }
     }
 
-    // Rule 1: a job that runs a full install (workspace and install-script code) holds no secrets.
-    if (isFullInstall(runs)) {
-      const allowed =
-        file === 'preview.yml' && jobName === 'smoke' ? ['VERCEL_AUTOMATION_BYPASS_SECRET'] : [];
-      const leaked = secrets.filter((s) => !allowed.includes(s));
-      if (leaked.length) fail(`${where}: full pnpm install next to secrets (${leaked.join(', ')})`);
-    }
-
-    // Rule 2: a job holding deploy or database secrets runs only the pinned CLI and a prod install.
-    if (secrets.some((s) => DEPLOY_SECRET.test(s))) {
-      for (const line of runs.split('\n')) {
-        if (/\bpnpm\b/.test(line) && !line.includes(PROD_INSTALL))
-          fail(`${where}: secret-holding job may only run "${PROD_INSTALL}": ${line.trim()}`);
-        if (/\bvercel (pull|build|deploy|alias)\b/.test(line) && !line.includes(VERCEL_CLI))
-          fail(`${where}: invoke the Vercel CLI as ${VERCEL_CLI}: ${line.trim()}`);
+    // Rules 1 and 2, as an allowlist: a job that holds any secret (or a deployment environment)
+    // runs no workspace or dependency code beyond the pinned Vercel CLI, a cache-free prod install
+    // and the migrator from source. The one exception is preview.yml's smoke job, which runs a full
+    // install next to the preview bypass secret only (spec addendum §3.4).
+    if (file === 'preview.yml' && jobName === 'smoke') {
+      const leaked = secrets.filter((s) => s !== 'VERCEL_AUTOMATION_BYPASS_SECRET');
+      if (leaked.length)
+        fail(`${where}: may hold only VERCEL_AUTOMATION_BYPASS_SECRET (${leaked.join(', ')})`);
+    } else if (secrets.length > 0 || job.environment) {
+      for (const line of commandLines(job)) {
+        const runsPackages = PACKAGE_RUNNER.test(line.replaceAll(VERCEL_CLI, ''));
+        if (runsPackages && line !== PROD_INSTALL)
+          fail(
+            `${where}: secret-holding job may only run "${PROD_INSTALL}" or ${VERCEL_CLI}: ${line}`,
+          );
+        if (/\bvercel\s+[a-z]/.test(line) && !line.includes(VERCEL_CLI))
+          fail(`${where}: invoke the Vercel CLI as ${VERCEL_CLI}: ${line}`);
+        for (const [, target] of line.matchAll(/\bnode\s+(\S+)/g)) {
+          if (target !== MIGRATOR)
+            fail(`${where}: secret-holding job may only run node ${MIGRATOR}: ${line}`);
+        }
+      }
+      for (const step of job.steps ?? []) {
+        const uses = String(step.uses ?? '');
+        const w = step.with ?? {};
+        // Final review C-2: a cache written by a full-install job can carry modified files.
+        if (uses.startsWith('actions/cache')) fail(`${where}: no caches in a secret-holding job`);
+        if (
+          uses.startsWith('actions/setup-node@') &&
+          (w.cache !== undefined || w['package-manager-cache'] !== false)
+        )
+          fail(
+            `${where}: setup-node must not cache here (no cache:, package-manager-cache: false)`,
+          );
+        if (uses.startsWith('pnpm/action-setup@') && (w.run_install || w.cache))
+          fail(`${where}: pnpm/action-setup must not install or cache here`);
+        if (uses.startsWith('actions/download-artifact@') && !SAFE_ARTIFACTS.includes(w.name))
+          fail(
+            `${where}: may only download ${SAFE_ARTIFACTS.join(', ')}, got ${w.name ?? 'all artifacts'}`,
+          );
       }
     }
 
@@ -132,7 +178,7 @@ if (branchStep?.with?.parent_branch !== 'preview-seed')
 const runsAt = (re) => provisionSteps.findIndex((s) => re.test(s.run ?? ''));
 const checkAt = runsAt(/preview-seed\.sh check/);
 const childAt = runsAt(/preview-seed\.sh assert-child/);
-const migrateAt = runsAt(/migrate-cli\.js/);
+const migrateAt = runsAt(/migrate-cli\.ts/);
 const branchAt = provisionSteps.indexOf(branchStep);
 if (!(checkAt !== -1 && checkAt < branchAt && branchAt < childAt && childAt < migrateAt)) {
   fail(
@@ -156,6 +202,17 @@ if (ensureAt === -1 || wipeAt === -1 || ensureAt > wipeAt)
   fail(
     'preview-seed.yml#seed: "Ensure the seed branch exists (never main)" must run before "Wipe and rebuild from zero"',
   );
+// Final review I-2: a seed with a parent may hold production rows, so it is always wiped.
+const wipeIf = String(seedJob?.steps?.[wipeAt]?.if ?? '');
+if (!wipeIf.includes("steps.seed.outputs.root != 'true'"))
+  fail(
+    "preview-seed.yml#seed: wipe whenever the seed isn't a root branch (steps.seed.outputs.root != 'true')",
+  );
+
+// Secret jobs run `npx vercel@<this version>`; a range would float in token-holding jobs.
+const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+if (!/^\d+\.\d+\.\d+$/.test(pkg.devDependencies?.vercel ?? ''))
+  fail('package.json: devDependencies.vercel must be an exact x.y.z version');
 
 const renovate = JSON.parse(readFileSync(join(root, 'renovate.json'), 'utf8'));
 if (!renovate.extends?.includes('helpers:pinGitHubActionDigests'))

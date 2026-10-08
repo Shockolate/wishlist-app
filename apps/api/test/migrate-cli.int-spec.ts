@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
@@ -7,7 +7,8 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { MIGRATIONS_DIR } from '../src/db/migrate.js';
 import { openTestDatabase } from './support/database.js';
 
-const CLI = fileURLToPath(new URL('../dist/db/migrate-cli.js', import.meta.url));
+// Run from source, exactly as CI's secret-holding jobs do (Node type stripping; final review C-1).
+const CLI = fileURLToPath(new URL('../src/db/migrate-cli.ts', import.meta.url));
 const journal = JSON.parse(readFileSync(join(MIGRATIONS_DIR, 'meta/_journal.json'), 'utf8')) as {
   entries: unknown[];
 };
@@ -42,11 +43,7 @@ async function appliedCount(url: string): Promise<number> {
   }
 }
 
-describe('migrate-cli (built)', () => {
-  it('exists, because turbo builds the package before integration tests', () => {
-    expect(existsSync(CLI), `missing ${CLI}; run via "pnpm turbo run test:integration"`).toBe(true);
-  });
-
+describe('migrate-cli (from source)', () => {
   it('applies every migration to an empty database, then nothing on a re-run', async () => {
     const url = await freshDatabase();
 
