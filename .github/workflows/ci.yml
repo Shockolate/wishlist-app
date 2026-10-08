@@ -31,6 +31,8 @@ jobs:
       - name: Script tests
         run: |
           scripts/wait-for-health.test.sh
+          scripts/neon-sweep.test.sh
+          scripts/vercel-url.test.sh
       - run: pnpm turbo run lint typecheck test build
 
   actionlint:

@@ -1,0 +1,10 @@
+{
+  "branches": [
+    { "id": "br-a", "name": "main" },
+    { "id": "br-b", "name": "pr-12" },
+    { "id": "br-c", "name": "pr-13" },
+    { "id": "br-d", "name": "pr-14" },
+    { "id": "br-e", "name": "pr-140" },
+    { "id": "br-f", "name": "pr-12-old" }
+  ]
+}
