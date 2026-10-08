@@ -1,0 +1,10 @@
+pnpm-lock.yaml
+# Local plan-execution scratch (gitignored via a nested .gitignore Prettier does not read).
+.superpowers/
+# Design record: reformatting would churn reviewed docs without changing their meaning.
+docs/superpowers/
+apps/api/drizzle/
+**/dist/
+**/.next/
+**/playwright-report/
+**/test-results/

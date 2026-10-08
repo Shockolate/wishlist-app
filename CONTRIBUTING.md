@@ -18,7 +18,7 @@ gh stack init <first-branch>      # first layer, on top of main
 # …commit…
 gh stack add <next-branch>        # next layer, on top of the current one
 # …commit…
-gh stack submit                   # push every layer and open/update one PR per layer
+gh stack submit --open            # push every layer and open/update one PR per layer, ready for review
 ```
 
 ### Address review feedback on a lower layer
@@ -46,3 +46,9 @@ Merging goes bottom-up. `gh stack merge <pr-number>` merges every layer up to an
 - Conventional Commit titles: `feat:`, `fix:`, `docs:`, `chore:`, `ci:`, `test:`, `refactor:`.
 - Behavior changes are written test-first.
 - Never commit secrets. Only `.env.example` files, and the non-secret `apps/web/.env.development`, are tracked.
+
+## Merge method
+
+PRs are **squash-merged**: one commit on `main` per PR, titled with the PR's Conventional Commit title. The ruleset on `main` allows only this method. See [Spike A](docs/superpowers/spikes/2026-10-07-stacked-pr-merge.md) for how it was chosen.
+
+Always submit with `--open`. Without it, a non-interactive `gh stack submit` creates draft PRs, and `gh stack merge` refuses to merge drafts.

@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.next/
+next-env.d.ts
+.turbo/
+coverage/
+.vercel/
+*.tsbuildinfo
+playwright-report/
+test-results/
+.DS_Store
+
+# Secrets stay local. Only .env.example and apps/web/.env.development are committed.
+.env
+.env.local
+.env.*.local
