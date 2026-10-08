@@ -108,18 +108,19 @@ jobs:
             cp "vercel-settings/$app/project.json" .vercel/project.json
             # --standalone inlines dependencies, so deploy jobs need no node_modules.
             pnpm exec vercel build --prod --standalone
-            mv .vercel/output "$app-output"
+            # A tarball keeps pnpm's symlinks; upload-artifact would replace them with copies.
+            tar -C .vercel/output -czf "$app-output.tgz" .
           done
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: api-output
-          path: api-output
+          path: api-output.tgz
           include-hidden-files: true
           retention-days: 1
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: web-output
-          path: web-output
+          path: web-output.tgz
           include-hidden-files: true
           retention-days: 1
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -186,7 +187,9 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: api-output
-          path: .vercel/output
+          path: artifacts
+      - name: Unpack the build output
+        run: mkdir -p .vercel/output && tar -xzf artifacts/api-output.tgz -C .vercel/output
       - run: scripts/check-vercel-output.sh .vercel/output
       - name: Deploy API
         env:
@@ -228,7 +231,9 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: web-output
-          path: .vercel/output
+          path: artifacts
+      - name: Unpack the build output
+        run: mkdir -p .vercel/output && tar -xzf artifacts/web-output.tgz -C .vercel/output
       - run: scripts/check-vercel-output.sh .vercel/output
       - name: Deploy web
         env:

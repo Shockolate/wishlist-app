@@ -78,6 +78,16 @@ for (const { file, wf } of workflows) {
           fail(`${where}: invoke the Vercel CLI as ${VERCEL_CLI}: ${line.trim()}`);
       }
     }
+
+    // Build output crosses from an untrusted job into this one: deploy only what
+    // check-vercel-output.sh accepted (complete, self-contained, no symlink leaving it).
+    const steps = job.steps ?? [];
+    const deployAt = steps.findIndex((s) => /\bvercel@\S+ deploy --prebuilt\b/.test(s.run ?? ''));
+    const outputCheckAt = steps.findIndex((s) =>
+      /^scripts\/check-vercel-output\.sh /.test(s.run ?? ''),
+    );
+    if (deployAt !== -1 && (outputCheckAt === -1 || outputCheckAt > deployAt))
+      fail(`${where}: run scripts/check-vercel-output.sh before vercel deploy --prebuilt`);
   }
 }
 

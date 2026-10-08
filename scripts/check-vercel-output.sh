@@ -18,4 +18,17 @@ while IFS= read -r -d '' config; do
     exit 1
   fi
 done < <(find "$dir" -name .vc-config.json -print0)
+
+# The output is built by a job that runs untrusted code but deployed by one that holds
+# VERCEL_TOKEN, which follows symlinks when it uploads. Every symlink (pnpm's layout) must stay
+# inside the output, or a crafted one could publish that job's files (e.g. /proc/self/environ).
+root=$(realpath "$dir")
+while IFS= read -r -d '' link; do
+  target=$(readlink "$link")
+  resolved=$(realpath -m "$link")
+  if [[ "$target" == /* || "$resolved" != "$root"/* ]]; then
+    echo "::error::$link points outside the build output ($target); refusing to deploy" >&2
+    exit 1
+  fi
+done < <(find "$dir" -type l -print0)
 echo "build output complete: $dir"

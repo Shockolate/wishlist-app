@@ -98,11 +98,12 @@ jobs:
           cp vercel-settings/api/project.json .vercel/project.json
           # --standalone inlines dependencies, so deploy jobs need no node_modules.
           pnpm exec vercel build --standalone
-          mv .vercel/output api-output
+          # A tarball keeps pnpm's symlinks; upload-artifact would replace them with copies.
+          tar -C .vercel/output -czf api-output.tgz .
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: api-output
-          path: api-output
+          path: api-output.tgz
           include-hidden-files: true
           retention-days: 1
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -147,7 +148,7 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: api-output
-          path: .vercel/output
+          path: artifacts
 
       - name: Check preview-seed exists
         env:
@@ -185,6 +186,8 @@ jobs:
           DATABASE_URL_DIRECT: ${{ steps.db.outputs.db_url }}
         run: node apps/api/dist/db/migrate-cli.js
 
+      - name: Unpack the build output
+        run: mkdir -p .vercel/output && tar -xzf artifacts/api-output.tgz -C .vercel/output
       - run: scripts/check-vercel-output.sh .vercel/output
 
       - name: Deploy API preview
@@ -236,11 +239,12 @@ jobs:
           cp vercel-settings/web/project.json .vercel/project.json
           # --standalone inlines dependencies, so deploy jobs need no node_modules.
           pnpm exec vercel build --standalone
-          mv .vercel/output web-output
+          # A tarball keeps pnpm's symlinks; upload-artifact would replace them with copies.
+          tar -C .vercel/output -czf web-output.tgz .
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: web-output
-          path: web-output
+          path: web-output.tgz
           include-hidden-files: true
           retention-days: 1
 
@@ -268,7 +272,9 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: web-output
-          path: .vercel/output
+          path: artifacts
+      - name: Unpack the build output
+        run: mkdir -p .vercel/output && tar -xzf artifacts/web-output.tgz -C .vercel/output
       - run: scripts/check-vercel-output.sh .vercel/output
       - name: Deploy the web preview and alias it
         env:
