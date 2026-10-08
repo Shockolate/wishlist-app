@@ -54,6 +54,28 @@ if (!String(preview?.if ?? '').includes("github.event.pull_request.user.type != 
   fail('preview.yml#preview: bot PRs (Renovate) must not get previews with deploy credentials');
 }
 
+// Rule 6 (spec addendum §2): every run step fails on any error in a pipeline.
+for (const { file, wf } of workflows) {
+  if (wf.defaults?.run?.shell !== 'bash') {
+    fail(`${file}: set defaults.run.shell: bash (GitHub runs it with -eo pipefail)`);
+  }
+}
+
+// Rule 5 (spec addendum §3.3): the seed job only runs on main and resolves the branch, refusing
+// production, before anything can wipe it.
+const seedJob = byFile['preview-seed.yml']?.jobs?.seed;
+if (!String(seedJob?.if ?? '').includes("github.ref == 'refs/heads/main'")) {
+  fail("preview-seed.yml#seed: must only run on main (if: github.ref == 'refs/heads/main')");
+}
+const seedSteps = (seedJob?.steps ?? []).map((s) => s.name);
+const ensureAt = seedSteps.indexOf('Ensure the seed branch exists (never main)');
+const wipeAt = seedSteps.indexOf('Wipe and rebuild from zero');
+if (ensureAt === -1 || wipeAt === -1 || ensureAt > wipeAt) {
+  fail(
+    'preview-seed.yml#seed: "Ensure the seed branch exists (never main)" must run before "Wipe and rebuild from zero"',
+  );
+}
+
 const renovate = JSON.parse(readFileSync(join(root, 'renovate.json'), 'utf8'));
 if (!renovate.extends?.includes('helpers:pinGitHubActionDigests')) {
   fail('renovate.json: extends must include helpers:pinGitHubActionDigests');

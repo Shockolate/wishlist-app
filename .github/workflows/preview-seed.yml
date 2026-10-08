@@ -1,0 +1,117 @@
+name: Preview seed
+
+# Keeps `preview-seed` current: the Neon branch every pr-* preview database is created from. It
+# never holds production data (spec addendum 2026-10-08, §3.3). Trust model (§2): `build` runs
+# the workspace with no secrets; `seed` holds the Neon key and runs only the built migrator after
+# a --prod --ignore-scripts install, plus curl, jq and psql.
+on:
+  push:
+    branches: [main]
+    paths: ['apps/api/drizzle/**']
+  workflow_dispatch:
+    inputs:
+      reset:
+        description: Wipe preview-seed and rebuild it by replaying every migration from zero
+        type: boolean
+        default: false
+      init_source:
+        description: How to create preview-seed if it is missing (parent-data is the approved fallback)
+        type: choice
+        options: [schema-only, parent-data]
+        default: schema-only
+
+concurrency:
+  group: preview-seed
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build the migrator
+        run: pnpm turbo run build --filter=@wishlist/api
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: migrator
+          path: apps/api/dist
+          retention-days: 1
+
+  seed:
+    name: seed
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: preview
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      # Production dependencies only, and no install scripts: the only code that runs next to the
+      # Neon key is ours plus drizzle-orm and pg.
+      - run: pnpm install --prod --frozen-lockfile --ignore-scripts --filter @wishlist/api
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: migrator
+          path: apps/api/dist
+
+      - name: Ensure the seed branch exists (never main)
+        id: seed
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          SEED_INIT_SOURCE: ${{ inputs.init_source || 'schema-only' }}
+        run: scripts/preview-seed.sh ensure | tee -a "$GITHUB_OUTPUT"
+
+      - name: Describe the seed branch
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+        run: scripts/preview-seed.sh describe preview-seed
+
+      - name: Fetch the seed branch's direct connection string
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          SEED_BRANCH_ID: ${{ steps.seed.outputs.id }}
+        run: |
+          uri=$(scripts/preview-seed.sh uri "$SEED_BRANCH_ID")
+          echo "::add-mask::$uri"
+          echo "SEED_DATABASE_URL=$uri" >> "$GITHUB_ENV"
+
+      # A schema-only branch copies drizzle's journal *table* but not its rows, so it must be wiped
+      # and rebuilt from zero; that also proves every migration still replays on an empty database.
+      - name: Wipe and rebuild from zero
+        if: steps.seed.outputs.created == 'true' || inputs.reset
+        run: psql "$SEED_DATABASE_URL" -v ON_ERROR_STOP=1 -c 'DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE; CREATE SCHEMA public;'
+
+      - name: Migrate
+        run: DATABASE_URL_DIRECT="$SEED_DATABASE_URL" node apps/api/dist/db/migrate-cli.js
+
+      - name: Report contents (seed data only; empty until Plan 2)
+        run: |
+          psql "$SEED_DATABASE_URL" -tAc "select 'rate_limits rows: ' || count(*) from rate_limits"

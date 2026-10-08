@@ -7,6 +7,10 @@ permissions:
   contents: read
   pull-requests: write
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   dependency-review:
     name: dependency-review
