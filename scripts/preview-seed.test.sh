@@ -8,17 +8,23 @@ seed() { "$here/preview-seed.sh" "$@"; }
 fail() { echo "preview-seed: FAIL: $1" >&2; exit 1; }
 
 out=$(NEON_BRANCHES_FILE="$fx/with-seed.json" seed ensure)
-[[ "$out" == $'id=br-seed\ncreated=false' ]] || fail "reuse existing seed: got '$out'"
+[[ "$out" == $'id=br-seed\ncreated=false\nroot=true' ]] || fail "reuse existing seed: got '$out'"
+
+# A seed with a parent may hold that parent's (production) rows, so the workflow must wipe it.
+out=$(NEON_BRANCHES_FILE="$fx/seed-with-parent.json" seed ensure)
+[[ "$out" == $'id=br-seed\ncreated=false\nroot=false' ]] || fail "seed with a parent: got '$out'"
 
 err=$(NEON_BRANCHES_FILE="$fx/no-seed.json" DRY_RUN=1 seed ensure 2>&1 >/dev/null)
 out=$(NEON_BRANCHES_FILE="$fx/no-seed.json" DRY_RUN=1 seed ensure 2>/dev/null)
-[[ "$out" == $'id=dry-run\ncreated=true' ]] || fail "create when missing: got '$out'"
+[[ "$out" == $'id=dry-run\ncreated=true\nroot=true' ]] || fail "create when missing: got '$out'"
 for want in '"name":"preview-seed"' '"parent_id":"br-main"' '"init_source":"schema-only"'; do
   [[ "$err" == *"$want"* ]] || fail "create body missing $want: $err"
 done
 
 err=$(NEON_BRANCHES_FILE="$fx/no-seed.json" DRY_RUN=1 SEED_INIT_SOURCE=parent-data seed ensure 2>&1 >/dev/null)
 [[ "$err" == *'"init_source":"parent-data"'* ]] || fail "fallback init_source: $err"
+out=$(NEON_BRANCHES_FILE="$fx/no-seed.json" DRY_RUN=1 SEED_INIT_SOURCE=parent-data seed ensure 2>/dev/null)
+[[ "$out" == *$'\nroot=false' ]] || fail "fallback seed is not a root branch: got '$out'"
 
 if NEON_BRANCHES_FILE="$fx/no-seed.json" DRY_RUN=1 SEED_INIT_SOURCE=bogus seed ensure >/dev/null 2>&1; then
   fail "accepted an unknown SEED_INIT_SOURCE"

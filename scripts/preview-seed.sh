@@ -3,7 +3,7 @@
 # holds production data (spec addendum 2026-10-08, §3.3).
 #
 # Usage:
-#   scripts/preview-seed.sh ensure                       # prints id=<id> and created=<true|false>
+#   scripts/preview-seed.sh ensure                       # prints id=<id>, created=<bool>, root=<bool>
 #   scripts/preview-seed.sh check                        # exit 1 with a fix-it hint if it's missing
 #   scripts/preview-seed.sh uri <branch-id>              # direct (unpooled) connection string
 #   scripts/preview-seed.sh describe <name>              # name, id, parent_id and default flag
@@ -54,16 +54,23 @@ case "${1:-}" in
       if [[ "${DRY_RUN:-}" == "1" ]]; then
         echo "would create: $body" >&2
         seed_id="dry-run"
+        if [[ "$init_source" == schema-only ]]; then seed_parent=""; else seed_parent="$main_id"; fi
       else
         seed_id=$(curl -fsS -X POST "${auth[@]}" -H "Content-Type: application/json" -d "$body" "$api/branches" | jq -r '.branch.id')
         wait_ready "$seed_id"
+        seed_parent=$(field_by_name "$(list_branches)" "$seed_name" parent_id)
       fi
       created=true
+    else
+      seed_parent=$(field_by_name "$branches" "$seed_name" parent_id)
     fi
     # The check that matters most: never hand production's branch to a job that wipes.
     [[ "$seed_id" != "$main_id" ]] || die "refusing: '$seed_name' resolved to the production branch ($main_id)"
     echo "id=$seed_id"
     echo "created=$created"
+    # A seed with a parent may hold that parent's (production) rows: the parent-data fallback, a run
+    # that failed before its wipe, or a branch made by hand. The workflow wipes it on every run.
+    if [[ -z "$seed_parent" ]]; then echo "root=true"; else echo "root=false"; fi
     ;;
   check)
     branches=$(list_branches)

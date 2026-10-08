@@ -1,5 +1,6 @@
 import { pathToFileURL } from 'node:url';
-import { runMigrations } from './migrate.js';
+// A .ts specifier so Node can run this file from source; tsc rewrites it to .js when building.
+import { runMigrations } from './migrate.ts';
 
 export interface MigrateCliIo {
   run(url: string): Promise<void>;
@@ -11,8 +12,9 @@ const POSTGRES_URL = /^postgres(ql)?:\/\//;
 
 /**
  * Applies the committed migrations to DATABASE_URL_DIRECT. CI jobs that hold database secrets run
- * this built file instead of drizzle-kit, so no devDependency code executes next to the secret
- * (spec addendum 2026-10-08, §4). Never prints the URL.
+ * this file straight from the checkout (`node apps/api/src/db/migrate-cli.ts`, Node's type
+ * stripping), so the only code next to the secret is reviewed source plus drizzle-orm and pg; never
+ * a build artifact or a devDependency (spec addendum 2026-10-08, §4). Never prints the URL.
  */
 export async function migrateCli(env: NodeJS.ProcessEnv, io: MigrateCliIo): Promise<number> {
   const url = env.DATABASE_URL_DIRECT;
@@ -47,7 +49,7 @@ function passwordForms(url: string): string[] {
   }
 }
 
-// Executed directly (`node dist/db/migrate-cli.js`), not when imported by tests.
+// Executed directly (`node apps/api/src/db/migrate-cli.ts`), not when imported by tests.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   process.exitCode = await migrateCli(process.env, {
     run: runMigrations,
