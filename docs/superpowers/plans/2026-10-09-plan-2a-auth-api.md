@@ -59,6 +59,8 @@ Everything from Plans 1 and 1b still applies:
 
 **New dependencies, exact:** `@node-rs/argon2@2.2.2` and `uuid@14.0.2`, both in `apps/api`. Nothing else: the email and CAPTCHA adapters use `fetch`.
 
+**Naming (decided 2026-10-09):** the product is **Hanker**, at `hanker.dev`. Everything a person sees says Hanker: email subjects, email text and the sender name. Internal identifiers stay `wishlist`, because it names the domain concept: the repo, the `@wishlist/*` packages, the Vercel projects, tables and code. The landing page keeps its `Wishlist` heading until Plan 2b rebrands the UI. The default sender is `Hanker <hanker@localhost>`, and production's is `Hanker <no-reply@mail.hanker.dev>` (Plan 2b).
+
 **Values fixed by the spec (copy them exactly):**
 
 | Thing | Value |
@@ -799,7 +801,7 @@ describe('parseEnv', () => {
       DATABASE_URL,
       APP_ORIGIN,
       EMAIL_TRANSPORT: 'log',
-      EMAIL_FROM: 'Wishlist <wishlist@localhost>',
+      EMAIL_FROM: 'Hanker <hanker@localhost>',
       MAILPIT_URL: 'http://localhost:8025',
     });
   });
@@ -881,7 +883,7 @@ const EnvSchema = z
     EMAIL_FROM: z
       .string()
       .regex(/^[^<>]+ <[^<>\s]+@[^<>\s]+>$/, 'must look like "Name <address@domain>"')
-      .default('Wishlist <wishlist@localhost>'),
+      .default('Hanker <hanker@localhost>'),
     RESEND_API_KEY: z.string().min(1).optional(),
     MAILPIT_URL: z.url().default('http://localhost:8025'),
     /** Unset means Turnstile is unavailable, so email-sending endpoints refuse (spec §6.5). */
@@ -931,7 +933,7 @@ export function testEnv(overrides: Partial<Env> = {}): Env {
     DATABASE_URL: 'postgres://unused:unused@127.0.0.1:1/unused',
     APP_ORIGIN: TEST_APP_ORIGIN,
     EMAIL_TRANSPORT: 'log',
-    EMAIL_FROM: 'Wishlist <wishlist@localhost>',
+    EMAIL_FROM: 'Hanker <hanker@localhost>',
     MAILPIT_URL: 'http://localhost:8025',
     ...overrides,
   };
@@ -2182,9 +2184,9 @@ import { parseAddress } from './email-sender.js';
 
 describe('parseAddress', () => {
   it('splits the EMAIL_FROM format into name and address', () => {
-    expect(parseAddress('Wishlist <no-reply@mail.example.com>')).toEqual({
-      name: 'Wishlist',
-      email: 'no-reply@mail.example.com',
+    expect(parseAddress('Hanker <no-reply@mail.hanker.dev>')).toEqual({
+      name: 'Hanker',
+      email: 'no-reply@mail.hanker.dev',
     });
   });
 
@@ -2213,11 +2215,11 @@ function fakeFetch(status: number) {
 describe('ResendEmailSender', () => {
   it('posts the message to Resend with the API key as a bearer token', async () => {
     const { fn, calls } = fakeFetch(200);
-    await new ResendEmailSender('re_key', 'Wishlist <no-reply@mail.example.com>', fn).send(message);
+    await new ResendEmailSender('re_key', 'Hanker <no-reply@mail.hanker.dev>', fn).send(message);
     expect(calls[0]?.url).toBe('https://api.resend.com/emails');
     expect(new Headers(calls[0]?.init.headers).get('authorization')).toBe('Bearer re_key');
     expect(JSON.parse(String(calls[0]?.init.body))).toEqual({
-      from: 'Wishlist <no-reply@mail.example.com>',
+      from: 'Hanker <no-reply@mail.hanker.dev>',
       to: ['ada@example.com'],
       subject: 'Hi',
       text: 'Hello',
@@ -2249,7 +2251,7 @@ describe('MailpitEmailSender', () => {
       calls.push({ url: url.toString(), init });
       return Promise.resolve(new Response('{"ID":"1"}', { status: 200 }));
     }) as unknown as typeof fetch;
-    await new MailpitEmailSender('http://localhost:8025', 'Wishlist <wishlist@localhost>', fn).send({
+    await new MailpitEmailSender('http://localhost:8025', 'Hanker <hanker@localhost>', fn).send({
       to: 'ada@example.com',
       subject: 'Hi',
       text: 'Hello',
@@ -2257,7 +2259,7 @@ describe('MailpitEmailSender', () => {
     });
     expect(calls[0]?.url).toBe('http://localhost:8025/api/v1/send');
     expect(JSON.parse(String(calls[0]?.init.body))).toEqual({
-      From: { Email: 'wishlist@localhost', Name: 'Wishlist' },
+      From: { Email: 'hanker@localhost', Name: 'Hanker' },
       To: [{ Email: 'ada@example.com' }],
       Subject: 'Hi',
       Text: 'Hello',
@@ -2575,7 +2577,7 @@ afterAll(() => mailpit.stop());
 
 describe('MailpitEmailSender against Mailpit', () => {
   it('delivers a message that shows up in the inbox', async () => {
-    await new MailpitEmailSender(baseUrl, 'Wishlist <wishlist@localhost>').send({
+    await new MailpitEmailSender(baseUrl, 'Hanker <hanker@localhost>').send({
       to: 'ada@example.com',
       subject: 'Confirm your email',
       text: 'Plain body',
@@ -2589,7 +2591,7 @@ describe('MailpitEmailSender against Mailpit', () => {
     expect(body.messages).toHaveLength(1);
     expect(body.messages[0]).toMatchObject({
       Subject: 'Confirm your email',
-      From: { Address: 'wishlist@localhost', Name: 'Wishlist' },
+      From: { Address: 'hanker@localhost', Name: 'Hanker' },
     });
   });
 });
@@ -3520,9 +3522,9 @@ import type { EmailMessage } from '../email/email-sender.js';
 import { Mailer } from '../email/mailer.js';
 
 export const SUBJECTS = {
-  verification: 'Confirm your email for Wishlist',
-  accountExists: 'You already have a Wishlist account',
-  passwordReset: 'Reset your Wishlist password',
+  verification: 'Confirm your email for Hanker',
+  accountExists: 'You already have a Hanker account',
+  passwordReset: 'Reset your Hanker password',
 } as const;
 
 type Rendered = Omit<EmailMessage, 'to'>;
@@ -3572,7 +3574,7 @@ export function verificationEmail(appOrigin: string, displayName: string, token:
 export function accountExistsEmail(appOrigin: string): Rendered {
   return compose(
     SUBJECTS.accountExists,
-    ['Someone tried to sign up for Wishlist with this email address, but it already has an account.'],
+    ['Someone tried to sign up for Hanker with this email address, but it already has an account.'],
     [
       { label: 'Log in', href: `${appOrigin}/login` },
       { label: 'Forgot your password? Reset it', href: `${appOrigin}/reset-password` },
@@ -5672,7 +5674,7 @@ In `docs/deployment.md`, replace the whole `## Environment variables` section, f
 | Vercel `wishlist-api` → Production | `APP_ORIGIN` | Web production origin. The CSRF guard compares it exactly, and email links use it |
 | Vercel `wishlist-api` → Production | `CRON_SECRET` (sensitive) | 48 random bytes, base64. Vercel Cron sends it as a bearer token. Unset means the cron refuses everyone |
 | Vercel `wishlist-api` → Production | `TURNSTILE_SECRET_KEY` (sensitive) | **Plan 2b.** While unset, signup, resend-verification and reset-request answer `503 CAPTCHA_UNAVAILABLE`. That's how Plan 2a ships dark |
-| Vercel `wishlist-api` → Production | `EMAIL_TRANSPORT`, `EMAIL_FROM`, `RESEND_API_KEY` (sensitive) | **Plan 2b.** Until then `EMAIL_TRANSPORT` defaults to `log` |
+| Vercel `wishlist-api` → Production | `EMAIL_TRANSPORT=resend`, `EMAIL_FROM=Hanker <no-reply@mail.hanker.dev>`, `RESEND_API_KEY` (sensitive) | **Plan 2b.** Until then `EMAIL_TRANSPORT` defaults to `log` |
 | Set per preview by CI | `DATABASE_URL`, `APP_ORIGIN`, `EMAIL_TRANSPORT=log`, `TURNSTILE_SECRET_KEY` (Cloudflare's always-pass test secret), `GIT_SHA` | See `.github/workflows/preview.yml` |
 | Set per deploy by CI | `GIT_SHA` | The commit being deployed |
 | Set at build by CI | `API_ORIGIN` (web) | API production origin, or the PR's API preview URL |
