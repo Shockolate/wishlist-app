@@ -7,6 +7,8 @@ import { EmailGate } from './email-gate.js';
 import { EmailTokensService } from './email-tokens.service.js';
 import { LoginService } from './login.service.js';
 import { MeController } from './me.controller.js';
+import { PasswordResetController } from './password-reset.controller.js';
+import { PasswordResetService } from './password-reset.service.js';
 import { SessionController } from './session.controller.js';
 import { SessionGuard } from './session.guard.js';
 import { SessionsService } from './sessions.service.js';
@@ -16,7 +18,7 @@ import { SignupService } from './signup.service.js';
 /** Accounts and sessions (spec §5 Auth, §6.1–§6.6). */
 @Module({
   imports: [RateLimitModule, SecurityModule, EmailModule],
-  controllers: [SessionController, MeController, SignupController],
+  controllers: [SessionController, MeController, SignupController, PasswordResetController],
   providers: [
     SessionsService,
     SessionGuard,
@@ -25,6 +27,7 @@ import { SignupService } from './signup.service.js';
     AuthEmails,
     SignupService,
     LoginService,
+    PasswordResetService,
   ],
 })
 export class AuthModule {}
