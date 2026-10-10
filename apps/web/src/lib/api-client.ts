@@ -76,7 +76,10 @@ export function createApiClient({
       );
     }
     if (!res.ok) throw new ApiError(await readProblem(res));
-    if (res.status !== 204 && !isJson(res)) {
+    // 204, and the empty 202 that sign-up and the resend and reset requests answer with.
+    const bodiless =
+      res.status === 204 || (res.status === 202 && (await res.clone().text()) === '');
+    if (!bodiless && !isJson(res)) {
       throw new ApiError(
         unexpectedResponse(
           res,
@@ -86,7 +89,7 @@ export function createApiClient({
     }
 
     let payload: unknown;
-    if (res.status !== 204) {
+    if (!bodiless) {
       try {
         payload = await res.json();
       } catch {

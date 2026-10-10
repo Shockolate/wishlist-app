@@ -158,4 +158,9 @@ describe('createApiClient', () => {
     const { client } = clientReturning(new Response(null, { status: 204 }));
     await expect(client.delete('/things/t1', z.undefined())).resolves.toBeUndefined();
   });
+
+  it('resolves an empty 202, which sign-up and the resend and reset requests answer with', async () => {
+    const { client } = clientReturning(new Response(null, { status: 202 }));
+    await expect(client.post('/auth/signup', {}, NoContentSchema)).resolves.toBeUndefined();
+  });
 });
