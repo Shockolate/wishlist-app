@@ -17,6 +17,11 @@ class ProbeController {
     throw new AppError(409, 'PROBE_CONFLICT', 'probe conflicted', { remaining: 2 });
   }
 
+  @Get('limited')
+  limited(): never {
+    throw new AppError(429, 'PROBE_LIMITED', 'slow down', {}, { 'Retry-After': '42' });
+  }
+
   @Get('crash')
   crash(): never {
     throw new Error('database password is hunter2');
@@ -49,6 +54,12 @@ describe('HTTP pipeline', () => {
       detail: 'probe conflicted',
       remaining: 2,
     });
+  });
+
+  it('sends the headers an AppError carries, such as Retry-After', async () => {
+    const res = await http(app).get('/api/probe/limited');
+    expect(res.status).toBe(429);
+    expect(res.headers['retry-after']).toBe('42');
   });
 
   it('hides unexpected errors behind an opaque 500', async () => {

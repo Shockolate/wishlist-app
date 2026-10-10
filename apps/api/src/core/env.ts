@@ -1,12 +1,50 @@
 import { z } from 'zod';
 
-const EnvSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.coerce.number().int().min(0).max(65_535).default(3001),
-  /** Commit the deployment was built from; set by the deploy pipelines. */
-  GIT_SHA: z.string().min(1).default('dev'),
-  DATABASE_URL: z.string().regex(/^postgres(ql)?:\/\//, 'must be a postgres:// connection string'),
-});
+/** A bare origin such as https://example.com: no path, query or trailing slash. */
+const OriginSchema = z.string().refine((value) => {
+  try {
+    return new URL(value).origin === value;
+  } catch {
+    return false;
+  }
+}, 'must be a bare origin such as https://example.com');
+
+const EnvSchema = z
+  .object({
+    NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+    PORT: z.coerce.number().int().min(0).max(65_535).default(3001),
+    /** Commit the deployment was built from; set by the deploy pipelines. */
+    GIT_SHA: z.string().min(1).default('dev'),
+    DATABASE_URL: z
+      .string()
+      .regex(/^postgres(ql)?:\/\//, 'must be a postgres:// connection string'),
+    /**
+     * The web origin browsers use. The CSRF guard only accepts state-changing requests from it
+     * (spec §6.2), and links in emails point at it.
+     */
+    APP_ORIGIN: OriginSchema,
+    /** `log` prints emails (previews, tests), `mailpit` delivers locally, `resend` sends for real. */
+    EMAIL_TRANSPORT: z.enum(['log', 'mailpit', 'resend']).default('log'),
+    EMAIL_FROM: z
+      .string()
+      .regex(/^[^<>]+ <[^<>\s]+@[^<>\s]+>$/, 'must look like "Name <address@domain>"')
+      .default('Hanker <hanker@localhost>'),
+    RESEND_API_KEY: z.string().min(1).optional(),
+    MAILPIT_URL: z.url().default('http://localhost:8025'),
+    /** Unset means Turnstile is unavailable, so email-sending endpoints refuse (spec §6.5). */
+    TURNSTILE_SECRET_KEY: z.string().min(1).optional(),
+    /** Vercel Cron sends it as a bearer token. Unset means the cron endpoint refuses everyone. */
+    CRON_SECRET: z.string().min(32).optional(),
+  })
+  .superRefine((env, ctx) => {
+    if (env.EMAIL_TRANSPORT === 'resend' && !env.RESEND_API_KEY) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['RESEND_API_KEY'],
+        message: 'is required when EMAIL_TRANSPORT=resend',
+      });
+    }
+  });
 
 export type Env = z.infer<typeof EnvSchema>;
 
