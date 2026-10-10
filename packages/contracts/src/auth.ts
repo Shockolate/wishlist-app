@@ -23,6 +23,8 @@ export const DisplayNameSchema = z
   .min(1)
   .max(50)
   .refine((name) => {
+    // Empty is min(1)'s job: one clear issue per input.
+    if (name.length === 0) return true;
     const rest = name.replace(JOINERS, '');
     // Joiners and spaces alone would show as a blank name.
     return rest.trim().length > 0 && !HIDDEN_CHARACTERS.test(rest);
