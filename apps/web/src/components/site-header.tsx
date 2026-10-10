@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { DocumentLink } from '@/components/document-link';
 
 const LINK = 'inline-flex min-h-11 items-center text-[15px] underline';
 
@@ -18,9 +19,9 @@ export function SiteHeader({ action = 'login' }: { action?: 'login' | 'signup' |
         </Link>
       ) : null}
       {action === 'signup' ? (
-        <Link href="/signup" className={LINK}>
+        <DocumentLink href="/signup" className={LINK}>
           Create an account
-        </Link>
+        </DocumentLink>
       ) : null}
     </header>
   );

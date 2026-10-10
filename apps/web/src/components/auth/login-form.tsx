@@ -2,10 +2,10 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { LoginRequestSchema } from '@wishlist/contracts';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { DocumentLink } from '@/components/document-link';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
@@ -64,9 +64,12 @@ export function LoginForm({ next }: { next: string }) {
         </Button>
       </form>
       <p className="mt-5 text-[15px]">
-        <Link href="/reset-password" className="inline-flex min-h-11 items-center underline">
+        <DocumentLink
+          href="/reset-password"
+          className="inline-flex min-h-11 items-center underline"
+        >
           Forgot your password?
-        </Link>
+        </DocumentLink>
       </p>
     </Card>
   );
