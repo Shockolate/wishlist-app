@@ -26,17 +26,30 @@ export class SessionsService {
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
-  async create(userId: string): Promise<{ token: string }> {
-    const now = this.clock.now();
-    const token = newToken(32);
-    await this.db.insert(sessions).values({
-      id: hashToken(token),
-      userId,
-      createdAt: now,
-      lastSeenAt: now,
-      expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
+  /**
+   * A new session, but only if the password is still the one just verified (rule 17). The share
+   * lock holds a concurrent reset or change back until this session exists, and that change then
+   * revokes it; a change that committed first makes this return null.
+   */
+  async create(userId: string, verifiedPasswordHash: string): Promise<{ token: string } | null> {
+    return this.db.transaction(async (tx) => {
+      const [user] = await tx
+        .select({ passwordHash: users.passwordHash })
+        .from(users)
+        .where(eq(users.id, userId))
+        .for('share');
+      if (user?.passwordHash !== verifiedPasswordHash) return null;
+      const now = this.clock.now();
+      const token = newToken(32);
+      await tx.insert(sessions).values({
+        id: hashToken(token),
+        userId,
+        createdAt: now,
+        lastSeenAt: now,
+        expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
+      });
+      return { token };
     });
-    return { token };
   }
 
   /**
