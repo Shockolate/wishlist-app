@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { LoginRequest } from '@wishlist/contracts';
 import { DB, type Database } from '../db/database.module.js';
-import { rateLimitKey } from '../rate-limit/keys.js';
+import { ipRateLimitKey, rateLimitKey } from '../rate-limit/keys.js';
 import { RateLimiter } from '../rate-limit/rate-limiter.js';
 import { burnPasswordCheck, verifyPassword } from '../security/passwords.js';
 import { invalidCredentials } from './auth-errors.js';
@@ -23,7 +23,7 @@ export class LoginService {
    * log in; owner endpoints check verification (Plan 3).
    */
   async login(input: LoginRequest, ip: string): Promise<{ token: string }> {
-    await this.limiter.enforce(rateLimitKey('login:ip', ip), LOGIN_PER_IP);
+    await this.limiter.enforce(ipRateLimitKey('login:ip', ip), LOGIN_PER_IP);
     await this.limiter.enforce(rateLimitKey('login:email', input.email), LOGIN_PER_EMAIL);
     const user = await findUserByEmail(this.db, input.email);
     if (!user) {
