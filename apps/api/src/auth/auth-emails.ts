@@ -44,10 +44,11 @@ function compose(
   };
 }
 
-export function verificationEmail(appOrigin: string, displayName: string, token: string): Rendered {
+/** No greeting: the display name is unverified, so it can't speak in Hanker's voice (rule 14). */
+export function verificationEmail(appOrigin: string, token: string): Rendered {
   return compose(
     SUBJECTS.verification,
-    [`Hi ${displayName},`, 'Confirm your email address to start your wishlist.'],
+    ['Welcome to Hanker. Confirm your email address to start your wishlist.'],
     [{ label: 'Confirm your email', href: `${appOrigin}/verify-email?token=${token}` }],
     "This link expires in 24 hours. If you didn't sign up, ignore this email.",
   );
@@ -82,8 +83,8 @@ export class AuthEmails {
     @Inject(ENV) private readonly env: Env,
   ) {}
 
-  verification(to: string, displayName: string, token: string): void {
-    this.mailer.queue({ to, ...verificationEmail(this.env.APP_ORIGIN, displayName, token) });
+  verification(to: string, token: string): void {
+    this.mailer.queue({ to, ...verificationEmail(this.env.APP_ORIGIN, token) });
   }
 
   accountExists(to: string): void {

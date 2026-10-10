@@ -161,6 +161,13 @@ describe('POST /auth/signup (spec §5)', () => {
     });
     expect(limited.status).toBe(429);
   });
+
+  it('leaves the unverified display name out of the verification email (rule 14)', async () => {
+    await signUp(t, { ...ADA, displayName: 'evil.example/login' });
+    const mail = lastEmail(t, ADA.email, SUBJECTS.verification);
+    expect(mail.text).not.toContain('evil.example');
+    expect(mail.html).not.toContain('evil.example');
+  });
 });
 
 describe('POST /auth/verify-email (spec §5, §6.5)', () => {

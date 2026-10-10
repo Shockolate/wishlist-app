@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ChangePasswordRequestSchema,
+  DisplayNameSchema,
   EmailSchema,
   EmailTokenSchema,
   LoginRequestSchema,
@@ -101,5 +102,26 @@ describe('MeResponseSchema', () => {
       emailVerified: false,
     };
     expect(MeResponseSchema.parse(me)).toEqual(me);
+  });
+});
+
+describe('DisplayNameSchema (rule 14)', () => {
+  it.each(['Ada', 'Zoë', "O'Brien", 'Ada & Bob', '\u{1F469}‍\u{1F373} Ada'])(
+    'accepts %s',
+    (name) => {
+      expect(DisplayNameSchema.safeParse(name).success).toBe(true);
+    },
+  );
+
+  it.each([
+    ['a newline', 'Ada\nEvil'],
+    ['a tab', 'Ada\tEvil'],
+    ['a right-to-left override', 'Ada‮live'],
+    ['a zero-width space', 'A​da'],
+    ['a soft hyphen', 'A­da'],
+  ])('rejects %s', (_label, name) => {
+    const result = DisplayNameSchema.safeParse(name);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe('Use visible characters only');
   });
 });

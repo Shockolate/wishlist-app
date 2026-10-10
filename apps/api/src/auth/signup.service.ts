@@ -64,7 +64,7 @@ export class SignupService {
       return this.tokens.issue(tx, userId, 'verify_email');
     });
 
-    if (verifyToken) this.emails.verification(input.email, input.displayName, verifyToken);
+    if (verifyToken) this.emails.verification(input.email, verifyToken);
     else this.emails.accountExists(input.email);
   }
 
@@ -88,6 +88,6 @@ export class SignupService {
     const user = await findUserByEmail(this.db, input.email);
     if (!user || user.emailVerifiedAt) return;
     const token = await this.db.transaction((tx) => this.tokens.issue(tx, user.id, 'verify_email'));
-    this.emails.verification(user.email, user.displayName, token);
+    this.emails.verification(user.email, token);
   }
 }
