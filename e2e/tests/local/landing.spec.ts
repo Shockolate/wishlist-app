@@ -1,10 +1,17 @@
 import { expect, test } from '@playwright/test';
 import { ErrorCode, HealthResponseSchema, ProblemSchema } from '@wishlist/contracts';
 
-test('landing page reports a healthy API and database', async ({ page }) => {
+test('the landing page introduces Hanker and links to sign-up and login', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Wishlist' })).toBeVisible();
-  await expect(page.getByTestId('api-status')).toHaveText('API: ok · db: ok');
+  await expect(page).toHaveTitle('Hanker');
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'One list. One link. No doubled-up gifts.' }),
+  ).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Create your list' })).toHaveAttribute(
+    'href',
+    '/signup',
+  );
+  await expect(page.getByRole('link', { name: 'Log in' })).toHaveAttribute('href', '/login');
 });
 
 test('/api/* reaches the API through the same-origin rewrite', async ({ request }) => {
