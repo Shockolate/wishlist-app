@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 import { CLOCK, type Clock } from '../core/clock.js';
 import { DB, type Database } from '../db/database.module.js';
 import { rateLimits } from '../db/schema.js';
+import { rateLimited } from '../http/errors.js';
 import { fixedWindow, type RateLimitRule } from './window.js';
 
 export interface RateLimitResult {
@@ -41,5 +42,11 @@ export class RateLimiter {
       remaining: Math.max(0, rule.limit - row.count),
       retryAfterSeconds,
     };
+  }
+
+  /** Counts a hit and throws 429 with Retry-After once `key` is over its limit (spec §6.6). */
+  async enforce(key: string, rule: RateLimitRule): Promise<void> {
+    const result = await this.consume(key, rule);
+    if (!result.allowed) throw rateLimited(result.retryAfterSeconds);
   }
 }

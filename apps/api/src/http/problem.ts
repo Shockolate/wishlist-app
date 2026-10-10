@@ -13,6 +13,12 @@ const CODE_BY_STATUS: Readonly<Record<number, ErrorCode>> = {
   429: ErrorCode.RATE_LIMITED,
 };
 
+const MIDDLEWARE_DETAIL_BY_STATUS: Readonly<Record<number, string>> = {
+  400: 'The request body is not valid JSON.',
+  413: 'The request body is too large.',
+  415: 'Unsupported content type.',
+};
+
 /** Maps anything thrown while handling a request to the problem we send. Never leaks 5xx detail. */
 export function toProblem(exception: unknown, requestId: string): Problem {
   if (exception instanceof AppError) {
@@ -22,10 +28,16 @@ export function toProblem(exception: unknown, requestId: string): Problem {
     const status = exception.getStatus();
     return build(status, codeFor(status), requestId, status < 500 ? exception.message : undefined);
   }
-  // Errors raised by Express middleware (body-parser) carry a status and an `expose` flag saying
-  // whether their message is safe to show to the client.
+  // Errors raised by Express middleware (body-parser) carry a status and an `expose` flag. Their
+  // messages are not used, though: a JSON parse error quotes part of the request body, which could
+  // be a password. The detail is fixed per status instead.
   if (isExposedClientError(exception)) {
-    return build(exception.status, codeFor(exception.status), requestId, exception.message);
+    return build(
+      exception.status,
+      codeFor(exception.status),
+      requestId,
+      MIDDLEWARE_DETAIL_BY_STATUS[exception.status],
+    );
   }
   return build(500, ErrorCode.INTERNAL_ERROR, requestId);
 }

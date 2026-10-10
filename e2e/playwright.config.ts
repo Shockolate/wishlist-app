@@ -26,6 +26,7 @@ export default defineConfig({
         PORT: String(API_PORT),
         DATABASE_URL: databaseUrl,
         GIT_SHA: 'e2e',
+        APP_ORIGIN: `http://localhost:${WEB_PORT}`,
       },
       reuseExistingServer: false,
       timeout: 30_000,

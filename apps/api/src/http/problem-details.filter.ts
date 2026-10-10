@@ -1,5 +1,6 @@
 import { Catch, Logger, type ArgumentsHost, type ExceptionFilter } from '@nestjs/common';
 import type { Response } from 'express';
+import { AppError } from './app-error.js';
 import { sendProblem, toProblem } from './problem.js';
 import { requestIdOf } from './request-id.js';
 
@@ -15,6 +16,9 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         `[${problem.requestId}] unhandled error`,
         exception instanceof Error ? exception.stack : String(exception),
       );
+    }
+    if (exception instanceof AppError) {
+      for (const [name, value] of Object.entries(exception.headers)) res.setHeader(name, value);
     }
     sendProblem(res, problem);
   }
