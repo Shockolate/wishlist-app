@@ -1,11 +1,30 @@
-import { Controller, HttpCode, Inject, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, HttpCode, Inject, Post, Req, Res } from '@nestjs/common';
+import { LoginRequestSchema, type LoginRequest } from '@wishlist/contracts';
 import type { Request, Response } from 'express';
-import { clearSessionCookie, readSessionToken } from './session-cookie.js';
+import { ClientIp } from '../http/client-ip.js';
+import { ZodValidationPipe } from '../http/zod-validation.pipe.js';
+import { LoginService } from './login.service.js';
+import { clearSessionCookie, readSessionToken, setSessionCookie } from './session-cookie.js';
 import { SessionsService } from './sessions.service.js';
 
 @Controller('auth')
 export class SessionController {
-  constructor(@Inject(SessionsService) private readonly sessions: SessionsService) {}
+  constructor(
+    @Inject(SessionsService) private readonly sessions: SessionsService,
+    @Inject(LoginService) private readonly logins: LoginService,
+  ) {}
+
+  /** 204 with the session cookie, or 401 INVALID_CREDENTIALS (spec §5). */
+  @Post('login')
+  @HttpCode(204)
+  async login(
+    @Body(new ZodValidationPipe(LoginRequestSchema)) body: LoginRequest,
+    @ClientIp() ip: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<void> {
+    const session = await this.logins.login(body, ip);
+    setSessionCookie(res, session.token, session.maxAgeMs);
+  }
 
   /** Idempotent: 204 and a cleared cookie, whether or not a live session came with it. */
   @Post('logout')
