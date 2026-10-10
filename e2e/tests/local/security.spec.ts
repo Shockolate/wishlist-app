@@ -17,7 +17,9 @@ test('a page carries a nonce CSP that its own scripts satisfy (spec §6.9)', asy
 
   const scriptNonces = await page
     .locator('script[nonce]')
-    .evaluateAll((scripts) => scripts.map((script) => (script as HTMLScriptElement).nonce));
+    .evaluateAll((scripts) =>
+      scripts.map((script) => (script as unknown as { nonce: string }).nonce),
+    );
   expect(scriptNonces.length).toBeGreaterThan(0);
   expect(new Set(scriptNonces)).toEqual(new Set([nonce]));
   await page.waitForLoadState('networkidle');
