@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { EmailModule } from '../email/email.module.js';
 import { RateLimitModule } from '../rate-limit/rate-limit.module.js';
 import { SecurityModule } from '../security/security.module.js';
+import { AccountService } from './account.service.js';
 import { AuthEmails } from './auth-emails.js';
 import { EmailGate } from './email-gate.js';
 import { EmailTokensService } from './email-tokens.service.js';
@@ -28,6 +29,7 @@ import { SignupService } from './signup.service.js';
     SignupService,
     LoginService,
     PasswordResetService,
+    AccountService,
   ],
 })
 export class AuthModule {}
