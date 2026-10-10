@@ -56,4 +56,19 @@ describe('parseEnv', () => {
   it('rejects a CRON_SECRET shorter than 32 characters', () => {
     expect(() => parseEnv({ ...base, CRON_SECRET: 'short' })).toThrow(/CRON_SECRET/);
   });
+
+  it('refuses to only log account emails in production once sign-up can send them (rule 15)', () => {
+    const live = { ...base, VERCEL_ENV: 'production', TURNSTILE_SECRET_KEY: 'x' };
+    expect(() => parseEnv(live)).toThrow(/EMAIL_TRANSPORT/);
+    expect(
+      parseEnv({ ...live, EMAIL_TRANSPORT: 'resend', RESEND_API_KEY: 're_test' }).EMAIL_TRANSPORT,
+    ).toBe('resend');
+  });
+
+  it('still boots dark production, and previews on the log transport', () => {
+    expect(parseEnv({ ...base, VERCEL_ENV: 'production' }).EMAIL_TRANSPORT).toBe('log');
+    expect(
+      parseEnv({ ...base, VERCEL_ENV: 'preview', TURNSTILE_SECRET_KEY: 'x' }).EMAIL_TRANSPORT,
+    ).toBe('log');
+  });
 });

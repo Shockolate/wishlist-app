@@ -15,6 +15,8 @@ const EnvSchema = z
     PORT: z.coerce.number().int().min(0).max(65_535).default(3001),
     /** Commit the deployment was built from; set by the deploy pipelines. */
     GIT_SHA: z.string().min(1).default('dev'),
+    /** Set by Vercel at runtime: production, preview or development. Unset everywhere else. */
+    VERCEL_ENV: z.enum(['production', 'preview', 'development']).optional(),
     DATABASE_URL: z
       .string()
       .regex(/^postgres(ql)?:\/\//, 'must be a postgres:// connection string'),
@@ -42,6 +44,19 @@ const EnvSchema = z
         code: 'custom',
         path: ['RESEND_API_KEY'],
         message: 'is required when EMAIL_TRANSPORT=resend',
+      });
+    }
+    // The day sign-up opens, the log transport would swallow every account email (rule 15).
+    if (
+      env.VERCEL_ENV === 'production' &&
+      env.TURNSTILE_SECRET_KEY &&
+      env.EMAIL_TRANSPORT === 'log'
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['EMAIL_TRANSPORT'],
+        message:
+          'must be resend in production once TURNSTILE_SECRET_KEY is set: with log, account emails would only be written to the logs',
       });
     }
   });

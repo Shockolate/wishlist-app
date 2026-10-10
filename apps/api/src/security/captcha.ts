@@ -13,6 +13,14 @@ export const CAPTCHA_VERIFIER = Symbol('CAPTCHA_VERIFIER');
 
 const SITEVERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 
+/** Siteverify errors that mean our request is wrong, not the visitor's: an operator must act (rule 16). */
+const OPERATOR_ERRORS = new Set([
+  'missing-input-secret',
+  'invalid-input-secret',
+  'bad-request',
+  'internal-error',
+]);
+
 const SiteverifySchema = z.object({
   success: z.boolean(),
   'error-codes': z.array(z.string()).default([]),
@@ -53,9 +61,8 @@ export class TurnstileVerifier implements CaptchaVerifier {
     const body = SiteverifySchema.safeParse(json);
     if (!body.success) return this.unavailable('unexpected siteverify response');
     if (body.data.success) return 'passed';
-    return body.data['error-codes'].includes('internal-error')
-      ? this.unavailable('Cloudflare reported internal-error')
-      : 'failed';
+    const operatorError = body.data['error-codes'].find((code) => OPERATOR_ERRORS.has(code));
+    return operatorError ? this.unavailable(`Cloudflare reported ${operatorError}`) : 'failed';
   }
 
   /**
