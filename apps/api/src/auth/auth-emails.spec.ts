@@ -11,17 +11,17 @@ const TOKEN = 'T'.repeat(43);
 
 describe('account emails', () => {
   it('links verification to /verify-email with the token, in text and in HTML', () => {
-    const email = verificationEmail(ORIGIN, 'Ada', TOKEN);
+    const email = verificationEmail(ORIGIN, TOKEN);
     expect(email.subject).toBe(SUBJECTS.verification);
     expect(email.text).toContain(`${ORIGIN}/verify-email?token=${TOKEN}`);
     expect(email.html).toContain(`href="${ORIGIN}/verify-email?token=${TOKEN}"`);
-    expect(email.text).toContain('Hi Ada,');
+    expect(email.text).not.toMatch(/^Hi\b/m);
   });
 
-  it('escapes the display name in HTML', () => {
-    const { html } = verificationEmail(ORIGIN, '<b>Ada</b>', TOKEN);
-    expect(html).toContain('&lt;b&gt;Ada&lt;/b&gt;');
-    expect(html).not.toContain('<b>Ada</b>');
+  it('escapes every value it puts into HTML', () => {
+    const { html } = passwordResetEmail('https://x.example/?a=1&b=<2>', TOKEN);
+    expect(html).toContain('https://x.example/?a=1&amp;b=&lt;2&gt;');
+    expect(html).not.toContain('<2>');
   });
 
   it('answers a signup for an existing account with links to log in and to reset, and no token', () => {
