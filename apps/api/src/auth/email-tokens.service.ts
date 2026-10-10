@@ -20,7 +20,8 @@ export class EmailTokensService {
   /**
    * A fresh token; the user's earlier unused tokens for this purpose stop working. Locking the
    * user's row first serializes concurrent calls for one user: the second waits, and its delete
-   * then sees the first's committed token (rule 18).
+   * then sees the first's committed token (rule 18). Lock order: the user's row before its
+   * email_tokens rows; consume() and changePassword follow it too.
    */
   async issue(tx: Transaction, userId: string, purpose: EmailTokenPurpose): Promise<string> {
     await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for('update');
@@ -62,19 +63,33 @@ export class EmailTokensService {
 
   /**
    * Uses up a live token inside the caller's transaction and returns its user. Returns null if
-   * the token is unknown, expired or already used. FOR UPDATE makes a concurrent second use wait,
-   * then find the token consumed.
+   * the token is unknown, expired or already used. Locking the token row makes a concurrent
+   * second use wait, then find the token consumed. Lock order: the user's row before its
+   * email_tokens rows, as in issue() and changePassword, so the callers' later users UPDATE
+   * can't deadlock with them.
    */
   async consume(
     tx: Transaction,
     token: string,
     purpose: EmailTokenPurpose,
   ): Promise<string | null> {
+    const [found] = await tx
+      .select({ userId: emailTokens.userId })
+      .from(emailTokens)
+      .where(this.live(token, purpose));
+    if (!found) return null;
+    // Lock order: the users row before email_tokens rows, as issue() and changePassword do.
+    await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, found.userId))
+      .for('no key update');
     const [row] = await tx
       .select({ id: emailTokens.id, userId: emailTokens.userId })
       .from(emailTokens)
       .where(this.live(token, purpose))
       .for('update');
+    // Superseded by issue(), or retired by a password change, while waiting for the user's row.
     if (!row) return null;
     await tx
       .update(emailTokens)
