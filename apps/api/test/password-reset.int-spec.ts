@@ -103,7 +103,7 @@ describe('password reset (spec §5)', () => {
     expect((await confirm(resetToken(), 'an unbreached passphrase 4')).status).toBe(204);
   });
 
-  it('rejects a made-up token before any breach check or hashing', async () => {
+  it('rejects a made-up token before any breach check', async () => {
     const res = await confirm('A'.repeat(43));
     expect(codeOf(res)).toBe(ErrorCode.INVALID_TOKEN);
     expect(t.breaches.checked).toEqual([]);

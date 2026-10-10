@@ -22,7 +22,7 @@ services:
   mailpit:
     image: axllent/mailpit:v1.31.4
     ports:
-      - '8025:8025'
+      - '127.0.0.1:8025:8025' # localhost only: the inbox holds live sign-in links
 
 volumes:
   pgdata:

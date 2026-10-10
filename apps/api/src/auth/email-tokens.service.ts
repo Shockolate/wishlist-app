@@ -17,7 +17,7 @@ export const EMAIL_TOKEN_TTL_MS: Readonly<Record<EmailTokenPurpose, number>> = {
 export class EmailTokensService {
   constructor(@Inject(CLOCK) private readonly clock: Clock) {}
 
-  /** A fresh token. Any earlier unused token for the same purpose stops working. */
+  /** A fresh token. Deletes the user's earlier unused tokens for this purpose; two concurrent calls can each keep theirs. */
   async issue(tx: Transaction, userId: string, purpose: EmailTokenPurpose): Promise<string> {
     const now = this.clock.now();
     const token = newToken(32);

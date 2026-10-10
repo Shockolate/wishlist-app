@@ -33,7 +33,7 @@ export class SignupService {
   async signup(input: SignupRequest, ip: string): Promise<void> {
     await this.gate.admit(input.email, input.turnstileToken, ip);
     await this.passwordPolicy.assertNotBreached(input.password);
-    // Hash before looking the address up, so both outcomes take the same time.
+    // Hash before looking the address up, so argon2 (the slow part) runs whether or not it exists.
     const passwordHash = await hashPassword(input.password);
     const now = this.clock.now();
 
