@@ -6,6 +6,8 @@ import { createPool } from './pool.js';
 import * as schema from './schema.js';
 
 export type Database = NodePgDatabase<typeof schema>;
+/** A transaction handle: what `db.transaction(async (tx) => …)` passes in. */
+export type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
 export const PG_POOL = Symbol('PG_POOL');
 export const DB = Symbol('DB');
