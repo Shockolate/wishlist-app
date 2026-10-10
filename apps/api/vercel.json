@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "git": { "deploymentEnabled": false },
-  "installCommand": "pnpm install --frozen-lockfile && pnpm --filter @wishlist/contracts build"
+  "installCommand": "pnpm install --frozen-lockfile && pnpm --filter @wishlist/contracts build",
+  "crons": [{ "path": "/api/internal/cron/daily", "schedule": "0 9 * * *" }]
 }
