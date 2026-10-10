@@ -1,6 +1,28 @@
+import type { Clock } from '../core/clock.js';
 import type { EmailMessage, EmailSender } from '../email/email-sender.js';
 import type { BreachedPasswordChecker } from '../security/breached-passwords.js';
 import type { CaptchaVerdict, CaptchaVerifier } from '../security/captcha.js';
+
+/** A clock tests move by hand. */
+export class FakeClock implements Clock {
+  private current: Date;
+
+  constructor(start: Date) {
+    this.current = new Date(start);
+  }
+
+  now(): Date {
+    return new Date(this.current);
+  }
+
+  set(time: Date): void {
+    this.current = new Date(time);
+  }
+
+  advance(ms: number): void {
+    this.current = new Date(this.current.getTime() + ms);
+  }
+}
 
 /** Turnstile stand-in. Set `verdict`; `tokens` records what was checked. */
 export class FakeCaptcha implements CaptchaVerifier {

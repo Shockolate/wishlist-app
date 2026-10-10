@@ -266,6 +266,9 @@ importers:
       typescript:
         specifier: 6.0.3
         version: 6.0.3
+      undici-types:
+        specifier: 7.24.6
+        version: 7.24.6
       unplugin-swc:
         specifier: 2.0.0
         version: 2.0.0(@swc/core@1.16.13(@swc/helpers@0.5.23))(esbuild@0.28.2)(rolldown@1.2.12)(vite@8.3.3(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
