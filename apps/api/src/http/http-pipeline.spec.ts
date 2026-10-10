@@ -75,14 +75,15 @@ describe('HTTP pipeline', () => {
     expect(res.body).toEqual({ hello: 'world' });
   });
 
-  it('answers malformed JSON with problem+json 400', async () => {
+  it('answers malformed JSON with problem+json 400, without echoing the body', async () => {
     const res = await http(app)
       .post('/api/probe/echo')
       .set('content-type', 'application/json')
-      .send('{"broken": ');
+      .send('{"password": hunter2secret');
     expect(res.status).toBe(400);
     expect(res.headers['content-type']).toContain('application/problem+json');
     expect(ProblemSchema.parse(res.body).code).toBe(ErrorCode.BAD_REQUEST);
+    expect(JSON.stringify(res.body)).not.toContain('hunter2');
   });
 
   it('answers oversized bodies with problem+json 413', async () => {

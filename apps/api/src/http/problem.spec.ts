@@ -50,8 +50,16 @@ describe('toProblem', () => {
     expect(toProblem(parseError, 'req-1')).toMatchObject({
       status: 400,
       code: 'BAD_REQUEST',
-      detail: 'Unexpected end of JSON input',
+      detail: 'The request body is not valid JSON.',
     });
+  });
+
+  it('gives exposed middleware errors a fixed detail, never the library message', () => {
+    const thrown = (status: number) =>
+      Object.assign(new Error('quotes "hunter2" from the body'), { status, expose: true });
+    expect(toProblem(thrown(413), 'req-1').detail).toBe('The request body is too large.');
+    expect(toProblem(thrown(415), 'req-1').detail).toBe('Unsupported content type.');
+    expect(toProblem(thrown(418), 'req-1')).not.toHaveProperty('detail');
   });
 
   it('turns anything else into an opaque 500', () => {
