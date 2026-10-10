@@ -1,9 +1,10 @@
 import { ErrorCode, MeResponseSchema, ProblemSchema } from '@wishlist/contracts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { SUBJECTS } from '../src/auth/auth-emails.js';
 import { SESSION_COOKIE } from '../src/auth/session-cookie.js';
-import { ADA, logIn, signUpVerified } from './support/accounts.js';
+import { ADA, lastEmail, logIn, signUpVerified, TURNSTILE_OK } from './support/accounts.js';
 import { createAuthTestApp, type AuthTestApp } from './support/auth-app.js';
-import { client, setCookies, type ApiResponse } from './support/client.js';
+import { client, linkToken, setCookies, type ApiResponse } from './support/client.js';
 import { openTestDatabase } from './support/database.js';
 
 const db = openTestDatabase();
@@ -65,6 +66,24 @@ describe('/me needs a session', () => {
 describe('POST /me/password (spec §5)', () => {
   const change = (cookie: string, currentPassword: string, newPassword = NEW_PASSWORD) =>
     client(t.app, cookie).post('/me/password', { currentPassword, newPassword });
+
+  it('retires outstanding reset links, so one sent before the change cannot undo it (rule 18)', async () => {
+    await signUpVerified(t);
+    const cookie = await logIn(t);
+    await client(t.app).post('/auth/password-reset/request', {
+      email: ADA.email,
+      turnstileToken: TURNSTILE_OK,
+    });
+    const link = linkToken(lastEmail(t, ADA.email, SUBJECTS.passwordReset).text);
+
+    expect((await change(cookie, ADA.password)).status).toBe(204);
+
+    const res = await client(t.app).post('/auth/password-reset/confirm', {
+      token: link,
+      newPassword: 'yet another passphrase 3',
+    });
+    expect([res.status, codeOf(res)]).toEqual([400, ErrorCode.INVALID_TOKEN]);
+  });
 
   it('keeps this session and revokes every other one', async () => {
     await signUpVerified(t);

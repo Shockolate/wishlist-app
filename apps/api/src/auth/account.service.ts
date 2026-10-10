@@ -9,6 +9,7 @@ import { RateLimiter } from '../rate-limit/rate-limiter.js';
 import { PasswordPolicy } from '../security/password-policy.js';
 import { hashPassword, verifyPassword } from '../security/passwords.js';
 import { wrongPassword } from './auth-errors.js';
+import { EmailTokensService } from './email-tokens.service.js';
 import { LOGIN_PER_EMAIL } from './rate-limits.js';
 import type { AuthContext } from './session.guard.js';
 
@@ -20,6 +21,7 @@ export class AccountService {
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(RateLimiter) private readonly limiter: RateLimiter,
     @Inject(PasswordPolicy) private readonly passwordPolicy: PasswordPolicy,
+    @Inject(EmailTokensService) private readonly tokens: EmailTokensService,
   ) {}
 
   async updateDisplayName(auth: AuthContext, displayName: string): Promise<MeResponse> {
@@ -43,6 +45,8 @@ export class AccountService {
       await tx
         .delete(sessions)
         .where(and(eq(sessions.userId, auth.user.id), ne(sessions.id, auth.sessionId)));
+      // A reset link sent before the change must not be able to undo it (rule 18).
+      await this.tokens.retireUnused(tx, auth.user.id, 'reset_password');
     });
   }
 

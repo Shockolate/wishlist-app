@@ -48,6 +48,8 @@ export class PasswordResetService {
     const reset = await this.db.transaction(async (tx) => {
       const userId = await this.tokens.consume(tx, input.token, 'reset_password');
       if (!userId) return false;
+      // Any other live reset link would undo this reset for the next hour (rule 18).
+      await this.tokens.retireUnused(tx, userId, 'reset_password');
       await tx.update(users).set({ passwordHash, updatedAt: now }).where(eq(users.id, userId));
       await tx
         .update(users)
