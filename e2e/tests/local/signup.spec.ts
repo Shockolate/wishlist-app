@@ -18,6 +18,7 @@ test('signs up, and the verification email arrives', async ({ page }) => {
   await fillSignup(page, email);
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByRole('heading', { name: 'Check your email' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Check your email' })).toBeFocused();
   await expect(page.getByText(email)).toBeVisible();
   expect((await waitForEmail(email, VERIFY)).text).toContain('/verify-email?token=');
 });
@@ -38,6 +39,20 @@ test('pressing Create account twice sends one request (Review Focus 5)', async (
   await expect(page.getByRole('heading', { name: 'Check your email' })).toBeVisible();
   await waitForEmail(email, VERIFY);
   // A second request would have sent an "already have an account" email by now.
+  await page.waitForTimeout(2_000);
+  expect(await emailsTo(email)).toHaveLength(1);
+});
+
+test('two submits in one moment still send one request (the in-flight guard)', async ({ page }) => {
+  const email = uniqueEmail('guard');
+  await fillSignup(page, email);
+  // Both submits land before React can disable the button, so only the guard stops the second.
+  await page.locator('form').evaluate((form) => {
+    (form as unknown as { requestSubmit(): void }).requestSubmit();
+    (form as unknown as { requestSubmit(): void }).requestSubmit();
+  });
+  await expect(page.getByRole('heading', { name: 'Check your email' })).toBeVisible();
+  await waitForEmail(email, VERIFY);
   await page.waitForTimeout(2_000);
   expect(await emailsTo(email)).toHaveLength(1);
 });

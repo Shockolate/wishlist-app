@@ -64,7 +64,7 @@ export function LoginForm({ next }: { next: string }) {
         </Button>
       </form>
       <p className="mt-5 text-[15px]">
-        <Link href="/reset-password" className="underline">
+        <Link href="/reset-password" className="inline-flex min-h-11 items-center underline">
           Forgot your password?
         </Link>
       </p>

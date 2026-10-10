@@ -15,6 +15,7 @@ import { NoContentSchema } from '@/lib/api-client';
 import { browserApi } from '@/lib/browser-api';
 import { formErrorMap } from '@/lib/form-errors';
 import { errorMessage, fieldErrors, hasCode } from '@/lib/messages';
+import { useFocusOnMount } from '@/lib/use-focus-on-mount';
 
 const FormSchema = SignupRequestSchema.omit({ turnstileToken: true });
 const FIELDS = ['displayName', 'email', 'password'] as const;
@@ -62,8 +63,9 @@ export function SignupForm({ nonce }: { nonce: string | undefined }) {
     }
   });
 
-  // One request per press, however fast the clicks (Review Focus 5). The guard sits here, not in
-  // the handleSubmit callback, which the React Compiler lint can't see reading a ref safely.
+  // One request per press (Review Focus 5), in two layers: the disabled button stops a second
+  // press; this guard stops a second submit that arrives before the re-render disables it. It sits
+  // here, not in the handleSubmit callback, where the React Compiler lint objects to a ref read.
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     if (inFlight.current) {
       event.preventDefault();
@@ -127,9 +129,12 @@ export function SignupForm({ nonce }: { nonce: string | undefined }) {
 
 /** The same answer for a new address and an existing one (spec §8): the email says which. */
 function CheckYourEmail({ email }: { email: string }) {
+  const heading = useFocusOnMount<HTMLHeadingElement>();
   return (
     <Card className="mt-8">
-      <h2 className="font-display text-3xl">Check your email</h2>
+      <h2 ref={heading} tabIndex={-1} className="font-display text-3xl focus:outline-none">
+        Check your email
+      </h2>
       <p className="mt-3 leading-relaxed">
         We sent a link to <strong>{email}</strong>. Open it within 24 hours to confirm your address.
       </p>
