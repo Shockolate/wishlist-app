@@ -5,6 +5,7 @@ import { SecurityModule } from '../security/security.module.js';
 import { AuthEmails } from './auth-emails.js';
 import { EmailGate } from './email-gate.js';
 import { EmailTokensService } from './email-tokens.service.js';
+import { LoginService } from './login.service.js';
 import { MeController } from './me.controller.js';
 import { SessionController } from './session.controller.js';
 import { SessionGuard } from './session.guard.js';
@@ -23,6 +24,7 @@ import { SignupService } from './signup.service.js';
     EmailGate,
     AuthEmails,
     SignupService,
+    LoginService,
   ],
 })
 export class AuthModule {}

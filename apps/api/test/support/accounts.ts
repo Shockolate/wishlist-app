@@ -1,7 +1,7 @@
 import { SUBJECTS } from '../../src/auth/auth-emails.js';
 import type { EmailMessage } from '../../src/email/email-sender.js';
 import type { AuthTestApp } from './auth-app.js';
-import { client, linkToken } from './client.js';
+import { client, linkToken, sessionCookie } from './client.js';
 
 export interface Account {
   email: string;
@@ -39,4 +39,17 @@ export async function signUpVerified(t: AuthTestApp, account: Account = ADA): Pr
   const token = linkToken(lastEmail(t, account.email, SUBJECTS.verification).text);
   const res = await client(t.app).post('/auth/verify-email', { token });
   if (res.status !== 204) throw new Error(`verify answered ${res.status}`);
+}
+
+/** Logs in and returns the session cookie to send back. */
+export async function logIn(
+  t: AuthTestApp,
+  credentials: Pick<Account, 'email' | 'password'> = ADA,
+): Promise<string> {
+  const res = await client(t.app).post('/auth/login', {
+    email: credentials.email,
+    password: credentials.password,
+  });
+  if (res.status !== 204) throw new Error(`login answered ${res.status}`);
+  return sessionCookie(res);
 }
