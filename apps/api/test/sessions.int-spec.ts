@@ -4,7 +4,7 @@ import { SESSION_COOKIE } from '../src/auth/session-cookie.js';
 import { SessionsService } from '../src/auth/sessions.service.js';
 import { newId } from '../src/core/ids.js';
 import { http } from '../src/testing/app.js';
-import { createAuthTestApp, type AuthTestApp } from './support/auth-app.js';
+import { createAuthTestApp, TEST_START, type AuthTestApp } from './support/auth-app.js';
 import { client, sessionCookie, setCookies } from './support/client.js';
 import { openTestDatabase } from './support/database.js';
 
@@ -84,14 +84,26 @@ describe('sessions (spec §6.1)', () => {
     expect(setCookies(early)).toEqual([]);
 
     t.clock.advance(2 * 60 * 1000);
+    const refreshedAt = t.clock.now();
     const refreshed = await client(t.app, cookie).get('/me');
     expect(sessionCookie(refreshed)).toBe(cookie);
     expect(setCookies(refreshed)[0]).toMatch(
       /Max-Age=2592000; Path=\/; .*HttpOnly; Secure; SameSite=Lax$/,
     );
+    const { rows } = await db.pool.query<{ last_seen_at: Date; expires_at: Date }>(
+      'select last_seen_at, expires_at from sessions',
+    );
+    expect(rows[0]?.last_seen_at).toEqual(refreshedAt);
+    expect(rows[0]?.expires_at).toEqual(new Date(refreshedAt.getTime() + 30 * DAY));
 
-    // 29 more days: past the original 30-day expiry, but within the refreshed one.
-    t.clock.advance(29 * DAY);
+    // Just refreshed, so a request a few minutes later neither writes nor reissues the cookie.
+    t.clock.advance(5 * 60 * 1000);
+    const soon = await client(t.app, cookie).get('/me');
+    expect(soon.status).toBe(200);
+    expect(setCookies(soon)).toEqual([]);
+
+    // Past the original 30-day expiry but within the refreshed one: only a slide keeps it alive.
+    t.clock.set(new Date(TEST_START.getTime() + 30 * DAY + 30 * 60 * 1000));
     expect((await client(t.app, cookie).get('/me')).status).toBe(200);
   });
 
