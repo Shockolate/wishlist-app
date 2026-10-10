@@ -20,7 +20,7 @@ pnpm --filter @wishlist/api db:migrate
 pnpm --filter @wishlist/e2e exec playwright install --with-deps chromium
 ```
 
-Already have an `apps/api/.env`? Since Plan 2a the API needs `APP_ORIGIN`, and local development uses `EMAIL_TRANSPORT=mailpit` and Turnstile's test secret. Copy the new lines from `.env.example`, or the API stops at boot and names the missing variable.
+Already have an `apps/api/.env`? Since Plan 2a the API needs `APP_ORIGIN`, and local development uses `EMAIL_TRANSPORT=mailpit` and Turnstile's test secret. Copy the new lines from `.env.example`. Without `APP_ORIGIN` the API stops at boot and names it. Without the other two it boots, but signup answers `503 CAPTCHA_UNAVAILABLE` and email goes to the API's console instead of Mailpit.
 
 ## Daily loop
 
@@ -73,7 +73,7 @@ curl keeps the `__Host-session` cookie over plain http because it's localhost.
 
 ## Pinned dependencies
 
-`apps/api` pins `undici-types` as a devDependency, at the version `@types/node` locks. Vercel's post-build type check doesn't follow pnpm's symlinks, so without the pin `@types/node` can't find `undici-types`, the global `Response` type collapses, and `build-api` fails with `TS2339`. When you bump `@types/node`, bump `undici-types` to the version the lockfile resolves for it: `pnpm --filter @wishlist/api why undici-types`.
+`apps/api` pins `undici-types` as a devDependency, at the version `@types/node` locks. Vercel's post-build type check doesn't follow pnpm's symlinks, so without the pin `@types/node` can't find `undici-types`, the global `Response` type collapses, and `build-api` fails with `TS2339`. When you bump `@types/node`, bump `undici-types` to the version the lockfile resolves for it: `pnpm --filter @wishlist/api why undici-types --depth 1`.
 
 ## Workflow
 
