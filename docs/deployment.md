@@ -72,12 +72,38 @@ printf '%s' '{"generate":{"note":"GitHub Actions smoke tests (wishlist-app)"}}' 
 
 ## Environment variables
 
-| Where                              | Name                       | Value                                              |
-| ---------------------------------- | -------------------------- | -------------------------------------------------- |
-| Vercel `wishlist-api` → Production | `DATABASE_URL` (sensitive) | Neon pooled string                                 |
-| Vercel `wishlist-api` → Production | `APP_ORIGIN`               | Web production origin                              |
-| Set per deploy by CI               | `GIT_SHA`                  | The commit being deployed                          |
-| Set at build by CI                 | `API_ORIGIN` (web)         | API production origin, or the PR's API preview URL |
+| Where                              | Name                                                                                                                          | Value                                                                                                                                   |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Vercel `wishlist-api` → Production | `DATABASE_URL` (sensitive)                                                                                                    | Neon pooled string                                                                                                                      |
+| Vercel `wishlist-api` → Production | `APP_ORIGIN`                                                                                                                  | Web production origin. The CSRF guard compares it exactly, and email links use it                                                       |
+| Vercel `wishlist-api` → Production | `CRON_SECRET` (sensitive)                                                                                                     | 48 random bytes, base64. Vercel Cron sends it as a bearer token. Unset means the cron refuses everyone                                  |
+| Vercel `wishlist-api` → Production | `TURNSTILE_SECRET_KEY` (sensitive)                                                                                            | **Plan 2b.** While unset, signup, resend-verification and reset-request answer `503 CAPTCHA_UNAVAILABLE`. That's how Plan 2a ships dark |
+| Vercel `wishlist-api` → Production | `EMAIL_TRANSPORT=resend`, `EMAIL_FROM=Hanker <no-reply@mail.hanker.dev>`, `RESEND_API_KEY` (sensitive)                        | **Plan 2b.** Until then `EMAIL_TRANSPORT` defaults to `log`                                                                             |
+| Set per preview by CI              | `DATABASE_URL`, `APP_ORIGIN`, `EMAIL_TRANSPORT=log`, `TURNSTILE_SECRET_KEY` (Cloudflare's always-pass test secret), `GIT_SHA` | See `.github/workflows/preview.yml`                                                                                                     |
+| Set per deploy by CI               | `GIT_SHA`                                                                                                                     | The commit being deployed                                                                                                               |
+| Set at build by CI                 | `API_ORIGIN` (web)                                                                                                            | API production origin, or the PR's API preview URL                                                                                      |
+
+Set a sensitive production variable without it touching disk or shell history. For example, `CRON_SECRET`:
+
+```bash
+openssl rand -base64 48 | tr -d '\n' \
+  | npx --yes vercel@62.5.0 env add CRON_SECRET production --sensitive --project wishlist-api --scope shockolate
+```
+
+Runtime variables apply to the **next** deployment. Redeploy, or merge to `main`, after changing one.
+
+## Daily cron
+
+`apps/api/vercel.json` schedules `GET /api/internal/cron/daily` for 09:00 UTC. Hobby runs it once a day, at some point within that hour, and only on production deployments. Each run purges:
+
+- unverified accounts older than 7 days, which cascades to their wishlists, tokens and sessions;
+- expired email tokens and sessions;
+- rate-limit windows older than a day.
+
+The response lists the counts.
+
+- **Check it ran:** Vercel → `wishlist-api` → Settings → Cron Jobs shows the schedule and has a **Run** button. The run's logs show the JSON counts.
+- **It refuses** any request without `Authorization: Bearer $CRON_SECRET` with a `401`.
 
 ## GitHub configuration
 

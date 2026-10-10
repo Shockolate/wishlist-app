@@ -265,7 +265,7 @@ rate_limits (
 
 - Every route is under `/api`. Request bodies are `application/json`.
 - Each request and response has a Zod schema in `packages/contracts`. A global Zod validation pipe validates requests.
-- Errors are RFC 9457 `application/problem+json` with a stable `code` and the `requestId`. For validation failures they also include `errors[]`, the path of each bad field.
+- Errors are RFC 9457 `application/problem+json` with a stable `code` and the `requestId`. For validation failures they also include `errors[]`, the path of each bad field; those are `400 VALIDATION_FAILED` (Plan 2a).
 
 ### Auth
 
@@ -280,8 +280,8 @@ rate_limits (
 | `POST /auth/password-reset/confirm` | `{token, newPassword}` | `204`. Revokes **all** sessions and sets `email_verified_at` if it was null, because receiving the reset proves the person controls the inbox |
 | `GET /me` | none | `{id, email, displayName, emailVerified}` |
 | `PATCH /me` | `{displayName}` | Updated user |
-| `POST /me/password` | `{currentPassword, newPassword}` | `204`. Revokes all **other** sessions |
-| `DELETE /me` | `{password}` | `204`. Cascades everything and clears the cookie |
+| `POST /me/password` | `{currentPassword, newPassword}` | `204`. Revokes all **other** sessions. A wrong current password is `403 INVALID_CREDENTIALS`: a `401` would read as "signed out" |
+| `DELETE /me` | `{password}` | `204`. Cascades everything and clears the cookie. A wrong password is `403 INVALID_CREDENTIALS` |
 
 Unverified users can log in. Every owner endpoint returns `403 EMAIL_NOT_VERIFIED` for them, and the web app shows a "check your email or resend" screen.
 
@@ -399,6 +399,8 @@ These are the initial values. They're configurable, and every limited endpoint r
 | signup, resend-verification, reset-request | 3 per hour per email, and 20 per hour per IP |
 | `POST …/claims`, `PATCH /claims/*` | 30 per hour per share token, and 20 per hour per IP |
 | `POST /wishlist/unfurl` | 60 per hour per user |
+
+**Buckets and order (Plan 2a).** Signup, resend-verification and reset-request share one per-address and one per-IP bucket: together they cap the mail one inbox or one IP can trigger. Those endpoints check the per-IP limit, then Turnstile, then the per-address limit, so failed challenges can't use up a victim's budget. Password confirmations on `/me` count against login's per-address bucket. Keys store a SHA-256 of the email or IP, never the raw value.
 
 **Client IP (resolved by [Spike B](../spikes/2026-10-07-vercel-rewrite-headers-and-alias.md)):** on Vercel, the API reads the client IP from **`x-real-ip`**. Requests forwarded by the Next.js rewrite carry the browser's real IP, and Vercel's edge overwrites client-supplied `x-real-ip`, `x-forwarded-for` and `x-vercel-forwarded-for`, both through the rewrite and on direct calls. The header is trusted **only when `VERCEL` is set**; elsewhere (local, CI) it is client-controlled, so the API falls back to the socket address. Per-IP limits stay in.
 
@@ -524,7 +526,7 @@ When a dependency fails, the behavior is fixed per service:
 |---|---|
 | HIBP | Skip the breach check and log it |
 | Turnstile | Refuse the email-sending endpoints and tell the user to try again later |
-| Resend | The endpoint still returns `202`. The error goes to Sentry, and the user can resend |
+| Resend | The endpoint still returns `202`: email is delivered in the background, after the response (Plan 2a). The error is logged (Sentry from Plan 5), and the user can resend |
 | Unfurl target | `200` with empty fields; the owner fills them in by hand |
 | Neon cold start | The `pg` connect timeout is 10 s. Non-idempotent writes aren't retried |
 
@@ -615,7 +617,7 @@ When a dependency fails, the behavior is fixed per service:
 |---|---|
 | GitHub Environment `production` | `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID_WEB`, `VERCEL_PROJECT_ID_API`, `NEON_API_KEY`, `NEON_PROJECT_ID`, `DATABASE_URL_DIRECT` (for migrations and dumps), `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `AGE_RECIPIENT`, `SENTRY_AUTH_TOKEN` |
 | GitHub Environment `preview` | The Vercel and Neon secrets above, plus `VERCEL_AUTOMATION_BYPASS_SECRET` |
-| Vercel project env | `DATABASE_URL` (pooled), `APP_ORIGIN`, `RESEND_API_KEY`, `TURNSTILE_SECRET_KEY`, `SENTRY_DSN`, `CRON_SECRET`, `EMAIL_TRANSPORT` (`resend` or `log`) |
+| Vercel project env | `DATABASE_URL` (pooled), `APP_ORIGIN`, `RESEND_API_KEY`, `TURNSTILE_SECRET_KEY`, `SENTRY_DSN`, `CRON_SECRET`, `EMAIL_TRANSPORT` (`resend`, `mailpit` for local development and E2E, or `log`), `EMAIL_FROM` |
 
 The private `age` key is never stored in GitHub. It's kept offline by the owner.
 
