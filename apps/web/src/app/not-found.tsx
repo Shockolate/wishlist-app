@@ -11,7 +11,7 @@ export default function NotFound() {
           The link may be mistyped, or the page has moved.
         </p>
         <p className="mt-8">
-          <Link href="/" className="underline">
+          <Link href="/" className="inline-flex min-h-11 items-center underline">
             Go to the home page
           </Link>
         </p>
