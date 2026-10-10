@@ -1,5 +1,5 @@
 import { ErrorCode, ProblemSchema, type Problem } from '@wishlist/contracts';
-import type { z } from 'zod';
+import { z } from 'zod';
 
 /** The API (or something in front of it) answered with an error status. */
 export class ApiError extends Error {
@@ -26,6 +26,9 @@ export class ContractMismatchError extends Error {
     this.name = 'ContractMismatchError';
   }
 }
+
+/** The schema for an empty 204 response. */
+export const NoContentSchema = z.undefined();
 
 type FetchFn = (url: string, init: RequestInit) => Promise<Response>;
 
@@ -103,7 +106,8 @@ export function createApiClient({
       request('PATCH', path, schema, body),
     put: <S extends z.ZodType>(path: string, body: unknown, schema: S) =>
       request('PUT', path, schema, body),
-    delete: <S extends z.ZodType>(path: string, schema: S) => request('DELETE', path, schema),
+    delete: <S extends z.ZodType>(path: string, schema: S, body?: unknown) =>
+      request('DELETE', path, schema, body),
   };
 }
 

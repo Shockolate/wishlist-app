@@ -219,6 +219,8 @@ jobs:
     timeout-minutes: 15
     env:
       API_ORIGIN: ${{ needs.provision.outputs.api_url }}
+      # Previews pair Cloudflare's always-pass test key with the API's test secret (Plan 2a).
+      TURNSTILE_SITE_KEY: 1x00000000000000000000AA
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

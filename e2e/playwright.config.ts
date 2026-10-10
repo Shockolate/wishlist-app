@@ -3,6 +3,10 @@ import { defineConfig, devices } from '@playwright/test';
 // Not 3000/3001, so E2E can run while `pnpm dev` is up.
 const WEB_PORT = 3100;
 const API_PORT = 3101;
+
+// Cloudflare's published always-pass Turnstile test keys (public, not credentials).
+const TURNSTILE_TEST_SITE_KEY = '1x00000000000000000000AA';
+const TURNSTILE_TEST_SECRET = '1x0000000000000000000000000000000AA';
 const databaseUrl =
   process.env.E2E_DATABASE_URL ?? 'postgres://wishlist:wishlist@localhost:54329/wishlist_e2e';
 
@@ -27,6 +31,9 @@ export default defineConfig({
         DATABASE_URL: databaseUrl,
         GIT_SHA: 'e2e',
         APP_ORIGIN: `http://localhost:${WEB_PORT}`,
+        EMAIL_TRANSPORT: 'mailpit',
+        MAILPIT_URL: 'http://localhost:8025',
+        TURNSTILE_SECRET_KEY: TURNSTILE_TEST_SECRET,
       },
       reuseExistingServer: false,
       timeout: 30_000,
@@ -35,7 +42,10 @@ export default defineConfig({
       command: `pnpm exec next start --port ${WEB_PORT}`,
       cwd: '../apps/web',
       url: `http://localhost:${WEB_PORT}`,
-      env: { API_ORIGIN: `http://localhost:${API_PORT}` },
+      env: {
+        API_ORIGIN: `http://localhost:${API_PORT}`,
+        TURNSTILE_SITE_KEY: TURNSTILE_TEST_SITE_KEY,
+      },
       reuseExistingServer: false,
       timeout: 60_000,
     },

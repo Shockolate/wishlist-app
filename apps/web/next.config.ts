@@ -26,13 +26,29 @@ function readApiOrigin(): string {
   return value;
 }
 
+/**
+ * Cloudflare Turnstile's public site key (rule 11). Required, so a build can't ship a widget that
+ * never renders. Outside production, use Cloudflare's always-pass test key.
+ */
+function readTurnstileSiteKey(): string {
+  const value = process.env.TURNSTILE_SITE_KEY;
+  if (!value) {
+    throw new Error(
+      'TURNSTILE_SITE_KEY must be set to build or start the web app (outside production, use the test key 1x00000000000000000000AA)',
+    );
+  }
+  return value;
+}
+
 const API_ORIGIN = readApiOrigin();
+const TURNSTILE_SITE_KEY = readTurnstileSiteKey();
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
-  // Inlined at build so server code calls exactly the API the rewrite points at.
-  env: { API_ORIGIN },
+  // Inlined at build: server code calls exactly the API the rewrite points at, and the browser
+  // gets the Turnstile site key.
+  env: { API_ORIGIN, TURNSTILE_SITE_KEY },
   async rewrites() {
     return [{ source: '/api/:path*', destination: `${API_ORIGIN}/api/:path*` }];
   },
