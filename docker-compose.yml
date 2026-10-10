@@ -18,5 +18,11 @@ services:
       timeout: 3s
       retries: 30
 
+  # Catches every email the API sends locally (EMAIL_TRANSPORT=mailpit). Inbox: http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:v1.31.4
+    ports:
+      - '8025:8025'
+
 volumes:
   pgdata:
