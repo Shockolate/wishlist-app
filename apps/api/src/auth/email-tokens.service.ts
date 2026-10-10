@@ -1,8 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, gt, isNull } from 'drizzle-orm';
+import { and, eq, gt, isNull, type SQL } from 'drizzle-orm';
 import { CLOCK, type Clock } from '../core/clock.js';
 import { newId } from '../core/ids.js';
-import type { Transaction } from '../db/database.module.js';
+import type { Database, Transaction } from '../db/database.module.js';
 import { emailTokens, type EmailTokenPurpose } from '../db/schema.js';
 import { hashToken, newToken } from '../security/tokens.js';
 
@@ -41,6 +41,15 @@ export class EmailTokensService {
     return token;
   }
 
+  /** The user a live token belongs to, without using it up. A cheap check before expensive work. */
+  async peek(db: Database, token: string, purpose: EmailTokenPurpose): Promise<string | null> {
+    const [row] = await db
+      .select({ userId: emailTokens.userId })
+      .from(emailTokens)
+      .where(this.live(token, purpose));
+    return row?.userId ?? null;
+  }
+
   /**
    * Uses up a live token inside the caller's transaction and returns its user. Returns null if
    * the token is unknown, expired or already used. FOR UPDATE makes a concurrent second use wait,
@@ -51,21 +60,25 @@ export class EmailTokensService {
     token: string,
     purpose: EmailTokenPurpose,
   ): Promise<string | null> {
-    const now = this.clock.now();
     const [row] = await tx
       .select({ id: emailTokens.id, userId: emailTokens.userId })
       .from(emailTokens)
-      .where(
-        and(
-          eq(emailTokens.tokenHash, hashToken(token)),
-          eq(emailTokens.purpose, purpose),
-          isNull(emailTokens.consumedAt),
-          gt(emailTokens.expiresAt, now),
-        ),
-      )
+      .where(this.live(token, purpose))
       .for('update');
     if (!row) return null;
-    await tx.update(emailTokens).set({ consumedAt: now }).where(eq(emailTokens.id, row.id));
+    await tx
+      .update(emailTokens)
+      .set({ consumedAt: this.clock.now() })
+      .where(eq(emailTokens.id, row.id));
     return row.userId;
+  }
+
+  private live(token: string, purpose: EmailTokenPurpose): SQL | undefined {
+    return and(
+      eq(emailTokens.tokenHash, hashToken(token)),
+      eq(emailTokens.purpose, purpose),
+      isNull(emailTokens.consumedAt),
+      gt(emailTokens.expiresAt, this.clock.now()),
+    );
   }
 }
