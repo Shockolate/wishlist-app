@@ -197,10 +197,13 @@ jobs:
         run: |
           cp vercel-settings/api/project.json .vercel/project.json
           # EMAIL_TRANSPORT=log: a preview never emails anyone, whatever data it holds (spec §10).
+          # Cloudflare's published always-pass test secret (public, not a credential): previews
+          # accept Turnstile test tokens, and their email is log-only anyway.
           url=$(npx --yes vercel@"$VERCEL_CLI_VERSION" deploy --prebuilt \
             --env DATABASE_URL="$DATABASE_URL" \
             --env APP_ORIGIN="https://$WEB_ALIAS" \
             --env EMAIL_TRANSPORT=log \
+            --env TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA \
             --env GIT_SHA="$HEAD_SHA" | scripts/vercel-url.sh)
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
