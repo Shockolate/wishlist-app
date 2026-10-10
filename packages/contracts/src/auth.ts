@@ -11,20 +11,22 @@ const ExistingPasswordSchema = z.string().min(1).max(128);
 
 /**
  * Control and format characters: newlines, tabs, bidirectional overrides, zero-width spaces. They
- * can make a name lie about what it says (rule 14). The zero-width joiner is allowed: emoji
- * sequences such as 👩‍🍳 need it.
+ * can make a name lie about what it says. The two joiners are allowed inside a name: emoji
+ * sequences need the zero-width joiner (U+200D), and Persian needs the non-joiner (U+200C).
  */
 const HIDDEN_CHARACTERS = /[\p{Cc}\p{Cf}]/u;
+const JOINERS = /[\u200C\u200D]/gu;
 
 export const DisplayNameSchema = z
   .string()
   .trim()
   .min(1)
   .max(50)
-  .refine(
-    (name) => !HIDDEN_CHARACTERS.test(name.replaceAll('‍', '')),
-    'Use visible characters only',
-  );
+  .refine((name) => {
+    const rest = name.replace(JOINERS, '');
+    // Joiners and spaces alone would show as a blank name.
+    return rest.trim().length > 0 && !HIDDEN_CHARACTERS.test(rest);
+  }, 'Use visible characters only');
 
 /** An email-link token: 256 random bits, base64url without padding (spec §4). */
 export const EmailTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/, 'Invalid token');
