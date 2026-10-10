@@ -4,6 +4,7 @@
 - **Status:** Draft, pending review
 - **Author:** Ted Armstrong (with Claude)
 - **Repo:** `github.com/Shockolate/wishlist-app` (public; not yet created)
+- **Product name:** **Hanker**, at `hanker.dev` (decided 2026-10-09, D26). Internal identifiers keep the domain noun `wishlist`.
 
 ## 1. Intent
 
@@ -604,9 +605,9 @@ When a dependency fails, the behavior is fixed per service:
 
 ### Domain and DNS
 
-- The domain is bought from Cloudflare Registrar.
+- The domain, `hanker.dev`, is bought from Cloudflare Registrar. Like every `.dev` domain it's on the HSTS preload list, so it's served over HTTPS only, which Vercel does anyway.
 - DNS stays on Cloudflare. The records pointing at Vercel are **DNS-only (grey cloud)**, because proxying in front of Vercel breaks certificate issuance and caching.
-- Resend's SPF, DKIM and DMARC records are added on its sending subdomain.
+- Resend's SPF, DKIM and DMARC records are added on its sending subdomain, `mail.hanker.dev`. Email comes from `Hanker <no-reply@mail.hanker.dev>`.
 
 ### Secrets
 
@@ -672,3 +673,4 @@ As of 2026-10-07 on the development machine:
 | D23 | ESM with Vitest; TypeScript pinned to 6.0.x; ESLint pinned to 9.x (amended 2026-10-07 while planning) | CommonJS API with Jest; ESM with experimental Jest; TS 7; ESLint 10 |
 | D24 | Secret-free build jobs; secrets only in jobs that run the pinned Vercel CLI, pinned actions, or a `--prod --ignore-scripts` install (2026-10-08) | One job with step-scoped secrets |
 | D25 | `preview-seed` as a schema-only root branch, wiped and migrated from zero, refreshed in place (2026-10-08) | Clone of production then anonymized; a schema-only root branch per PR (exceeds Neon Free's 3 root branches) |
+| D26 | Product name **Hanker** on `hanker.dev` (2026-10-09). The user-facing name changes; code, packages, projects and tables keep `wishlist` | `hanker.app` and `hanker.com` (both registered); keeping the generic "Wishlist" |
