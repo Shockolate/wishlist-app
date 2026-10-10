@@ -1,30 +1,35 @@
-import { HealthResponseSchema } from '@wishlist/contracts';
-import { ApiError } from '@/lib/api-client';
-import { serverApi } from '@/lib/api.server';
+import Link from 'next/link';
+import { Collage } from '@/components/collage';
+import { SiteHeader } from '@/components/site-header';
+import { buttonVariants } from '@/components/ui/button';
 
-// Rendered per request: the status must reflect the live API, and prerendering at build time
-// would make CI call the API.
-export const dynamic = 'force-dynamic';
-
-export default async function HomePage() {
+export default function HomePage() {
   return (
-    <main className="mx-auto max-w-xl px-4 py-12">
-      <h1 className="text-3xl font-semibold tracking-tight">Wishlist</h1>
-      <p className="mt-2 text-neutral-600">Wishlists for family and friends. Coming soon.</p>
-      <p className="mt-8 font-mono text-sm" data-testid="api-status">
-        {await apiStatus()}
-      </p>
-    </main>
+    <>
+      <SiteHeader action="none" />
+      <main className="mx-auto max-w-[1200px] px-4 pb-24 sm:px-7">
+        <div className="mt-14 flex flex-wrap items-start gap-x-16 gap-y-12">
+          <Collage />
+          <div className="min-w-0 max-w-[460px] flex-[1_1_340px]">
+            <h1 className="font-display text-[clamp(2.75rem,6vw,4rem)] leading-[0.98] tracking-[-0.01em]">
+              One list. One link. No doubled-up gifts.
+            </h1>
+            <p className="mt-5 text-lg leading-relaxed text-muted-foreground">
+              Add the things you’d love, then share your link with family and friends. They claim
+              gifts quietly, so nobody buys the same thing twice, and you never see who’s getting
+              what.
+            </p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link href="/signup" className={buttonVariants()}>
+                Create your list
+              </Link>
+              <Link href="/login" className={buttonVariants({ variant: 'secondary' })}>
+                Log in
+              </Link>
+            </div>
+          </div>
+        </div>
+      </main>
+    </>
   );
-}
-
-async function apiStatus(): Promise<string> {
-  try {
-    const api = await serverApi();
-    const health = await api.get('/health', HealthResponseSchema);
-    return `API: ${health.status} · db: ${health.db.ok ? 'ok' : 'down'}`;
-  } catch (error) {
-    if (error instanceof ApiError && error.status === 503) return 'API: degraded · db: down';
-    return 'API: unreachable';
-  }
 }

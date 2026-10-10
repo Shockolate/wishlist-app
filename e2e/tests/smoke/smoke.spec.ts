@@ -21,5 +21,7 @@ test('auth is live: /api/me without a session answers 401 UNAUTHENTICATED', asyn
 
 test('landing page renders', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Wishlist' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'One list. One link. No doubled-up gifts.' }),
+  ).toBeVisible();
 });
