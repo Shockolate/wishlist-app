@@ -23,7 +23,7 @@ export class SessionController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<void> {
     const session = await this.logins.login(body, ip);
-    setSessionCookie(res, session.token, session.maxAgeMs);
+    setSessionCookie(res, session.token);
   }
 
   /** Idempotent: 204 and a cleared cookie, whether or not a live session came with it. */

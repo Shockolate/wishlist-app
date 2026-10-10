@@ -34,7 +34,7 @@ describe('POST /auth/login (spec §5, §6.1, §6.4)', () => {
     expect(res.status).toBe(204);
     expect(setCookies(res)[0]).toMatch(
       new RegExp(
-        `^${SESSION_COOKIE}=[A-Za-z0-9_-]{43}; Max-Age=2592000; Path=/; Expires=.+; HttpOnly; Secure; SameSite=Lax$`,
+        `^${SESSION_COOKIE}=[A-Za-z0-9_-]{43}; Max-Age=34560000; Path=/; Expires=.+; HttpOnly; Secure; SameSite=Lax$`,
       ),
     );
     const me = await client(t.app, sessionCookie(res)).get('/me');

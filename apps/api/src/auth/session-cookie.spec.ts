@@ -5,9 +5,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createUnitApp, http } from '../testing/app.js';
 import {
   clearSessionCookie,
+  hasSessionCookie,
   readSessionToken,
   SESSION_COOKIE,
-  SESSION_TTL_MS,
   setSessionCookie,
 } from './session-cookie.js';
 
@@ -23,13 +23,20 @@ describe('readSessionToken', () => {
     expect(readSessionToken('theme=dark')).toBeUndefined();
     expect(readSessionToken(`${SESSION_COOKIE}=not-a-token`)).toBeUndefined();
   });
+
+  it('tells whether a session cookie was sent at all, well-formed or not', () => {
+    expect(hasSessionCookie(`theme=dark; ${SESSION_COOKIE}=not-a-token`)).toBe(true);
+    expect(hasSessionCookie(`${SESSION_COOKIE}=${TOKEN}`)).toBe(true);
+    expect(hasSessionCookie('theme=dark')).toBe(false);
+    expect(hasSessionCookie(undefined)).toBe(false);
+  });
 });
 
 @Controller('probe')
 class ProbeController {
   @Get('set')
   set(@Res({ passthrough: true }) res: Response): void {
-    setSessionCookie(res, TOKEN, SESSION_TTL_MS);
+    setSessionCookie(res, TOKEN);
   }
 
   @Get('clear')
@@ -47,10 +54,10 @@ describe('session cookie attributes (spec §6.1)', () => {
 
   afterAll(() => app.close());
 
-  it('sets __Host-session HttpOnly, Secure, SameSite=Lax, Path=/ for 30 days', async () => {
+  it('sets __Host-session HttpOnly, Secure, SameSite=Lax, Path=/ for 400 days (D27)', async () => {
     const res = await http(app).get('/api/probe/set');
     const cookie = String(res.headers['set-cookie']);
-    expect(cookie).toMatch(new RegExp(`^${SESSION_COOKIE}=${TOKEN}; Max-Age=2592000; Path=/; `));
+    expect(cookie).toMatch(new RegExp(`^${SESSION_COOKIE}=${TOKEN}; Max-Age=34560000; Path=/; `));
     expect(cookie).toMatch(/; HttpOnly; Secure; SameSite=Lax$/);
     expect(cookie).not.toMatch(/Domain=/i);
   });

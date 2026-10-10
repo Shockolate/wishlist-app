@@ -22,7 +22,7 @@ export class LoginService {
    * the address exists. An unknown address still costs a full argon2 check. Unverified users may
    * log in; owner endpoints check verification (Plan 3).
    */
-  async login(input: LoginRequest, ip: string): Promise<{ token: string; maxAgeMs: number }> {
+  async login(input: LoginRequest, ip: string): Promise<{ token: string }> {
     await this.limiter.enforce(rateLimitKey('login:ip', ip), LOGIN_PER_IP);
     await this.limiter.enforce(rateLimitKey('login:email', input.email), LOGIN_PER_EMAIL);
     const user = await findUserByEmail(this.db, input.email);

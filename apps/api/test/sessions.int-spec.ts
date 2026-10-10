@@ -5,7 +5,7 @@ import { SessionsService } from '../src/auth/sessions.service.js';
 import { newId } from '../src/core/ids.js';
 import { http } from '../src/testing/app.js';
 import { createAuthTestApp, TEST_START, type AuthTestApp } from './support/auth-app.js';
-import { client, sessionCookie, setCookies } from './support/client.js';
+import { client, setCookies } from './support/client.js';
 import { openTestDatabase } from './support/database.js';
 
 const db = openTestDatabase();
@@ -75,36 +75,52 @@ describe('sessions (spec §6.1)', () => {
     expect((await client(t.app, cookie).get('/me')).status).toBe(401);
   });
 
-  it('slides the expiry at most once an hour, reissuing the cookie when it does', async () => {
+  it('slides the database expiry at most once an hour and never reissues the cookie (D27)', async () => {
     const { cookie } = await signedIn();
+    const row = async () =>
+      (
+        await db.pool.query<{ last_seen_at: Date; expires_at: Date }>(
+          'select last_seen_at, expires_at from sessions',
+        )
+      ).rows[0];
 
     t.clock.advance(59 * 60 * 1000);
     const early = await client(t.app, cookie).get('/me');
     expect(early.status).toBe(200);
     expect(setCookies(early)).toEqual([]);
+    expect((await row())?.expires_at).toEqual(new Date(TEST_START.getTime() + 30 * DAY));
 
     t.clock.advance(2 * 60 * 1000);
     const refreshedAt = t.clock.now();
     const refreshed = await client(t.app, cookie).get('/me');
-    expect(sessionCookie(refreshed)).toBe(cookie);
-    expect(setCookies(refreshed)[0]).toMatch(
-      /Max-Age=2592000; Path=\/; .*HttpOnly; Secure; SameSite=Lax$/,
-    );
-    const { rows } = await db.pool.query<{ last_seen_at: Date; expires_at: Date }>(
-      'select last_seen_at, expires_at from sessions',
-    );
-    expect(rows[0]?.last_seen_at).toEqual(refreshedAt);
-    expect(rows[0]?.expires_at).toEqual(new Date(refreshedAt.getTime() + 30 * DAY));
+    expect(refreshed.status).toBe(200);
+    expect(setCookies(refreshed)).toEqual([]);
+    expect(await row()).toEqual({
+      last_seen_at: refreshedAt,
+      expires_at: new Date(refreshedAt.getTime() + 30 * DAY),
+    });
 
-    // Just refreshed, so a request a few minutes later neither writes nor reissues the cookie.
-    t.clock.advance(5 * 60 * 1000);
-    const soon = await client(t.app, cookie).get('/me');
-    expect(soon.status).toBe(200);
-    expect(setCookies(soon)).toEqual([]);
-
-    // Past the original 30-day expiry but within the refreshed one: only a slide keeps it alive.
+    // Past the original 30-day expiry but within the slid one: only the slide keeps it alive.
     t.clock.set(new Date(TEST_START.getTime() + 30 * DAY + 30 * 60 * 1000));
     expect((await client(t.app, cookie).get('/me')).status).toBe(200);
+  });
+
+  it('clears a dead session cookie with the 401, so the browser stops sending it (rule 2)', async () => {
+    const { cookie } = await signedIn();
+    t.clock.advance(30 * DAY + 1);
+    const expired = await client(t.app, cookie).get('/me');
+    expect(expired.status).toBe(401);
+    expect(setCookies(expired)[0]).toMatch(
+      new RegExp(`^${SESSION_COOKIE}=; Path=/; Expires=Thu, 01 Jan 1970`),
+    );
+
+    const malformed = await client(t.app, `${SESSION_COOKIE}=not-a-token`).get('/me');
+    expect(malformed.status).toBe(401);
+    expect(setCookies(malformed)).toHaveLength(1);
+
+    const none = await client(t.app).get('/me');
+    expect(none.status).toBe(401);
+    expect(setCookies(none)).toEqual([]);
   });
 
   it('logout deletes the session and clears the cookie', async () => {
