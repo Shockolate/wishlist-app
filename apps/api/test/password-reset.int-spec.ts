@@ -1,6 +1,8 @@
 import { ErrorCode, MeResponseSchema, ProblemSchema } from '@wishlist/contracts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { SUBJECTS } from '../src/auth/auth-emails.js';
+import { newId } from '../src/core/ids.js';
+import { hashToken } from '../src/security/tokens.js';
 import { ADA, lastEmail, logIn, signUp, signUpVerified, TURNSTILE_OK } from './support/accounts.js';
 import { createAuthTestApp, type AuthTestApp } from './support/auth-app.js';
 import { client, linkToken, type ApiResponse } from './support/client.js';
@@ -34,6 +36,39 @@ const login = (password: string) =>
   client(t.app).post('/auth/login', { email: ADA.email, password });
 
 describe('password reset (spec §5)', () => {
+  it('retires every other unused reset link once the password is reset (rule 18)', async () => {
+    await signUpVerified(t);
+    await requestReset(ADA.email);
+    const used = resetToken();
+    // A second live link, as the old issue() race could leave behind.
+    const spare = 'S'.repeat(43);
+    await db.pool.query(
+      `insert into email_tokens (id, user_id, purpose, token_hash, expires_at, created_at)
+       select $1, id, 'reset_password', $2, $3, $4 from users`,
+      [
+        newId(),
+        hashToken(spare),
+        new Date(t.clock.now().getTime() + 60 * 60 * 1000),
+        t.clock.now(),
+      ],
+    );
+
+    expect((await confirm(used)).status).toBe(204);
+    const res = await confirm(spare, 'yet another passphrase 3');
+    expect([res.status, codeOf(res)]).toEqual([400, ErrorCode.INVALID_TOKEN]);
+  });
+
+  it('never accepts a verification link as a reset link, or the other way round', async () => {
+    await signUp(t);
+    const verify = linkToken(lastEmail(t, ADA.email, SUBJECTS.verification).text);
+    const asReset = await confirm(verify);
+    expect([asReset.status, codeOf(asReset)]).toEqual([400, ErrorCode.INVALID_TOKEN]);
+
+    await requestReset(ADA.email);
+    const asVerify = await client(t.app).post('/auth/verify-email', { token: resetToken() });
+    expect([asVerify.status, codeOf(asVerify)]).toEqual([400, ErrorCode.INVALID_TOKEN]);
+  });
+
   it('emails a link to a known address and nothing to an unknown one, with identical responses (spec §8)', async () => {
     await signUpVerified(t);
     const known = await requestReset(ADA.email);
