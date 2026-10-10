@@ -168,6 +168,18 @@ describe('POST /auth/signup (spec §5)', () => {
     expect(mail.text).not.toContain('evil.example');
     expect(mail.html).not.toContain('evil.example');
   });
+
+  it("doesn't charge an address's hourly budget for a breached password (rule 12)", async () => {
+    t.breaches.breached.add('password12345');
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const res = await client(t.app).post('/auth/signup', {
+        ...SIGNUP,
+        password: 'password12345',
+      });
+      expect([res.status, codeOf(res)]).toEqual([400, ErrorCode.PASSWORD_BREACHED]);
+    }
+    expect((await client(t.app).post('/auth/signup', SIGNUP)).status).toBe(202);
+  });
 });
 
 describe('POST /auth/verify-email (spec §5, §6.5)', () => {
