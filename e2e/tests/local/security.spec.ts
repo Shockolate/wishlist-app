@@ -1,13 +1,33 @@
 import { expect, test } from '@playwright/test';
 
+// The e2e package has no DOM types; this is the part of the browser's global the test touches.
+type PageGlobal = {
+  __cspViolations: string[];
+  document: {
+    addEventListener(
+      type: 'securitypolicyviolation',
+      listener: (event: { violatedDirective: string; blockedURI: string }) => void,
+    ): void;
+  };
+};
+
 const nonceIn = (csp: string | undefined) => /'nonce-([^']+)'/.exec(csp ?? '')?.[1];
 
 test('a page carries a nonce CSP that its own scripts satisfy (spec §6.9)', async ({ page }) => {
-  const violations: string[] = [];
-  page.on('console', (message) => {
-    if (/Content Security Policy/i.test(message.text())) violations.push(message.text());
+  // Collect violations in the page itself, from the first byte, so nothing slips past.
+  await page.addInitScript(() => {
+    const scope = globalThis as unknown as PageGlobal;
+    scope.__cspViolations = [];
+    scope.document.addEventListener('securitypolicyviolation', (event) => {
+      scope.__cspViolations.push(`${event.violatedDirective} ${event.blockedURI}`);
+    });
   });
-  const res = await page.goto('/');
+  const consoleViolations: string[] = [];
+  page.on('console', (message) => {
+    if (/Content Security Policy/i.test(message.text())) consoleViolations.push(message.text());
+  });
+
+  const res = await page.goto('/', { waitUntil: 'load' });
   const csp = res?.headers()['content-security-policy'];
   const nonce = nonceIn(csp);
   expect(nonce).toBeTruthy();
@@ -17,13 +37,16 @@ test('a page carries a nonce CSP that its own scripts satisfy (spec §6.9)', asy
 
   const scriptNonces = await page
     .locator('script[nonce]')
-    .evaluateAll((scripts) =>
-      scripts.map((script) => (script as unknown as { nonce: string }).nonce),
-    );
+    .evaluateAll((scripts) => scripts.map((script) => (script as { nonce?: string }).nonce));
   expect(scriptNonces.length).toBeGreaterThan(0);
   expect(new Set(scriptNonces)).toEqual(new Set([nonce]));
-  await page.waitForLoadState('networkidle');
-  expect(violations).toEqual([]);
+
+  // Hydration has run by now: Next's client scripts execute before the load event.
+  const pageViolations = await page.evaluate(
+    () => (globalThis as unknown as PageGlobal).__cspViolations,
+  );
+  expect(pageViolations).toEqual([]);
+  expect(consoleViolations).toEqual([]);
 });
 
 test('every request gets a fresh nonce', async ({ request }) => {
