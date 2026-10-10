@@ -1,5 +1,5 @@
 import { ErrorCode, MeResponseSchema, ProblemSchema } from '@wishlist/contracts';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SUBJECTS } from '../src/auth/auth-emails.js';
 import { SESSION_COOKIE } from '../src/auth/session-cookie.js';
 import { ADA, lastEmail, logIn, signUpVerified, TURNSTILE_OK } from './support/accounts.js';
@@ -22,6 +22,10 @@ afterAll(async () => {
 beforeEach(async () => {
   await db.truncateAll();
   t.reset();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 const NEW_PASSWORD = 'a brand new passphrase 2';
@@ -83,6 +87,37 @@ describe('POST /me/password (spec §5)', () => {
       newPassword: 'yet another passphrase 3',
     });
     expect([res.status, codeOf(res)]).toEqual([400, ErrorCode.INVALID_TOKEN]);
+  });
+
+  // The breach check runs after the current password is confirmed and before the new one is
+  // written: the test changes the world there, as a concurrent reset would.
+  it('refuses the change if the password changed meanwhile, and keeps the newer one (rule 17)', async () => {
+    await signUpVerified(t);
+    const cookie = await logIn(t);
+    vi.spyOn(t.breaches, 'isBreached').mockImplementationOnce(async () => {
+      await db.pool.query(`update users set password_hash = 'changed elsewhere'`);
+      return false;
+    });
+
+    const res = await change(cookie, ADA.password);
+    expect([res.status, codeOf(res)]).toEqual([403, ErrorCode.INVALID_CREDENTIALS]);
+    const { rows } = await db.pool.query<{ password_hash: string }>(
+      'select password_hash from users',
+    );
+    expect(rows[0]?.password_hash).toBe('changed elsewhere');
+  });
+
+  it('refuses the change if this session was revoked meanwhile (rule 17)', async () => {
+    await signUpVerified(t);
+    const cookie = await logIn(t);
+    vi.spyOn(t.breaches, 'isBreached').mockImplementationOnce(async () => {
+      await db.pool.query('delete from sessions');
+      return false;
+    });
+
+    const res = await change(cookie, ADA.password);
+    expect([res.status, codeOf(res)]).toEqual([401, ErrorCode.UNAUTHENTICATED]);
+    expect((await login(ADA.password)).status).toBe(204);
   });
 
   it('keeps this session and revokes every other one', async () => {

@@ -4,6 +4,7 @@ import { and, eq, ne } from 'drizzle-orm';
 import { CLOCK, type Clock } from '../core/clock.js';
 import { DB, type Database } from '../db/database.module.js';
 import { sessions, users } from '../db/schema.js';
+import { unauthenticated } from '../http/errors.js';
 import { rateLimitKey } from '../rate-limit/keys.js';
 import { RateLimiter } from '../rate-limit/rate-limiter.js';
 import { PasswordPolicy } from '../security/password-policy.js';
@@ -34,10 +35,24 @@ export class AccountService {
 
   /** Revokes every other session and keeps this one (spec §6.1), in the same transaction. */
   async changePassword(auth: AuthContext, input: ChangePasswordRequest): Promise<void> {
-    await this.confirmPassword(auth, input.currentPassword);
+    const verifiedHash = await this.confirmPassword(auth, input.currentPassword);
     await this.passwordPolicy.assertNotBreached(input.newPassword);
     const passwordHash = await hashPassword(input.newPassword);
     await this.db.transaction(async (tx) => {
+      // Re-check under the row lock: a reset or another change may have landed while this one
+      // hashed, and this request's own session may have been revoked meanwhile (rule 17).
+      const [user] = await tx
+        .select({ passwordHash: users.passwordHash })
+        .from(users)
+        .where(eq(users.id, auth.user.id))
+        .for('update');
+      if (user?.passwordHash !== verifiedHash) throw wrongPassword();
+      const [own] = await tx
+        .select({ id: sessions.id })
+        .from(sessions)
+        .where(eq(sessions.id, auth.sessionId));
+      if (!own) throw unauthenticated();
+
       await tx
         .update(users)
         .set({ passwordHash, updatedAt: this.clock.now() })
@@ -60,12 +75,13 @@ export class AccountService {
    * Re-checks the password before a sensitive change. Attempts count against login's per-address
    * bucket, so a stolen session can't be used to brute-force the password.
    */
-  private async confirmPassword(auth: AuthContext, password: string): Promise<void> {
+  private async confirmPassword(auth: AuthContext, password: string): Promise<string> {
     await this.limiter.enforce(rateLimitKey('login:email', auth.user.email), LOGIN_PER_EMAIL);
     const [row] = await this.db
       .select({ passwordHash: users.passwordHash })
       .from(users)
       .where(eq(users.id, auth.user.id));
     if (!row || !(await verifyPassword(row.passwordHash, password))) throw wrongPassword();
+    return row.passwordHash;
   }
 }

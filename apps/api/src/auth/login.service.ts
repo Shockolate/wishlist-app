@@ -31,6 +31,9 @@ export class LoginService {
       throw invalidCredentials();
     }
     if (!(await verifyPassword(user.passwordHash, input.password))) throw invalidCredentials();
-    return this.sessions.create(user.id);
+    // Null when a reset or change replaced the password since it was read (rule 17).
+    const session = await this.sessions.create(user.id, user.passwordHash);
+    if (!session) throw invalidCredentials();
+    return session;
   }
 }

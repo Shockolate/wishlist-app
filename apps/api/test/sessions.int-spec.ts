@@ -35,7 +35,9 @@ async function signedIn(): Promise<{ userId: string; cookie: string }> {
     `insert into users (id, email, password_hash, display_name) values ($1, 'ada@example.com', 'x', 'Ada')`,
     [userId],
   );
-  const { token } = await t.app.get(SessionsService).create(userId);
+  const session = await t.app.get(SessionsService).create(userId, 'x');
+  if (!session) throw new Error('the test user should have been given a session');
+  const { token } = session;
   return { userId, cookie: `${SESSION_COOKIE}=${token}` };
 }
 
@@ -144,5 +146,16 @@ describe('sessions (spec §6.1)', () => {
     const res = await http(t.app).post('/api/auth/logout').set('Cookie', cookie).send({});
     expect(res.status).toBe(403);
     expect((await client(t.app, cookie).get('/me')).status).toBe(200);
+  });
+
+  it('refuses to create a session when the password changed after it was verified (rule 17)', async () => {
+    const userId = newId();
+    await db.pool.query(
+      `insert into users (id, email, password_hash, display_name) values ($1, 'ada@example.com', 'current', 'Ada')`,
+      [userId],
+    );
+    await expect(t.app.get(SessionsService).create(userId, 'stale')).resolves.toBeNull();
+    const { rows } = await db.pool.query<{ n: string }>('select count(*) as n from sessions');
+    expect(Number(rows[0]?.n)).toBe(0);
   });
 });
