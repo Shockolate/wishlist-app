@@ -48,6 +48,7 @@ test('sends a new verification link from /verify-email', async ({ page, baseURL 
   await passTurnstile(page);
   await page.getByRole('button', { name: 'Send a new link' }).click();
   await expect(page.getByRole('status')).toContainText('a new link is on its way');
+  await expect(page.getByRole('status')).toBeFocused();
   await expect
     .poll(async () => (await emailsTo(email)).filter((m) => m.Subject === VERIFY).length)
     .toBe(2);
@@ -61,6 +62,7 @@ test('resets a forgotten password, and the new one logs in', async ({ page, base
   await passTurnstile(page);
   await page.getByRole('button', { name: 'Send the link' }).click();
   await expect(page.getByRole('status')).toContainText('a link is on its way');
+  await expect(page.getByRole('status')).toBeFocused();
 
   const res = await page.goto(
     linkPath((await waitForEmail(email, RESET)).text, '/reset-password/confirm'),

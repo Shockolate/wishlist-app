@@ -13,6 +13,7 @@ import { NoContentSchema } from '@/lib/api-client';
 import { browserApi } from '@/lib/browser-api';
 import { formErrorMap } from '@/lib/form-errors';
 import { errorMessage } from '@/lib/messages';
+import { useFocusOnMount } from '@/lib/use-focus-on-mount';
 
 /** Resend-verification and reset-request take the same body: an email and a Turnstile token. */
 const EmailOnlySchema = PasswordResetRequestSchema.omit({ turnstileToken: true });
@@ -78,13 +79,7 @@ export function EmailLinkForm({
     });
   };
 
-  if (sent) {
-    return (
-      <Notice tone="success" className="mt-6">
-        {sentMessage}
-      </Notice>
-    );
-  }
+  if (sent) return <Sent message={sentMessage} />;
 
   return (
     <form onSubmit={onSubmit} noValidate className="mt-6 flex flex-col gap-5">
@@ -99,5 +94,15 @@ export function EmailLinkForm({
         {submitLabel}
       </Button>
     </form>
+  );
+}
+
+/** Replaces the form, so focus moves here (the pressed button is gone) and the text is read out. */
+function Sent({ message }: { message: string }) {
+  const ref = useFocusOnMount<HTMLDivElement>();
+  return (
+    <Notice ref={ref} tabIndex={-1} tone="success" className="mt-6 focus:outline-none">
+      {message}
+    </Notice>
   );
 }
