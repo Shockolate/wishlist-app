@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { unauthenticated } from '../http/errors.js';
-import { readSessionToken, setSessionCookie } from './session-cookie.js';
+import { clearSessionCookie, hasSessionCookie, readSessionToken } from './session-cookie.js';
 import { SessionsService, type SessionUser } from './sessions.service.js';
 
 export interface AuthContext {
@@ -18,8 +18,8 @@ export interface AuthContext {
 type AuthenticatedRequest = Request & { auth?: AuthContext };
 
 /**
- * Requires a live session. It attaches the session to the request and reissues the cookie when
- * the expiry slid. Every authorization decision is made here, in the API (spec §6.1).
+ * Requires a live session and attaches it to the request. Every authorization decision is made
+ * here, in the API (spec §6.1). A dead cookie is cleared along with the 401 (rule 2).
  */
 @Injectable()
 export class SessionGuard implements CanActivate {
@@ -30,9 +30,9 @@ export class SessionGuard implements CanActivate {
     const req = http.getRequest<AuthenticatedRequest>();
     const token = readSessionToken(req.headers.cookie);
     const session = token ? await this.sessions.resolve(token) : null;
-    if (!token || !session) throw unauthenticated();
-    if (session.refreshed) {
-      setSessionCookie(http.getResponse<Response>(), token, session.maxAgeMs);
+    if (!session) {
+      if (hasSessionCookie(req.headers.cookie)) clearSessionCookie(http.getResponse<Response>());
+      throw unauthenticated();
     }
     req.auth = { sessionId: session.sessionId, user: session.user };
     return true;

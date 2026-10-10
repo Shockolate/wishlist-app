@@ -16,10 +16,6 @@ export interface SessionUser {
 export interface ActiveSession {
   sessionId: string;
   user: SessionUser;
-  /** What the cookie's Max-Age should be now. */
-  maxAgeMs: number;
-  /** The expiry slid forward on this request, so the cookie must be reissued. */
-  refreshed: boolean;
 }
 
 /** Database sessions (spec §6.1, D16): revocable at once, at the cost of one indexed lookup. */
@@ -30,7 +26,7 @@ export class SessionsService {
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
-  async create(userId: string): Promise<{ token: string; maxAgeMs: number }> {
+  async create(userId: string): Promise<{ token: string }> {
     const now = this.clock.now();
     const token = newToken(32);
     await this.db.insert(sessions).values({
@@ -40,17 +36,19 @@ export class SessionsService {
       lastSeenAt: now,
       expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
     });
-    return { token, maxAgeMs: SESSION_TTL_MS };
+    return { token };
   }
 
-  /** The live session for a token. Its expiry slides forward at most once an hour. */
+  /**
+   * The live session for a token. Its database expiry slides forward at most once an hour; the
+   * cookie is never touched, because the database alone decides (D27).
+   */
   async resolve(token: string): Promise<ActiveSession | null> {
     const now = this.clock.now();
     const sessionId = hashToken(token);
     const [row] = await this.db
       .select({
         lastSeenAt: sessions.lastSeenAt,
-        expiresAt: sessions.expiresAt,
         id: users.id,
         email: users.email,
         displayName: users.displayName,
@@ -61,25 +59,21 @@ export class SessionsService {
       .where(and(eq(sessions.id, sessionId), gt(sessions.expiresAt, now)));
     if (!row) return null;
 
-    const user: SessionUser = {
-      id: row.id,
-      email: row.email,
-      displayName: row.displayName,
-      emailVerified: row.emailVerifiedAt !== null,
-    };
-    if (now.getTime() - row.lastSeenAt.getTime() < SESSION_REFRESH_MS) {
-      return {
-        sessionId,
-        user,
-        maxAgeMs: row.expiresAt.getTime() - now.getTime(),
-        refreshed: false,
-      };
+    if (now.getTime() - row.lastSeenAt.getTime() >= SESSION_REFRESH_MS) {
+      await this.db
+        .update(sessions)
+        .set({ lastSeenAt: now, expiresAt: new Date(now.getTime() + SESSION_TTL_MS) })
+        .where(eq(sessions.id, sessionId));
     }
-    await this.db
-      .update(sessions)
-      .set({ lastSeenAt: now, expiresAt: new Date(now.getTime() + SESSION_TTL_MS) })
-      .where(eq(sessions.id, sessionId));
-    return { sessionId, user, maxAgeMs: SESSION_TTL_MS, refreshed: true };
+    return {
+      sessionId,
+      user: {
+        id: row.id,
+        email: row.email,
+        displayName: row.displayName,
+        emailVerified: row.emailVerifiedAt !== null,
+      },
+    };
   }
 
   async revoke(token: string): Promise<void> {
