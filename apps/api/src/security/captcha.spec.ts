@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { Logger } from '@nestjs/common';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TurnstileVerifier } from './captcha.js';
 
 function fakeFetch(respond: () => Response) {
@@ -14,6 +15,15 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
 describe('TurnstileVerifier', () => {
+  // Swallows the warnings the unavailable paths log, and lets the logging tests assert on them.
+  let warn: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    warn.mockRestore();
+  });
+
   it('passes when Cloudflare accepts the token', async () => {
     const { fn } = fakeFetch(() => json({ success: true }));
     expect(await new TurnstileVerifier('secret', fn).verify('token', '203.0.113.7')).toBe('passed');
@@ -67,5 +77,44 @@ describe('TurnstileVerifier', () => {
     expect(await new TurnstileVerifier('secret', fn).verify('token', '203.0.113.7')).toBe(
       'unavailable',
     );
+  });
+
+  describe('logging', () => {
+    const loggedText = () => warn.mock.calls.flat().map(String).join('\n');
+
+    it.each([
+      ['an HTTP error', () => json({}, 500)],
+      ['an internal error', () => json({ success: false, 'error-codes': ['internal-error'] })],
+      ['a body that is not siteverify JSON', () => new Response('<html>', { status: 200 })],
+    ])('warns on %s without leaking the secret or the token', async (_label, respond) => {
+      const { fn } = fakeFetch(respond);
+      await new TurnstileVerifier('s3cret-key', fn).verify('t0ken-value', '203.0.113.7');
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(loggedText()).not.toContain('s3cret-key');
+      expect(loggedText()).not.toContain('t0ken-value');
+    });
+
+    it('warns when Cloudflare is unreachable, without leaking the secret or the token', async () => {
+      const fn = (() => Promise.reject(new TypeError('fetch failed'))) as unknown as typeof fetch;
+      await new TurnstileVerifier('s3cret-key', fn).verify('t0ken-value', '203.0.113.7');
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(loggedText()).toContain('fetch failed');
+      expect(loggedText()).not.toContain('s3cret-key');
+      expect(loggedText()).not.toContain('t0ken-value');
+    });
+
+    it('stays silent without a secret, which is the intended dark state', async () => {
+      const { fn } = fakeFetch(() => json({ success: true }));
+      await new TurnstileVerifier(undefined, fn).verify('token', '203.0.113.7');
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('stays silent when the token is simply rejected', async () => {
+      const { fn } = fakeFetch(() =>
+        json({ success: false, 'error-codes': ['invalid-input-response'] }),
+      );
+      await new TurnstileVerifier('secret', fn).verify('token', '203.0.113.7');
+      expect(warn).not.toHaveBeenCalled();
+    });
   });
 });

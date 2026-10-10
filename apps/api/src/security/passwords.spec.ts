@@ -20,7 +20,20 @@ describe('passwords (spec §6.4)', () => {
     expect(await verifyPassword('not-a-phc-string', 'anything')).toBe(false);
   });
 
-  it('can burn the time of a check without a real hash', async () => {
-    await expect(burnPasswordCheck('anything')).resolves.toBeUndefined();
+  it('burns about as much time as a real check, so unknown emails are not distinguishable', async () => {
+    const realHash = await hashPassword('correct horse 1');
+    await burnPasswordCheck('x'); // warm-up: the first call also computes the dummy hash
+    const time = async (fn: () => Promise<unknown>): Promise<number> => {
+      const start = performance.now();
+      await fn();
+      return performance.now() - start;
+    };
+    const verifies: number[] = [];
+    const burns: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      verifies.push(await time(() => verifyPassword(realHash, 'x')));
+      burns.push(await time(() => burnPasswordCheck('x')));
+    }
+    expect(Math.min(...burns)).toBeGreaterThanOrEqual(0.5 * Math.min(...verifies));
   });
 });

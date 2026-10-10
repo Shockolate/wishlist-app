@@ -1,4 +1,5 @@
 import { isIP } from 'node:net';
+import { Logger } from '@nestjs/common';
 import { z } from 'zod';
 
 export type CaptchaVerdict = 'passed' | 'failed' | 'unavailable';
@@ -23,6 +24,8 @@ const SiteverifySchema = z.object({
  * (spec §9).
  */
 export class TurnstileVerifier implements CaptchaVerifier {
+  private readonly logger = new Logger('Turnstile');
+
   constructor(
     private readonly secret: string | undefined,
     private readonly fetchFn: typeof fetch = fetch,
@@ -42,14 +45,26 @@ export class TurnstileVerifier implements CaptchaVerifier {
         }),
         signal: AbortSignal.timeout(5_000),
       });
-    } catch {
-      return 'unavailable';
+    } catch (error) {
+      return this.unavailable(error instanceof Error ? error.message : String(error));
     }
-    if (!res.ok) return 'unavailable';
+    if (!res.ok) return this.unavailable(`siteverify answered HTTP ${res.status}`);
     const json: unknown = await res.json().catch(() => undefined);
     const body = SiteverifySchema.safeParse(json);
-    if (!body.success) return 'unavailable';
+    if (!body.success) return this.unavailable('unexpected siteverify response');
     if (body.data.success) return 'passed';
-    return body.data['error-codes'].includes('internal-error') ? 'unavailable' : 'failed';
+    return body.data['error-codes'].includes('internal-error')
+      ? this.unavailable('Cloudflare reported internal-error')
+      : 'failed';
+  }
+
+  /**
+   * Logs why, so an operator can tell an outage from a changed response shape or a bad secret.
+   * Only fixed text, an HTTP status or the network error's message is logged, never the token
+   * or the secret. The no-secret case doesn't come through here: that's the intended dark state.
+   */
+  private unavailable(reason: string): CaptchaVerdict {
+    this.logger.warn(`captcha unavailable: ${reason}`);
+    return 'unavailable';
   }
 }
