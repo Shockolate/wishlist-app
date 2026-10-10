@@ -25,7 +25,10 @@ export function AccountHeader({ current }: { current: 'list' | 'settings' }) {
   return (
     <header className="border-b border-border">
       <div className="mx-auto flex max-w-[1200px] flex-wrap items-center gap-x-8 gap-y-3 px-4 py-4 sm:px-7">
-        <Link href="/list" className="font-display text-[30px] leading-none no-underline">
+        <Link
+          href="/list"
+          className="inline-flex min-h-11 items-center font-display text-[30px] leading-none no-underline"
+        >
           Hanker
         </Link>
         <nav aria-label="Main" className="flex flex-1 gap-1.5 text-[15px] font-medium">
