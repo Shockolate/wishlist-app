@@ -50,8 +50,11 @@ export function ChooseNewPassword({ token }: { token: string | null }) {
       await browserApi.post('/auth/password-reset/confirm', { token, ...values }, NoContentSchema);
       setState('done');
     } catch (error) {
-      if (hasCode(error, ErrorCode.INVALID_TOKEN)) setState('spent');
-      else if (hasCode(error, ErrorCode.PASSWORD_BREACHED)) {
+      if (hasCode(error, ErrorCode.INVALID_TOKEN)) {
+        // Two overlapping submits: the loser sees the token already used. Don't tell someone whose
+        // password just changed that the link failed.
+        setState((current) => (current === 'done' ? current : 'spent'));
+      } else if (hasCode(error, ErrorCode.PASSWORD_BREACHED)) {
         setError('newPassword', { message: errorMessage(error) }, { shouldFocus: true });
       } else setFormError(errorMessage(error));
     }
