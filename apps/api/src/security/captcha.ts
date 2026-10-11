@@ -13,7 +13,10 @@ export const CAPTCHA_VERIFIER = Symbol('CAPTCHA_VERIFIER');
 
 const SITEVERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 
-/** Siteverify errors that mean our request is wrong, not the visitor's: an operator must act (rule 16). */
+/**
+ * Siteverify errors that mean our request is wrong, not the visitor's: an operator must act
+ * (Plan 2b rule 16).
+ */
 const OPERATOR_ERRORS = new Set([
   'missing-input-secret',
   'invalid-input-secret',
@@ -27,9 +30,9 @@ const SiteverifySchema = z.object({
 });
 
 /**
- * Cloudflare Turnstile. Having no secret, a network failure, or an error on Cloudflare's side all
- * mean "unavailable". The endpoints then refuse rather than let requests through unchecked
- * (spec §9).
+ * Cloudflare Turnstile. Having no secret, a network failure, an unexpected response, or a
+ * siteverify error that blames our own request (OPERATOR_ERRORS) all mean "unavailable". The
+ * endpoints then refuse rather than let requests through unchecked (spec §9).
  */
 export class TurnstileVerifier implements CaptchaVerifier {
   private readonly logger = new Logger('Turnstile');

@@ -107,7 +107,7 @@ describe('sessions (spec §6.1)', () => {
     expect((await client(t.app, cookie).get('/me')).status).toBe(200);
   });
 
-  it('clears a dead session cookie with the 401, so the browser stops sending it (rule 2)', async () => {
+  it('clears a dead session cookie with the 401, so the browser stops sending it (Plan 2b rule 2)', async () => {
     const { cookie } = await signedIn();
     t.clock.advance(30 * DAY + 1);
     const expired = await client(t.app, cookie).get('/me');
@@ -148,7 +148,7 @@ describe('sessions (spec §6.1)', () => {
     expect((await client(t.app, cookie).get('/me')).status).toBe(200);
   });
 
-  it('refuses to create a session when the password changed after it was verified (rule 17)', async () => {
+  it('refuses to create a session when the password changed after it was verified (Plan 2b rule 17)', async () => {
     const userId = newId();
     await db.pool.query(
       `insert into users (id, email, password_hash, display_name) values ($1, 'ada@example.com', 'current', 'Ada')`,

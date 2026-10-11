@@ -7,7 +7,7 @@ async function logIn(page: Page, email: string, password = PASSWORD) {
   await page.getByRole('button', { name: 'Log in' }).click();
 }
 
-test('login: plain words for a wrong password, then home; next never leaves the site (Review Focus 4)', async ({
+test('login: plain words for a wrong password, then home; next never leaves the site (Plan 2b Review Focus 4)', async ({
   page,
   baseURL,
 }) => {

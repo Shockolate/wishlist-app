@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
-  // Every page renders per request, so each gets the proxy's nonce (rule 5).
+  // Every page renders per request, so each gets the proxy's nonce (Plan 2b rule 5).
   await connection();
   return (
     <html lang="en" className={`${geist.variable} ${instrumentSerif.variable}`}>

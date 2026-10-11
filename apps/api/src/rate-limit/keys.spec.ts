@@ -19,7 +19,7 @@ describe('rateLimitKey', () => {
   });
 });
 
-describe('ipIdentity (rule 13)', () => {
+describe('ipIdentity (Plan 2b rule 13)', () => {
   it('keeps an IPv4 address whole', () => {
     expect(ipIdentity('203.0.113.7')).toBe('203.0.113.7');
   });

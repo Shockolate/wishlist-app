@@ -1,7 +1,7 @@
 import type { z } from 'zod';
 
 /**
- * Plain-language messages for the contracts' rules, in place of Zod's (rule 23). Pass it to
+ * Plain-language messages for the contracts' rules, in place of Zod's (Plan 2b rule 23). Pass it to
  * zodResolver as `{ error: formErrorMap }`. A refinement's own message, such as the display
  * name's, wins.
  */

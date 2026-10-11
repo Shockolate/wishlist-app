@@ -44,7 +44,10 @@ function compose(
   };
 }
 
-/** No greeting: the display name is unverified, so it can't speak in Hanker's voice (rule 14). */
+/**
+ * No greeting: the display name is unverified, so it can't speak in Hanker's voice
+ * (Plan 2b rule 14).
+ */
 export function verificationEmail(appOrigin: string, token: string): Rendered {
   return compose(
     SUBJECTS.verification,

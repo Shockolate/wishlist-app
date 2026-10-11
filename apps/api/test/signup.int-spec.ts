@@ -162,14 +162,14 @@ describe('POST /auth/signup (spec §5)', () => {
     expect(limited.status).toBe(429);
   });
 
-  it('leaves the unverified display name out of the verification email (rule 14)', async () => {
+  it('leaves the unverified display name out of the verification email (Plan 2b rule 14)', async () => {
     await signUp(t, { ...ADA, displayName: 'evil.example/login' });
     const mail = lastEmail(t, ADA.email, SUBJECTS.verification);
     expect(mail.text).not.toContain('evil.example');
     expect(mail.html).not.toContain('evil.example');
   });
 
-  it("doesn't charge an address's hourly budget for a breached password (rule 12)", async () => {
+  it("doesn't charge an address's hourly budget for a breached password (Plan 2b rule 12)", async () => {
     t.breaches.breached.add('password12345');
     for (let attempt = 0; attempt < 4; attempt++) {
       const res = await client(t.app).post('/auth/signup', {

@@ -1,5 +1,5 @@
 /**
- * Where to go after logging in. Only a same-site path survives (rule 9, Review Focus 4).
+ * Where to go after logging in. Only a same-site path survives (Plan 2b rule 9, Review Focus 4).
  * Whitespace and control characters are refused because browsers strip them, which turns
  * "/\t/evil" into "//evil".
  */

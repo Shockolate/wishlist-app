@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { safeNext } from './safe-next';
 
-describe('safeNext (rule 9, Review Focus 4)', () => {
+describe('safeNext (Plan 2b rule 9, Review Focus 4)', () => {
   it.each([
     ['/settings', '/settings'],
     ['/list?x=1', '/list?x=1'],

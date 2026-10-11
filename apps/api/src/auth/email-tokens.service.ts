@@ -20,8 +20,8 @@ export class EmailTokensService {
   /**
    * A fresh token; the user's earlier unused tokens for this purpose stop working. Locking the
    * user's row first serializes concurrent calls for one user: the second waits, and its delete
-   * then sees the first's committed token (rule 18). Lock order: the user's row before its
-   * email_tokens rows; consume() and changePassword follow it too.
+   * then sees the first's committed token (Plan 2b rule 18). Lock order: the user's row before its
+   * email_tokens rows; consume(), changePassword and deleteAccount follow it too.
    */
   async issue(tx: Transaction, userId: string, purpose: EmailTokenPurpose): Promise<string> {
     await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for('update');
@@ -63,10 +63,10 @@ export class EmailTokensService {
 
   /**
    * Uses up a live token inside the caller's transaction and returns its user. Returns null if
-   * the token is unknown, expired or already used. Locking the token row makes a concurrent
-   * second use wait, then find the token consumed. Lock order: the user's row before its
-   * email_tokens rows, as in issue() and changePassword, so the callers' later users UPDATE
-   * can't deadlock with them.
+   * the token is unknown, expired or already used. The user's row is locked first, so a
+   * concurrent second use waits there, then re-reads the token and finds it consumed. Lock order:
+   * the user's row before its email_tokens rows, as in issue() and changePassword, so the callers'
+   * later users UPDATE can't deadlock with them.
    */
   async consume(
     tx: Transaction,

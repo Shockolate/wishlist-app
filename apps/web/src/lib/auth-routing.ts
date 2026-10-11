@@ -3,7 +3,7 @@ const SIGNED_IN_ONLY = ['/list', '/settings'];
 /**
  * Where the proxy sends a request instead, judged only by whether the session cookie exists
  * (spec §6.1). The API makes every real decision, and the pages send a stale cookie to /login.
- * /login itself is never redirected: a stale cookie would loop (rule 8).
+ * /login itself is never redirected: a stale cookie would loop (Plan 2b rule 8).
  */
 export function authRedirect(url: URL, hasSessionCookie: boolean): string | null {
   const path = url.pathname;

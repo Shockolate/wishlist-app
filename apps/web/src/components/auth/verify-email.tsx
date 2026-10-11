@@ -20,7 +20,7 @@ type State = 'confirm' | 'confirmed' | 'spent' | 'invalid' | 'check';
 
 /**
  * Confirms an address only when the person presses the button. Rendering the page never uses
- * the token, so a mail scanner or a second look can't spend it (rule 7, Review Focus 1).
+ * the token, so a mail scanner or a second look can't spend it (Plan 2b rule 7, Review Focus 1).
  *
  * 'invalid' and 'check' are what the page shows on arrival; 'spent' is the link turning out to be
  * used up after a press, so only that one moves focus.

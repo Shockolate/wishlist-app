@@ -90,7 +90,7 @@ describe('POST /me/password (spec §5)', () => {
   const change = (cookie: string, currentPassword: string, newPassword = NEW_PASSWORD) =>
     client(t.app, cookie).post('/me/password', { currentPassword, newPassword });
 
-  it('retires outstanding reset links, so one sent before the change cannot undo it (rule 18)', async () => {
+  it('retires outstanding reset links, so one sent before the change cannot undo it (Plan 2b rule 18)', async () => {
     await signUpVerified(t);
     const cookie = await logIn(t);
     await client(t.app).post('/auth/password-reset/request', {
@@ -110,7 +110,7 @@ describe('POST /me/password (spec §5)', () => {
 
   // The breach check runs after the current password is confirmed and before the new one is
   // written: the test changes the world there, as a concurrent reset would.
-  it('refuses the change if the password changed meanwhile, and keeps the newer one (rule 17)', async () => {
+  it('refuses the change if the password changed meanwhile, and keeps the newer one (Plan 2b rule 17)', async () => {
     await signUpVerified(t);
     const cookie = await logIn(t);
     vi.spyOn(t.breaches, 'isBreached').mockImplementationOnce(async () => {
@@ -126,7 +126,7 @@ describe('POST /me/password (spec §5)', () => {
     expect(rows[0]?.password_hash).toBe('changed elsewhere');
   });
 
-  it('refuses the change if this session was revoked meanwhile (rule 17)', async () => {
+  it('refuses the change if this session was revoked meanwhile (Plan 2b rule 17)', async () => {
     await signUpVerified(t);
     const cookie = await logIn(t);
     vi.spyOn(t.breaches, 'isBreached').mockImplementationOnce(async () => {

@@ -65,9 +65,10 @@ export function SignupForm({ nonce }: { nonce: string | undefined }) {
     }
   });
 
-  // One request per press (Review Focus 5), in two layers: the disabled button stops a second
-  // press; this guard stops a second submit that arrives before the re-render disables it. It sits
-  // here, not in the handleSubmit callback, where the React Compiler lint objects to a ref read.
+  // One request per press (Plan 2b Review Focus 5), in two layers: the disabled button stops a
+  // second press; this guard stops a second submit that arrives before the re-render disables it.
+  // It sits here, not in the handleSubmit callback, where the React Compiler lint objects to a ref
+  // read.
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     if (inFlight.current) {
       event.preventDefault();

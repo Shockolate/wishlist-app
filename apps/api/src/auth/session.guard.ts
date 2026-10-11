@@ -19,7 +19,7 @@ type AuthenticatedRequest = Request & { auth?: AuthContext };
 
 /**
  * Requires a live session and attaches it to the request. Every authorization decision is made
- * here, in the API (spec §6.1). A dead cookie is cleared along with the 401 (rule 2).
+ * here, in the API (spec §6.1). A dead cookie is cleared along with the 401 (Plan 2b rule 2).
  */
 @Injectable()
 export class SessionGuard implements CanActivate {

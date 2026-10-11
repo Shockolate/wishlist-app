@@ -16,7 +16,7 @@ import { browserApi } from '@/lib/browser-api';
 import { formErrorMap } from '@/lib/form-errors';
 import { errorMessage } from '@/lib/messages';
 
-/** `next` has already been through safeNext (rule 9). */
+/** `next` has already been through safeNext (Plan 2b rule 9). */
 export function LoginForm({ next }: { next: string }) {
   const router = useRouter();
   const [formError, setFormError] = useState<string | null>(null);
