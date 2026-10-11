@@ -44,7 +44,7 @@ export function NameForm({ displayName }: { displayName: string }) {
         return;
       }
       const message = fieldErrors(error).displayName;
-      if (message) setError('displayName', { message });
+      if (message) setError('displayName', { message }, { shouldFocus: true });
       else setFormError(errorMessage(error));
     }
   });

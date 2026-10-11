@@ -43,9 +43,13 @@ export function PasswordForm() {
         return;
       }
       if (hasCode(error, ErrorCode.INVALID_CREDENTIALS)) {
-        setError('currentPassword', { message: 'That password isn’t right.' });
+        setError(
+          'currentPassword',
+          { message: 'That password isn’t right.' },
+          { shouldFocus: true },
+        );
       } else if (hasCode(error, ErrorCode.PASSWORD_BREACHED)) {
-        setError('newPassword', { message: errorMessage(error) });
+        setError('newPassword', { message: errorMessage(error) }, { shouldFocus: true });
       } else setFormError(errorMessage(error));
     }
   });

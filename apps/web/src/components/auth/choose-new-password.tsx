@@ -52,7 +52,7 @@ export function ChooseNewPassword({ token }: { token: string | null }) {
     } catch (error) {
       if (hasCode(error, ErrorCode.INVALID_TOKEN)) setState('spent');
       else if (hasCode(error, ErrorCode.PASSWORD_BREACHED)) {
-        setError('newPassword', { message: errorMessage(error) });
+        setError('newPassword', { message: errorMessage(error) }, { shouldFocus: true });
       } else setFormError(errorMessage(error));
     }
   });

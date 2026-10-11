@@ -41,7 +41,7 @@ export function DeleteAccountForm() {
         return;
       }
       if (hasCode(error, ErrorCode.INVALID_CREDENTIALS)) {
-        setError('password', { message: 'That password isn’t right.' });
+        setError('password', { message: 'That password isn’t right.' }, { shouldFocus: true });
       } else setFormError(errorMessage(error));
     }
   });

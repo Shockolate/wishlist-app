@@ -39,6 +39,8 @@ test('changes the password, keeps this device, and the old password stops workin
   await page.getByLabel('New password').fill(NEW_PASSWORD);
   await page.getByRole('button', { name: 'Change password' }).click();
   await expect(page.getByText('That password isn’t right.')).toBeVisible();
+  // A server-side field error moves focus to the field, so a screen reader reads it (WCAG 3.3.1).
+  await expect(page.getByLabel('Current password')).toBeFocused();
 
   await page.getByLabel('Current password').fill(PASSWORD);
   await page.getByRole('button', { name: 'Change password' }).click();

@@ -47,15 +47,17 @@ export function SignupForm({ nonce }: { nonce: string | undefined }) {
       setSentTo(values.email);
     } catch (error) {
       const fields = fieldErrors(error);
+      const breached = hasCode(error, ErrorCode.PASSWORD_BREACHED);
+      if (breached) fields.password = errorMessage(error);
+      // Focus the first field with an error, so a screen reader reads its label and the message.
+      let focused = false;
       for (const name of FIELDS) {
         const message = fields[name];
-        if (message) setError(name, { message });
+        if (!message) continue;
+        setError(name, { message }, { shouldFocus: !focused });
+        focused = true;
       }
-      if (hasCode(error, ErrorCode.PASSWORD_BREACHED)) {
-        setError('password', { message: errorMessage(error) });
-      } else if (Object.keys(fields).length === 0) {
-        setFormError(errorMessage(error));
-      }
+      if (!breached && Object.keys(fields).length === 0) setFormError(errorMessage(error));
     } finally {
       // A Turnstile token works once: get a fresh one for the next attempt.
       setToken(null);
