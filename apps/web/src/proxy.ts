@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { authRedirect } from '@/lib/auth-routing';
-import { contentSecurityPolicy, usesTurnstile } from '@/lib/csp';
+import { contentSecurityPolicy } from '@/lib/csp';
 import { SESSION_COOKIE } from '@/lib/session';
 
 /**
@@ -13,11 +13,7 @@ export function proxy(request: NextRequest) {
   if (redirect) return NextResponse.redirect(new URL(redirect, request.url));
 
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
-  const csp = contentSecurityPolicy({
-    nonce,
-    turnstile: usesTurnstile(request.nextUrl.pathname),
-    dev: process.env.NODE_ENV === 'development',
-  });
+  const csp = contentSecurityPolicy({ nonce, dev: process.env.NODE_ENV === 'development' });
   const headers = new Headers(request.headers);
   headers.set('x-nonce', nonce);
   headers.set('content-security-policy', csp);

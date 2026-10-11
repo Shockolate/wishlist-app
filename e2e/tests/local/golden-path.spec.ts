@@ -15,6 +15,7 @@ test('a new person signs up, confirms, logs in, renames, resets the password and
 
   await page.goto('/');
   await page.getByRole('link', { name: 'Create your list' }).click();
+  await expect(page).toHaveURL('/signup');
   await page.getByLabel('Your name').fill('Ada');
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(PASSWORD);
@@ -43,6 +44,7 @@ test('a new person signs up, confirms, logs in, renames, resets the password and
   await expect(page).toHaveURL('/');
   await page.goto('/login');
   await page.getByRole('link', { name: 'Forgot your password?' }).click();
+  await expect(page).toHaveURL('/reset-password');
   await page.getByLabel('Email').fill(email);
   await passTurnstile(page);
   await page.getByRole('button', { name: 'Send the link' }).click();
