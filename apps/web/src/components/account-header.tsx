@@ -21,7 +21,8 @@ export function AccountHeader({ current }: { current: 'list' | 'settings' }) {
     try {
       await browserApi.post('/auth/logout', {}, NoContentSchema);
     } catch (failure) {
-      // A 401 means the session was already gone and the API cleared the cookie: same outcome.
+      // Logout answers 204 even without a session, so a 401 isn't expected; if one comes, treat it
+      // as signed out, because a 401 always clears the cookie.
       // Anything else (offline, a 5xx) means we may still be signed in, so say so and stay put.
       if (!hasCode(failure, ErrorCode.UNAUTHENTICATED)) {
         setError(errorMessage(failure));
