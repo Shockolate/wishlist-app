@@ -6,7 +6,7 @@ export function stripTokenFromUrl(): void {
   const url = new URL(window.location.href);
   if (!url.searchParams.has('token')) return;
   url.searchParams.delete('token');
-  // null state, as Next documents: passing history.state back (with Next's internal marker) makes
-  // Next treat this as its own call and leave the router's canonical URL, token included.
-  window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+  // Keep Next's own history state. This runs before Next patches history.replaceState, so a null
+  // state would wipe Next's entry and leave Back to this page blank.
+  window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
 }
