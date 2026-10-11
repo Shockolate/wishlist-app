@@ -24,7 +24,7 @@ test('the home greets the user, asks an unverified one to confirm, and settings 
   await page.goto('/settings');
   await page.getByLabel('Display name').fill('Ada L.');
   await page.getByRole('button', { name: 'Save name' }).click();
-  await expect(page.getByRole('status')).toHaveText('Name saved');
+  await expect(page.getByRole('status').filter({ hasText: 'Name saved' })).toHaveText('Name saved');
   await page.reload();
   await expect(page.getByLabel('Display name')).toHaveValue('Ada L.');
 });
@@ -44,7 +44,7 @@ test('changes the password, keeps this device, and the old password stops workin
 
   await page.getByLabel('Current password').fill(PASSWORD);
   await page.getByRole('button', { name: 'Change password' }).click();
-  await expect(page.getByRole('status')).toContainText('Password changed');
+  await expect(page.getByRole('status').filter({ hasText: 'Password changed' })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
 

@@ -92,10 +92,10 @@ export function PasswordForm() {
           Change password
         </Button>
       </form>
-      {/* Always mounted, so the notice inserted into it is announced; focus stays on the form. */}
-      <div aria-live="polite">
+      {/* The status region is always mounted, so the notice inserted into it is announced once. */}
+      <div role="status">
         {changed ? (
-          <Notice tone="success" className="mt-4">
+          <Notice tone="success" announce={false} className="mt-4">
             Password changed. Other devices are signed out.
           </Notice>
         ) : null}

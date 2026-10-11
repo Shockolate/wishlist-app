@@ -69,10 +69,10 @@ export function NameForm({ displayName }: { displayName: string }) {
           Save name
         </Button>
       </form>
-      {/* Always mounted, so the notice inserted into it is announced; focus stays on the form. */}
-      <div aria-live="polite">
+      {/* The status region is always mounted, so the notice inserted into it is announced once. */}
+      <div role="status">
         {saved ? (
-          <Notice tone="success" className="mt-4">
+          <Notice tone="success" announce={false} className="mt-4">
             Name saved
           </Notice>
         ) : null}

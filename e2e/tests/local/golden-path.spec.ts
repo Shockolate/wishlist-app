@@ -38,7 +38,7 @@ test('a new person signs up, confirms, logs in, renames, resets the password and
   await mainNav.getByRole('link', { name: 'Settings' }).click();
   await page.getByLabel('Display name').fill('Ada Lovelace');
   await page.getByRole('button', { name: 'Save name' }).click();
-  await expect(page.getByRole('status')).toHaveText('Name saved');
+  await expect(page.getByRole('status').filter({ hasText: 'Name saved' })).toHaveText('Name saved');
 
   await page.getByRole('button', { name: 'Log out' }).click();
   await expect(page).toHaveURL('/');
