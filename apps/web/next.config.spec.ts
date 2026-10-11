@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-async function loadConfig(apiOrigin: string) {
+async function loadConfig(apiOrigin: string, siteKey = '1x00000000000000000000AA') {
   vi.stubEnv('API_ORIGIN', apiOrigin);
+  vi.stubEnv('TURNSTILE_SITE_KEY', siteKey);
   vi.resetModules();
   return (await import('./next.config')).default;
 }
@@ -27,8 +28,17 @@ describe('next.config', () => {
     ]);
   });
 
-  it('inlines API_ORIGIN for server code', async () => {
+  it('inlines API_ORIGIN and the Turnstile site key at build', async () => {
     const config = await loadConfig('https://api.example.test');
-    expect(config.env).toEqual({ API_ORIGIN: 'https://api.example.test' });
+    expect(config.env).toEqual({
+      API_ORIGIN: 'https://api.example.test',
+      TURNSTILE_SITE_KEY: '1x00000000000000000000AA',
+    });
+  });
+
+  it('refuses to load without TURNSTILE_SITE_KEY (rule 11)', async () => {
+    await expect(loadConfig('https://api.example.test', '')).rejects.toThrow(
+      /TURNSTILE_SITE_KEY must be set/,
+    );
   });
 });

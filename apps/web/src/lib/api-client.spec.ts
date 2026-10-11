@@ -1,7 +1,7 @@
 import { ErrorCode } from '@wishlist/contracts';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { ApiError, ContractMismatchError, createApiClient } from './api-client';
+import { ApiError, ContractMismatchError, NoContentSchema, createApiClient } from './api-client';
 
 const Thing = z.object({ id: z.string() });
 
@@ -34,6 +34,13 @@ describe('createApiClient', () => {
     expect(calls[0]?.init.headers).toMatchObject({
       accept: 'application/json, application/problem+json',
     });
+  });
+
+  it('sends a JSON body with DELETE, which DELETE /me needs for the password', async () => {
+    const { client, calls } = clientReturning(new Response(null, { status: 204 }));
+    await expect(client.delete('/me', NoContentSchema, { password: 'x' })).resolves.toBeUndefined();
+    expect(calls[0]?.init.method).toBe('DELETE');
+    expect(calls[0]?.init.body).toBe('{"password":"x"}');
   });
 
   it('forwards configured headers such as the incoming cookie', async () => {

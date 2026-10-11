@@ -127,4 +127,9 @@ describe('DisplayNameSchema (rule 14)', () => {
     expect(result.success).toBe(false);
     expect(result.error?.issues[0]?.message).toBe('Use visible characters only');
   });
+
+  it('reports an empty name once, as too short', () => {
+    const result = DisplayNameSchema.safeParse('  ');
+    expect(result.error?.issues.map((issue) => issue.code)).toEqual(['too_small']);
+  });
 });

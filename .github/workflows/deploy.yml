@@ -84,6 +84,8 @@ jobs:
     timeout-minutes: 20
     env:
       API_ORIGIN: ${{ vars.API_PRODUCTION_ORIGIN }}
+      # The production widget's public site key (Plan 2b Task 1). The build fails without it.
+      TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
