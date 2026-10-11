@@ -25,3 +25,11 @@ test('landing page renders', async ({ page }) => {
     page.getByRole('heading', { level: 1, name: 'One list. One link. No doubled-up gifts.' }),
   ).toBeVisible();
 });
+
+test('the login page renders with its nonce CSP (spec §6.9)', async ({ page }) => {
+  const res = await page.goto('/login');
+  expect(res?.headers()['content-security-policy']).toMatch(
+    /script-src 'self' 'nonce-[^']+' 'strict-dynamic'/,
+  );
+  await expect(page.getByRole('heading', { name: 'Log in' })).toBeVisible();
+});
