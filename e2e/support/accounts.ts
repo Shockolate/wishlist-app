@@ -21,7 +21,9 @@ export async function signUpViaApi(
     headers: { origin: baseURL },
     data: { email, password: PASSWORD, displayName, turnstileToken: TEST_TURNSTILE_TOKEN },
   });
-  if (res.status() !== 202) throw new Error(`signup answered ${res.status()}`);
+  if (res.status() !== 202) {
+    throw new Error(`signup answered ${res.status()}: ${await res.text()}`);
+  }
 }
 
 /** Logs in through the API. The cookie lands in the page's browser context. */
