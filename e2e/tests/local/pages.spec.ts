@@ -19,9 +19,9 @@ async function expectAccessible(page: Page) {
 
 /**
  * Loads the page fresh at phone width (a resize of a loaded page would hide layout that only
- * breaks on first render), then measures sideways overflow. `networkidle` never settles on
- * these pages, so a finished Turnstile widget is the readiness signal where there is one. (Its
- * iframe sits in a closed shadow root that locators can't reach, so we wait for the token.)
+ * breaks on first render), then measures sideways overflow. `networkidle` never settles on the
+ * Turnstile pages, so a finished widget is the readiness signal there. (Its iframe sits in a
+ * closed shadow root that locators can't reach, so we wait for the token.)
  */
 async function expectFitsPhone(page: Page, path: string) {
   await page.setViewportSize(PHONE);
