@@ -1,1 +1,65 @@
 @import 'tailwindcss';
+
+/*
+ * Hanker's Warm Editorial palette (Ted, 2026-10-10; Plan 2b's theme table). The names follow
+ * shadcn/ui's semantic tokens, so components copied from it work unchanged. Terracotta (--primary)
+ * is for actions only: at 2.9:1 on sand it can't carry text, so text on it is espresso.
+ */
+:root {
+  --background: #faf7f2;
+  --foreground: #1e1b18;
+  --card: #ffffff;
+  --card-foreground: #1e1b18;
+  --primary: #ff5a4d;
+  --primary-foreground: #1e1b18;
+  --muted-foreground: #5c554e;
+  --border: #1e1b18;
+  --input: #8c847b;
+  --ring: #1e1b18;
+  --success: #6b8e78;
+  --success-foreground: #3f5a49;
+  --success-wash: #e6eee8;
+  --destructive: #b42318;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-wash: var(--success-wash);
+  --color-destructive: var(--destructive);
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-instrument-serif), ui-serif, Georgia, serif;
+  --radius-card: 16px;
+  --radius-control: 12px;
+}
+
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+  }
+
+  a {
+    text-underline-offset: 4px;
+  }
+}
+
+/* Motion is decoration here: people who ask for less get none (spec §7, WCAG 2.2 AA). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
