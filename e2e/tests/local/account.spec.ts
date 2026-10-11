@@ -97,7 +97,7 @@ test('deletes the account after the password, and signs out', async ({ page, bas
   expect(await logInViaApi(page.request, baseURL ?? '', email)).toBe(401);
 });
 
-test('a stale session cookie leads to login, not a loop (Review Focus 2)', async ({
+test('a stale session cookie leads to login, not a loop (Plan 2b Review Focus 2)', async ({
   page,
   context,
   baseURL,

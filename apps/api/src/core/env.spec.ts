@@ -57,7 +57,7 @@ describe('parseEnv', () => {
     expect(() => parseEnv({ ...base, CRON_SECRET: 'short' })).toThrow(/CRON_SECRET/);
   });
 
-  it('refuses to only log account emails in production once sign-up can send them (rule 15)', () => {
+  it('refuses to only log account emails in production once sign-up can send them (Plan 2b rule 15)', () => {
     const live = { ...base, VERCEL_ENV: 'production', TURNSTILE_SECRET_KEY: 'x' };
     expect(() => parseEnv(live)).toThrow(/EMAIL_TRANSPORT/);
     expect(

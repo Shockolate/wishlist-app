@@ -32,7 +32,9 @@ test('says what to fix before sending anything', async ({ page }) => {
   await expect(page.getByLabel('Email')).toHaveAttribute('aria-invalid', 'true');
 });
 
-test('pressing Create account twice sends one request (Review Focus 5)', async ({ page }) => {
+test('pressing Create account twice sends one request (Plan 2b Review Focus 5)', async ({
+  page,
+}) => {
   const email = uniqueEmail('double');
   await fillSignup(page, email);
   await page.getByRole('button', { name: 'Create account' }).dblclick();

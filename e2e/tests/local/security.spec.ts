@@ -95,7 +95,9 @@ test('a visitor with a session cookie skips the landing page', async ({ request 
   expect(res.headers()['location']).toMatch(/\/list$/);
 });
 
-test('robots.txt keeps auth and account pages out of search (spec §6.7)', async ({ request }) => {
+test('robots.txt keeps the token and account pages out of search (spec §6.7)', async ({
+  request,
+}) => {
   const body = await (await request.get('/robots.txt')).text();
   for (const path of ['/verify-email', '/reset-password', '/list', '/settings']) {
     expect(body).toContain(`Disallow: ${path}`);

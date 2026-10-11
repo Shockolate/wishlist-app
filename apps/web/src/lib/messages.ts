@@ -10,7 +10,7 @@ export const WRONG_PASSWORD = 'That password isn’t right.';
 /** A form was sent before its Turnstile check produced a token. */
 export const FINISH_CHECK = 'Finish the check above, then try again.';
 
-/** What a person sees for each error code: the one table (spec §7, rule 23). */
+/** What a person sees for each error code: the one table (spec §7, Plan 2b rule 23). */
 export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   [ErrorCode.INVALID_CREDENTIALS]: "That email and password don't match.",
   [ErrorCode.PASSWORD_BREACHED]:

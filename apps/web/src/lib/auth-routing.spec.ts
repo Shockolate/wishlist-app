@@ -3,7 +3,7 @@ import { authRedirect } from './auth-routing';
 
 const at = (path: string) => new URL(path, 'https://hanker.dev');
 
-describe('authRedirect (spec §6.1, rule 8)', () => {
+describe('authRedirect (spec §6.1, Plan 2b rule 8)', () => {
   it.each([
     ['/list', false, '/login?next=%2Flist'],
     ['/settings', false, '/login?next=%2Fsettings'],

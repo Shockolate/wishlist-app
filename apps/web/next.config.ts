@@ -27,8 +27,8 @@ function readApiOrigin(): string {
 }
 
 /**
- * Cloudflare Turnstile's public site key (rule 11). Required, so a build can't ship a widget that
- * never renders. Outside production, use Cloudflare's always-pass test key.
+ * Cloudflare Turnstile's public site key (Plan 2b rule 11). Required, so a build can't ship a
+ * widget that never renders. Outside production, use Cloudflare's always-pass test key.
  */
 function readTurnstileSiteKey(): string {
   const value = process.env.TURNSTILE_SITE_KEY;

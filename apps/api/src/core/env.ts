@@ -46,7 +46,7 @@ const EnvSchema = z
         message: 'is required when EMAIL_TRANSPORT=resend',
       });
     }
-    // The day sign-up opens, the log transport would swallow every account email (rule 15).
+    // The day sign-up opens, the log transport would swallow every account email (Plan 2b rule 15).
     if (
       env.VERCEL_ENV === 'production' &&
       env.TURNSTILE_SECRET_KEY &&

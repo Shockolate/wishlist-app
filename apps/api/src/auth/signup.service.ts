@@ -32,7 +32,8 @@ export class SignupService {
    */
   async signup(input: SignupRequest, ip: string): Promise<void> {
     await this.gate.screen(input.turnstileToken, ip);
-    // Before the address is charged, so a breached password doesn't use up its emails (rule 12).
+    // Before the address is charged, so a breached password doesn't use up its emails
+    // (Plan 2b rule 12).
     await this.passwordPolicy.assertNotBreached(input.password);
     await this.gate.chargeAddress(input.email);
     // Hash before looking the address up, so argon2 (the slow part) runs whether or not it exists.

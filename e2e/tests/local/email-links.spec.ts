@@ -7,7 +7,7 @@ const VERIFY = 'Confirm your email for Hanker';
 const RESET = 'Reset your Hanker password';
 const NEW_PASSWORD = 'a brand new passphrase 2';
 
-test('a verification link is used only when the person presses Confirm, and never shows or leaks its token (Review Focus 1, 3)', async ({
+test('a verification link is used only when the person presses Confirm, and never shows or leaks its token (Plan 2b Review Focus 1, 3)', async ({
   page,
   baseURL,
 }) => {

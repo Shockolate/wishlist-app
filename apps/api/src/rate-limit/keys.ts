@@ -10,9 +10,9 @@ export function rateLimitKey(scope: string, value: string): string {
 }
 
 /**
- * The part of an IP address that identifies one client for a per-IP limit (rule 13). An IPv6 host
- * usually holds a whole /64, so IPv6 is keyed by its first 64 bits. An IPv4-mapped IPv6 address is
- * keyed as the IPv4 address it carries.
+ * The part of an IP address that identifies one client for a per-IP limit (Plan 2b rule 13). An
+ * IPv6 host usually holds a whole /64, so IPv6 is keyed by its first 64 bits. An IPv4-mapped IPv6
+ * address is keyed as the IPv4 address it carries.
  */
 export function ipIdentity(ip: string): string {
   const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(ip);

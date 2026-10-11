@@ -105,7 +105,7 @@ describe('MeResponseSchema', () => {
   });
 });
 
-describe('DisplayNameSchema (rule 14)', () => {
+describe('DisplayNameSchema (Plan 2b rule 14)', () => {
   it.each(['Ada', 'Zoë', "O'Brien", 'Ada & Bob', '\u{1F469}\u200D\u{1F373} Ada', 'می\u200Cخواهم'])(
     'accepts %s',
     (name) => {

@@ -6,7 +6,7 @@ import { serverApi } from './api.server';
 
 /**
  * The signed-in user, or a redirect to login that comes back here. The API decides; the proxy
- * only saw a cookie, which may be stale (spec §6.1, rule 8).
+ * only saw a cookie, which may be stale (spec §6.1, Plan 2b rule 8).
  */
 export async function requireMe(returnTo: string): Promise<MeResponse> {
   try {

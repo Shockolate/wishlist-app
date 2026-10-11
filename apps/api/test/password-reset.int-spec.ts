@@ -36,7 +36,7 @@ const login = (password: string) =>
   client(t.app).post('/auth/login', { email: ADA.email, password });
 
 describe('password reset (spec §5)', () => {
-  it('retires every other unused reset link once the password is reset (rule 18)', async () => {
+  it('retires every other unused reset link once the password is reset (Plan 2b rule 18)', async () => {
     await signUpVerified(t);
     await requestReset(ADA.email);
     const used = resetToken();

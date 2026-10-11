@@ -27,9 +27,9 @@ export class SessionsService {
   ) {}
 
   /**
-   * A new session, but only if the password is still the one just verified (rule 17). The share
-   * lock holds a concurrent reset or change back until this session exists, and that change then
-   * revokes it; a change that committed first makes this return null.
+   * A new session, but only if the password is still the one just verified (Plan 2b rule 17). The
+   * share lock holds a concurrent reset or change back until this session exists, and that change
+   * then revokes it. A change that committed first, or a deleted account, makes this return null.
    */
   async create(userId: string, verifiedPasswordHash: string): Promise<{ token: string } | null> {
     return this.db.transaction(async (tx) => {

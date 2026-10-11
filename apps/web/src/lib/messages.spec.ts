@@ -34,7 +34,7 @@ describe('errorMessage (spec §7, §9)', () => {
     );
   });
 
-  it('says sign-ups are paused while Turnstile is unavailable (rule 3)', () => {
+  it('says sign-ups are paused while Turnstile is unavailable (Plan 2b rule 3)', () => {
     expect(errorMessage(apiError(ErrorCode.CAPTCHA_UNAVAILABLE, { status: 503 }))).toBe(
       'Sign-ups and account emails are paused right now. Try again later.',
     );

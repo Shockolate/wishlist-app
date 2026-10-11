@@ -11,7 +11,7 @@ const messages = (schema: z.ZodType, input: unknown) =>
     ]),
   );
 
-describe('formErrorMap (rule 23)', () => {
+describe('formErrorMap (Plan 2b rule 23)', () => {
   it('speaks plainly about the sign-up fields', () => {
     const SignupForm = SignupRequestSchema.omit({ turnstileToken: true });
     expect(messages(SignupForm, { displayName: '  ', email: 'ada', password: 'short' })).toEqual({

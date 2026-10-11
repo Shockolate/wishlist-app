@@ -6,7 +6,7 @@ import { requireMe } from '@/lib/require-me';
 
 export const metadata: Metadata = { title: 'Your list' };
 
-/** The signed-in home until Plan 3 brings the list editor (rule 10). */
+/** The signed-in home until Plan 3 brings the list editor (Plan 2b rule 10). */
 export default async function ListPage() {
   const me = await requireMe('/list');
   return (

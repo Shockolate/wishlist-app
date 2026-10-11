@@ -47,7 +47,7 @@ export class AccountService {
       await tx
         .delete(sessions)
         .where(and(eq(sessions.userId, auth.user.id), ne(sessions.id, auth.sessionId)));
-      // A reset link sent before the change must not be able to undo it (rule 18).
+      // A reset link sent before the change must not be able to undo it (Plan 2b rule 18).
       await this.tokens.retireUnused(tx, auth.user.id, 'reset_password');
     });
   }
