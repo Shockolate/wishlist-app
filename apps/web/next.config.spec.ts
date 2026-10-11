@@ -41,4 +41,14 @@ describe('next.config', () => {
       /TURNSTILE_SITE_KEY must be set/,
     );
   });
+
+  it('keeps tokens out of Referer and search on the token pages (spec §6.7, rule 7)', async () => {
+    const rules = (await (await loadConfig('https://api.example.test')).headers?.()) ?? [];
+    for (const source of ['/verify-email', '/reset-password/confirm']) {
+      expect(rules.find((rule) => rule.source === source)?.headers).toEqual([
+        { key: 'Referrer-Policy', value: 'no-referrer' },
+        { key: 'X-Robots-Tag', value: 'noindex' },
+      ]);
+    }
+  });
 });

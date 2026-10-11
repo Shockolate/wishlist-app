@@ -61,6 +61,14 @@ const nextConfig: NextConfig = {
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
         ],
       },
+      // Token pages (spec §6.7): no Referer can carry the token, and search engines skip them.
+      ...['/verify-email', '/reset-password/confirm'].map((source) => ({
+        source,
+        headers: [
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+          { key: 'X-Robots-Tag', value: 'noindex' },
+        ],
+      })),
     ];
   },
 };

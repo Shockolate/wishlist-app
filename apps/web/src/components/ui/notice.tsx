@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { cn } from '@/lib/utils';
 
 /**
@@ -9,13 +9,19 @@ export function Notice({
   tone,
   children,
   className,
+  ref,
+  tabIndex,
 }: {
   tone: 'success' | 'error' | 'info';
   children: ReactNode;
   className?: string;
+  ref?: Ref<HTMLDivElement>;
+  tabIndex?: number;
 }) {
   return (
     <div
+      ref={ref}
+      tabIndex={tabIndex}
       role={tone === 'error' ? 'alert' : 'status'}
       className={cn(
         'flex items-start gap-2 rounded-control px-3.5 py-2.5 text-[15px] leading-snug',
