@@ -2,7 +2,6 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ChangePasswordRequestSchema, ErrorCode } from '@wishlist/contracts';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
@@ -13,11 +12,10 @@ import { Notice } from '@/components/ui/notice';
 import { NoContentSchema } from '@/lib/api-client';
 import { browserApi } from '@/lib/browser-api';
 import { formErrorMap } from '@/lib/form-errors';
-import { errorMessage, hasCode } from '@/lib/messages';
+import { errorMessage, hasCode, WRONG_PASSWORD } from '@/lib/messages';
 import { LOGIN_AGAIN } from './name-form';
 
 export function PasswordForm() {
-  const router = useRouter();
   const [changed, setChanged] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const {
@@ -40,13 +38,14 @@ export function PasswordForm() {
       setChanged(true);
     } catch (error) {
       if (hasCode(error, ErrorCode.UNAUTHENTICATED)) {
-        router.replace(LOGIN_AGAIN);
+        // Full navigation, so Back can't restore signed-in pages from the router's cache.
+        window.location.replace(LOGIN_AGAIN);
         return;
       }
       if (hasCode(error, ErrorCode.INVALID_CREDENTIALS)) {
-        setError('currentPassword', { message: 'That password isn’t right.' });
+        setError('currentPassword', { message: WRONG_PASSWORD }, { shouldFocus: true });
       } else if (hasCode(error, ErrorCode.PASSWORD_BREACHED)) {
-        setError('newPassword', { message: errorMessage(error) });
+        setError('newPassword', { message: errorMessage(error) }, { shouldFocus: true });
       } else setFormError(errorMessage(error));
     }
   });
@@ -93,10 +92,10 @@ export function PasswordForm() {
           Change password
         </Button>
       </form>
-      {/* Always mounted, so the notice inserted into it is announced; focus stays on the form. */}
-      <div aria-live="polite">
+      {/* The status region is always mounted, so the notice inserted into it is announced once. */}
+      <div role="status">
         {changed ? (
-          <Notice tone="success" className="mt-4">
+          <Notice tone="success" announce={false} className="mt-4">
             Password changed. Other devices are signed out.
           </Notice>
         ) : null}

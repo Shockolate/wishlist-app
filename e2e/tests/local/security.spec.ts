@@ -41,7 +41,8 @@ test('a page carries a nonce CSP that its own scripts satisfy (spec §6.9)', asy
   expect(scriptNonces.length).toBeGreaterThan(0);
   expect(new Set(scriptNonces)).toEqual(new Set([nonce]));
 
-  // Hydration has run by now: Next's client scripts execute before the load event.
+  // Next's client scripts have executed by the load event, so a blocked one would have been
+  // reported. Hydration itself may still be finishing.
   const pageViolations = await page.evaluate(
     () => (globalThis as unknown as PageGlobal).__cspViolations,
   );
@@ -75,6 +76,14 @@ test('signed-out visitors to account pages go to login, keeping where they were 
       new RegExp(`/login\\?next=${encodeURIComponent(path)}$`),
     );
   }
+});
+
+test('a path that only starts with "api" still gets the CSP; the matcher exempts /api itself', async ({
+  request,
+}) => {
+  const res = await request.get('/apiary');
+  expect(res.status()).toBe(404);
+  expect(res.headers()['content-security-policy']).toMatch(/'nonce-[^']+' 'strict-dynamic'/);
 });
 
 test('a visitor with a session cookie skips the landing page', async ({ request }) => {

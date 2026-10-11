@@ -3,7 +3,8 @@ import { cn } from '@/lib/utils';
 
 /**
  * A short message about what just happened. Success is sage with a check. An error is announced
- * at once (role="alert"); anything else politely (role="status").
+ * at once (role="alert"); anything else politely (role="status"). Pass announce={false} when the
+ * notice sits inside a live region that already announces it, so it isn't read twice.
  */
 export function Notice({
   tone,
@@ -11,18 +12,20 @@ export function Notice({
   className,
   ref,
   tabIndex,
+  announce = true,
 }: {
   tone: 'success' | 'error' | 'info';
   children: ReactNode;
   className?: string;
   ref?: Ref<HTMLDivElement>;
   tabIndex?: number;
+  announce?: boolean;
 }) {
   return (
     <div
       ref={ref}
       tabIndex={tabIndex}
-      role={tone === 'error' ? 'alert' : 'status'}
+      role={announce ? (tone === 'error' ? 'alert' : 'status') : undefined}
       className={cn(
         'flex items-start gap-2 rounded-control px-3.5 py-2.5 text-[15px] leading-snug',
         tone === 'success' && 'bg-success-wash font-medium text-success-foreground',

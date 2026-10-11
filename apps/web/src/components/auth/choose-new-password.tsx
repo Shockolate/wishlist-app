@@ -13,7 +13,7 @@ import { Notice } from '@/components/ui/notice';
 import { NoContentSchema } from '@/lib/api-client';
 import { browserApi } from '@/lib/browser-api';
 import { formErrorMap } from '@/lib/form-errors';
-import { errorMessage, hasCode } from '@/lib/messages';
+import { errorMessage, hasCode, LINK_EXPIRED } from '@/lib/messages';
 import { stripTokenFromUrl } from '@/lib/strip-token';
 import { useFocusOnMount } from '@/lib/use-focus-on-mount';
 import { cn } from '@/lib/utils';
@@ -50,9 +50,12 @@ export function ChooseNewPassword({ token }: { token: string | null }) {
       await browserApi.post('/auth/password-reset/confirm', { token, ...values }, NoContentSchema);
       setState('done');
     } catch (error) {
-      if (hasCode(error, ErrorCode.INVALID_TOKEN)) setState('spent');
-      else if (hasCode(error, ErrorCode.PASSWORD_BREACHED)) {
-        setError('newPassword', { message: errorMessage(error) });
+      if (hasCode(error, ErrorCode.INVALID_TOKEN)) {
+        // Two overlapping submits: the loser sees the token already used. Don't tell someone whose
+        // password just changed that the link failed.
+        setState((current) => (current === 'done' ? current : 'spent'));
+      } else if (hasCode(error, ErrorCode.PASSWORD_BREACHED)) {
+        setError('newPassword', { message: errorMessage(error) }, { shouldFocus: true });
       } else setFormError(errorMessage(error));
     }
   });
@@ -122,7 +125,7 @@ function ExpiredLink({ headingRef }: { headingRef?: Ref<HTMLHeadingElement> }) {
         tabIndex={headingRef ? -1 : undefined}
         className="font-display text-5xl leading-none focus:outline-none"
       >
-        This link has expired or has already been used.
+        {LINK_EXPIRED}
       </h1>
       <p className="mt-4 leading-relaxed text-muted-foreground">
         Reset links work once, within an hour.

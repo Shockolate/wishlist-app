@@ -2,7 +2,6 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { DeleteMeRequestSchema, ErrorCode } from '@wishlist/contracts';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
@@ -13,12 +12,11 @@ import { Notice } from '@/components/ui/notice';
 import { NoContentSchema } from '@/lib/api-client';
 import { browserApi } from '@/lib/browser-api';
 import { formErrorMap } from '@/lib/form-errors';
-import { errorMessage, hasCode } from '@/lib/messages';
+import { errorMessage, hasCode, WRONG_PASSWORD } from '@/lib/messages';
 import { LOGIN_AGAIN } from './name-form';
 
 /** The password is the confirmation: no extra dialog. The API clears the cookie on success. */
 export function DeleteAccountForm() {
-  const router = useRouter();
   const [formError, setFormError] = useState<string | null>(null);
   const {
     register,
@@ -34,14 +32,16 @@ export function DeleteAccountForm() {
     setFormError(null);
     try {
       await browserApi.delete('/me', NoContentSchema, values);
-      router.replace('/');
+      // Full navigations, here and below: a soft one leaves the deleted account's pages in the
+      // router's cache for Back to restore (see AccountHeader).
+      window.location.replace('/');
     } catch (error) {
       if (hasCode(error, ErrorCode.UNAUTHENTICATED)) {
-        router.replace(LOGIN_AGAIN);
+        window.location.replace(LOGIN_AGAIN);
         return;
       }
       if (hasCode(error, ErrorCode.INVALID_CREDENTIALS)) {
-        setError('password', { message: 'That password isn’t right.' });
+        setError('password', { message: WRONG_PASSWORD }, { shouldFocus: true });
       } else setFormError(errorMessage(error));
     }
   });

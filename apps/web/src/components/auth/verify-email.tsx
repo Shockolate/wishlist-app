@@ -8,13 +8,12 @@ import { Card } from '@/components/ui/card';
 import { Notice } from '@/components/ui/notice';
 import { NoContentSchema } from '@/lib/api-client';
 import { browserApi } from '@/lib/browser-api';
-import { errorMessage, hasCode } from '@/lib/messages';
+import { errorMessage, hasCode, LINK_EXPIRED } from '@/lib/messages';
 import { stripTokenFromUrl } from '@/lib/strip-token';
 import { useFocusOnMount } from '@/lib/use-focus-on-mount';
 import { cn } from '@/lib/utils';
 import { EmailLinkForm } from './email-link-form';
 
-const EXPIRED_HEADING = 'This link has expired or has already been used.';
 const EXPIRED_BODY = 'Confirmation links work once, within 24 hours. Send yourself a new one.';
 
 type State = 'confirm' | 'confirmed' | 'spent' | 'invalid' | 'check';
@@ -79,7 +78,7 @@ export function VerifyEmail({
   }
 
   return state === 'invalid' ? (
-    <ResendCard heading={EXPIRED_HEADING} body={EXPIRED_BODY} nonce={nonce} />
+    <ResendCard heading={LINK_EXPIRED} body={EXPIRED_BODY} nonce={nonce} />
   ) : (
     <ResendCard
       heading="Check your email"
@@ -112,7 +111,7 @@ function Confirmed() {
 function SpentLink({ nonce }: { nonce: string | undefined }) {
   const heading = useFocusOnMount<HTMLHeadingElement>();
   return (
-    <ResendCard heading={EXPIRED_HEADING} body={EXPIRED_BODY} nonce={nonce} headingRef={heading} />
+    <ResendCard heading={LINK_EXPIRED} body={EXPIRED_BODY} nonce={nonce} headingRef={heading} />
   );
 }
 

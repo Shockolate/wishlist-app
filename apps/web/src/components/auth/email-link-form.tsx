@@ -12,7 +12,7 @@ import { Notice } from '@/components/ui/notice';
 import { NoContentSchema } from '@/lib/api-client';
 import { browserApi } from '@/lib/browser-api';
 import { formErrorMap } from '@/lib/form-errors';
-import { errorMessage } from '@/lib/messages';
+import { errorMessage, FINISH_CHECK } from '@/lib/messages';
 import { useFocusOnMount } from '@/lib/use-focus-on-mount';
 
 /** Resend-verification and reset-request take the same body: an email and a Turnstile token. */
@@ -49,7 +49,7 @@ export function EmailLinkForm({
 
   const submit = handleSubmit(async (values) => {
     if (!token) {
-      setFormError('Finish the check above, then try again.');
+      setFormError(FINISH_CHECK);
       return;
     }
     setFormError(null);

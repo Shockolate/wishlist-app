@@ -39,11 +39,12 @@ export function NameForm({ displayName }: { displayName: string }) {
       router.refresh();
     } catch (error) {
       if (hasCode(error, ErrorCode.UNAUTHENTICATED)) {
-        router.replace(LOGIN_AGAIN);
+        // Full navigation, so Back can't restore signed-in pages from the router's cache.
+        window.location.replace(LOGIN_AGAIN);
         return;
       }
       const message = fieldErrors(error).displayName;
-      if (message) setError('displayName', { message });
+      if (message) setError('displayName', { message }, { shouldFocus: true });
       else setFormError(errorMessage(error));
     }
   });
@@ -68,10 +69,10 @@ export function NameForm({ displayName }: { displayName: string }) {
           Save name
         </Button>
       </form>
-      {/* Always mounted, so the notice inserted into it is announced; focus stays on the form. */}
-      <div aria-live="polite">
+      {/* The status region is always mounted, so the notice inserted into it is announced once. */}
+      <div role="status">
         {saved ? (
-          <Notice tone="success" className="mt-4">
+          <Notice tone="success" announce={false} className="mt-4">
             Name saved
           </Notice>
         ) : null}

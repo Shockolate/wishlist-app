@@ -14,7 +14,7 @@ import { Notice } from '@/components/ui/notice';
 import { NoContentSchema } from '@/lib/api-client';
 import { browserApi } from '@/lib/browser-api';
 import { formErrorMap } from '@/lib/form-errors';
-import { errorMessage, fieldErrors, hasCode } from '@/lib/messages';
+import { errorMessage, fieldErrors, FINISH_CHECK, hasCode } from '@/lib/messages';
 import { useFocusOnMount } from '@/lib/use-focus-on-mount';
 
 const FormSchema = SignupRequestSchema.omit({ turnstileToken: true });
@@ -38,7 +38,7 @@ export function SignupForm({ nonce }: { nonce: string | undefined }) {
 
   const submit = handleSubmit(async (values) => {
     if (!token) {
-      setFormError('Finish the check above, then try again.');
+      setFormError(FINISH_CHECK);
       return;
     }
     setFormError(null);
@@ -47,15 +47,17 @@ export function SignupForm({ nonce }: { nonce: string | undefined }) {
       setSentTo(values.email);
     } catch (error) {
       const fields = fieldErrors(error);
+      const breached = hasCode(error, ErrorCode.PASSWORD_BREACHED);
+      if (breached) fields.password = errorMessage(error);
+      // Focus the first field with an error, so a screen reader reads its label and the message.
+      let focused = false;
       for (const name of FIELDS) {
         const message = fields[name];
-        if (message) setError(name, { message });
+        if (!message) continue;
+        setError(name, { message }, { shouldFocus: !focused });
+        focused = true;
       }
-      if (hasCode(error, ErrorCode.PASSWORD_BREACHED)) {
-        setError('password', { message: errorMessage(error) });
-      } else if (Object.keys(fields).length === 0) {
-        setFormError(errorMessage(error));
-      }
+      if (!breached && Object.keys(fields).length === 0) setFormError(errorMessage(error));
     } finally {
       // A Turnstile token works once: get a fresh one for the next attempt.
       setToken(null);

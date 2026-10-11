@@ -46,7 +46,8 @@ test('pressing Create account twice sends one request (Review Focus 5)', async (
 test('two submits in one moment still send one request (the in-flight guard)', async ({ page }) => {
   const email = uniqueEmail('guard');
   await fillSignup(page, email);
-  // Both submits land before React can disable the button, so only the guard stops the second.
+  // requestSubmit() skips the button, so its disabled state can't stop the second submit: only the
+  // in-flight guard can.
   await page.locator('form').evaluate((form) => {
     (form as unknown as { requestSubmit(): void }).requestSubmit();
     (form as unknown as { requestSubmit(): void }).requestSubmit();

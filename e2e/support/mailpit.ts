@@ -25,6 +25,7 @@ export async function waitForEmail(
     const match = (await emailsTo(address)).find((m) => m.Subject === subject);
     if (match) {
       const res = await fetch(`${MAILPIT}/api/v1/message/${match.ID}`);
+      if (!res.ok) throw new Error(`Mailpit message ${match.ID} answered ${res.status}`);
       return { text: ((await res.json()) as { Text: string }).Text };
     }
     await new Promise((resolve) => setTimeout(resolve, 250));

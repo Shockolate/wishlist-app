@@ -61,7 +61,7 @@ Don't weaken or delete a test to get green. If a test is wrong, say why.
 - **Web:**
   - `apps/web/src/proxy.ts` gives every page a nonce CSP and does cookie-presence redirects. The API decides who is signed in.
   - Account forms call the API through `browserApi` (the `/api` rewrite), never Server Actions.
-  - Error copy lives only in `src/lib/messages.ts`.
+  - Error copy lives in `src/lib/messages.ts`, and field-validation copy in `src/lib/form-errors.ts`.
   - UI pieces are hand-copied, shadcn/ui-style, in `src/components/ui`, on the theme tokens in `globals.css`. Terracotta (`primary`) never carries text.
 
 ## Git and pull requests

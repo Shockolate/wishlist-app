@@ -38,6 +38,20 @@ test('a verification link is used only when the person presses Confirm, and neve
   await expect(page.getByRole('button', { name: 'Send a new link' })).toBeVisible();
 });
 
+test('Back to a token page shows its button again, because stripping the token keeps the router’s history entry', async ({
+  page,
+}) => {
+  // A well-formed token that is never pressed, so no email or account is needed.
+  await page.goto(`/verify-email?token=${'A'.repeat(43)}`);
+  await expect(page.getByRole('button', { name: 'Confirm my email' })).toBeVisible();
+  await expect.poll(() => page.url()).not.toContain('token=');
+
+  await page.getByRole('link', { name: 'Log in' }).click();
+  await expect(page).toHaveURL('/login');
+  await page.goBack();
+  await expect(page.getByRole('button', { name: 'Confirm my email' })).toBeVisible();
+});
+
 test('sends a new verification link from /verify-email', async ({ page, baseURL }) => {
   const email = uniqueEmail('resend');
   await signUpViaApi(page.request, baseURL ?? '', email);
