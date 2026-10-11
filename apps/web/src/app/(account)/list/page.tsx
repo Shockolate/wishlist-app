@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { AccountHeader } from '@/components/account-header';
-import { DocumentLink } from '@/components/document-link';
 import { Notice } from '@/components/ui/notice';
 import { requireMe } from '@/lib/require-me';
 
@@ -20,9 +19,9 @@ export default async function ListPage() {
         {me.emailVerified ? null : (
           <Notice tone="info" className="mt-6">
             Confirm your email to start your list. We sent a link to <strong>{me.email}</strong>.{' '}
-            <DocumentLink href="/verify-email" className="underline">
+            <Link href="/verify-email" className="underline">
               Send a new link
-            </DocumentLink>
+            </Link>
           </Notice>
         )}
         <p className="mt-6 text-lg leading-relaxed text-muted-foreground">

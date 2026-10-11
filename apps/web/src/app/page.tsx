@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { Collage } from '@/components/collage';
-import { DocumentLink } from '@/components/document-link';
 import { SiteHeader } from '@/components/site-header';
 import { buttonVariants } from '@/components/ui/button';
 
@@ -21,9 +20,9 @@ export default function HomePage() {
               what.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <DocumentLink href="/signup" className={buttonVariants()}>
+              <Link href="/signup" className={buttonVariants()}>
                 Create your list
-              </DocumentLink>
+              </Link>
               <Link href="/login" className={buttonVariants({ variant: 'secondary' })}>
                 Log in
               </Link>

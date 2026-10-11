@@ -33,7 +33,7 @@ test('a page carries a nonce CSP that its own scripts satisfy (spec §6.9)', asy
   expect(nonce).toBeTruthy();
   expect(csp).toContain("'strict-dynamic'");
   expect(csp).toContain("frame-ancestors 'none'");
-  expect(csp).not.toContain('challenges.cloudflare.com');
+  expect(csp).toContain('frame-src https://challenges.cloudflare.com');
 
   const scriptNonces = await page
     .locator('script[nonce]')
@@ -55,11 +55,14 @@ test('every request gets a fresh nonce', async ({ request }) => {
   expect(first).not.toBe(second);
 });
 
-test('only the Turnstile pages allow Cloudflare’s challenge (rule 6)', async ({ request }) => {
-  const cspOf = async (path: string) =>
-    (await request.get(path)).headers()['content-security-policy'] ?? '';
-  expect(await cspOf('/signup')).toContain('frame-src https://challenges.cloudflare.com');
-  expect(await cspOf('/login')).not.toContain('challenges.cloudflare.com');
+test('every page allows Cloudflare’s challenge, so in-app navigation keeps Turnstile working', async ({
+  request,
+}) => {
+  for (const path of ['/', '/login', '/signup']) {
+    const csp = (await request.get(path)).headers()['content-security-policy'] ?? '';
+    expect(csp, path).toContain('frame-src https://challenges.cloudflare.com');
+    expect(csp, path).toMatch(/script-src 'self' 'nonce-[^']+' 'strict-dynamic'/);
+  }
 });
 
 test('signed-out visitors to account pages go to login, keeping where they were going', async ({
