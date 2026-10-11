@@ -2,7 +2,6 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ChangePasswordRequestSchema, ErrorCode } from '@wishlist/contracts';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
@@ -17,7 +16,6 @@ import { errorMessage, hasCode } from '@/lib/messages';
 import { LOGIN_AGAIN } from './name-form';
 
 export function PasswordForm() {
-  const router = useRouter();
   const [changed, setChanged] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const {
@@ -40,7 +38,8 @@ export function PasswordForm() {
       setChanged(true);
     } catch (error) {
       if (hasCode(error, ErrorCode.UNAUTHENTICATED)) {
-        router.replace(LOGIN_AGAIN);
+        // Full navigation, so Back can't restore signed-in pages from the router's cache.
+        window.location.replace(LOGIN_AGAIN);
         return;
       }
       if (hasCode(error, ErrorCode.INVALID_CREDENTIALS)) {

@@ -46,18 +46,39 @@ test('changes the password, keeps this device, and the old password stops workin
   await page.reload();
   await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
 
+  // A reload drops the router's cache, so walk /list -> /settings by links: those soft navigations
+  // fill the cache that Back would restore from.
+  const nav = page.getByRole('navigation', { name: 'Main' });
+  await nav.getByRole('link', { name: 'Your list' }).click();
+  await expect(page).toHaveURL('/list');
+  await nav.getByRole('link', { name: 'Settings' }).click();
+  await expect(page).toHaveURL('/settings');
+
   await page.getByRole('button', { name: 'Log out' }).click();
   await expect(page).toHaveURL('/');
+  // Back must not restore the signed-in page from the router's in-memory cache.
+  await page.goBack();
+  await expect(page).toHaveURL('/login?next=%2Flist');
+  await expect(page.getByRole('heading', { name: 'Log in' })).toBeVisible();
+  await expect(page.getByText('Hello, Ada.')).toBeHidden();
   expect(await logInViaApi(page.request, baseURL ?? '', email)).toBe(401);
   expect(await logInViaApi(page.request, baseURL ?? '', email, NEW_PASSWORD)).toBe(204);
 });
 
 test('deletes the account after the password, and signs out', async ({ page, baseURL }) => {
   const email = await signedIn(page, baseURL ?? '', 'delete');
-  await page.goto('/settings');
+  await page.goto('/list');
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Settings' })
+    .click();
+  await expect(page).toHaveURL('/settings');
   await page.getByLabel('Your password').fill(PASSWORD);
   await page.getByRole('button', { name: 'Delete account' }).click();
   await expect(page).toHaveURL('/');
+  // Back must not show the deleted account's pages from the router's in-memory cache.
+  await page.goBack();
+  await expect(page).toHaveURL('/login?next=%2Flist');
   await page.goto('/settings');
   await expect(page).toHaveURL('/login?next=%2Fsettings');
   expect(await logInViaApi(page.request, baseURL ?? '', email)).toBe(401);

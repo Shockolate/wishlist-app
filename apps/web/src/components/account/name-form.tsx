@@ -39,7 +39,8 @@ export function NameForm({ displayName }: { displayName: string }) {
       router.refresh();
     } catch (error) {
       if (hasCode(error, ErrorCode.UNAUTHENTICATED)) {
-        router.replace(LOGIN_AGAIN);
+        // Full navigation, so Back can't restore signed-in pages from the router's cache.
+        window.location.replace(LOGIN_AGAIN);
         return;
       }
       const message = fieldErrors(error).displayName;
