@@ -78,6 +78,14 @@ test('signed-out visitors to account pages go to login, keeping where they were 
 });
 
 test('a visitor with a session cookie skips the landing page', async ({ request }) => {
+test('a path that only starts with "api" still gets the CSP; the matcher exempts /api itself', async ({
+  request,
+}) => {
+  const res = await request.get('/apiary');
+  expect(res.status()).toBe(404);
+  expect(res.headers()['content-security-policy']).toMatch(/'nonce-[^']+' 'strict-dynamic'/);
+});
+
   const res = await request.get('/', {
     maxRedirects: 0,
     headers: { cookie: `__Host-session=${'A'.repeat(43)}` },

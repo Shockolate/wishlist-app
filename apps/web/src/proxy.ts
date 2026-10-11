@@ -26,7 +26,7 @@ export const config = {
   matcher: [
     {
       // Pages only: not the /api rewrite, static files, or robots.txt.
-      source: '/((?!api|_next/static|_next/image|favicon.ico|robots.txt).*)',
+      source: '/((?!api(?:/|$)|_next/static|_next/image|favicon.ico|robots.txt).*)',
       missing: [
         { type: 'header', key: 'next-router-prefetch' },
         { type: 'header', key: 'purpose', value: 'prefetch' },
