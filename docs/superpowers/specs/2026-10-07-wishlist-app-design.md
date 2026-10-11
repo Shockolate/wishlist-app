@@ -402,6 +402,8 @@ These are the initial values. They're configurable, and every limited endpoint r
 
 **Buckets and order (Plan 2a).** Signup, resend-verification and reset-request share one per-address and one per-IP bucket: together they cap the mail one inbox or one IP can trigger. Those endpoints check the per-IP limit, then Turnstile, then the per-address limit, so failed challenges can't use up a victim's budget. Password confirmations on `/me` count against login's per-address bucket. Keys store a SHA-256 of the email or IP, never the raw value.
 
+**Plan 2b additions.** Per-IP limits key an IPv6 address by its /64, because one host usually holds a whole /64; an IPv4-mapped address is keyed as the IPv4 address it carries. In signup, the breached-password check runs before the address is charged against the mail budget, so a rejected password doesn't use up the address's emails.
+
 **Client IP (resolved by [Spike B](../spikes/2026-10-07-vercel-rewrite-headers-and-alias.md)):** on Vercel, the API reads the client IP from **`x-real-ip`**. Requests forwarded by the Next.js rewrite carry the browser's real IP, and Vercel's edge overwrites client-supplied `x-real-ip`, `x-forwarded-for` and `x-vercel-forwarded-for`, both through the rewrite and on direct calls. The header is trusted **only when `VERCEL` is set**; elsewhere (local, CI) it is client-controlled, so the API falls back to the socket address. Per-IP limits stay in.
 
 ### 6.7 Tokens in URLs
@@ -410,7 +412,7 @@ These are the initial values. They're configurable, and every limited endpoint r
 - **Indexing:** the same pages respond with `X-Robots-Tag: noindex`, and they're disallowed in `robots.txt`.
 - **Sentry:** `beforeSend` scrubs token path segments.
 - **Accepted:** Vercel's request logs contain the tokens. They're retained for 1 hour and only the account owner can read them.
-- **Token query strings:** the verify and reset pages read the token from the query string, POST it, then remove it from the address bar with `history.replaceState`.
+- **Token query strings:** the verify and reset pages read the token from the query string and remove it from the address bar with `history.replaceState` as soon as they load. They POST it only when the person presses the page's button, so a mail scanner or link preview can't use it up. Both pages send `Referrer-Policy: no-referrer` and `X-Robots-Tag: noindex`.
 
 ### 6.8 Unfurl (SSRF)
 
@@ -433,7 +435,7 @@ These are the initial values. They're configurable, and every limited endpoint r
 
 - **CSP:**
   - `default-src 'self'`
-  - `script-src 'self' 'nonce-…' 'strict-dynamic'`. A fresh nonce per request, from the web app's proxy; so every page renders dynamically
+  - `script-src 'self' 'nonce-…' 'strict-dynamic'`. A fresh nonce per request, from the web app's proxy, so every page renders dynamically
   - `style-src 'self' 'unsafe-inline'`. React and `next/font` set style attributes, which a nonce can't cover (Plan 2b)
   - `img-src 'self' https: data:`
   - `font-src 'self'`

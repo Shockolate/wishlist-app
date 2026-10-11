@@ -77,7 +77,7 @@ With `pnpm dev` running, open http://localhost:3000/signup.
 
 - The Turnstile widget is Cloudflare's always-pass test key (`TURNSTILE_SITE_KEY` in `apps/web/.env.development`), so it ticks itself.
 - Every email lands in Mailpit at http://localhost:8025.
-- A web _build_ (not `next dev`) needs `API_ORIGIN` and `TURNSTILE_SITE_KEY` in the environment. Outside production, use the test key `1x00000000000000000000AA`.
+- A web _build or start_ (not `next dev`) needs `API_ORIGIN` and `TURNSTILE_SITE_KEY` in the environment. Outside production, use the test key `1x00000000000000000000AA`.
 - `pnpm test:e2e` runs the account flows against production builds, with mail through Mailpit and Cloudflare's test widget. It needs Docker and network access to `challenges.cloudflare.com`.
 
 ## Pinned dependencies
