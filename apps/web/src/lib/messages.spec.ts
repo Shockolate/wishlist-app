@@ -18,6 +18,13 @@ describe('errorMessage (spec §7, §9)', () => {
     expect(message).toBe('Something went wrong on our side. Try again in a moment.');
   });
 
+  it('gives an unknown code, even one that names an Object.prototype member, the generic message', () => {
+    const generic = 'Something went wrong on our side. Try again in a moment.';
+    expect(errorMessage(apiError('constructor'))).toBe(generic);
+    expect(errorMessage(apiError('toString'))).toBe(generic);
+    expect(errorMessage(apiError('__proto__'))).toBe(generic);
+  });
+
   it('explains a lost connection and a version mismatch', () => {
     expect(errorMessage(new TypeError('Failed to fetch'))).toBe(
       "We couldn't reach Hanker. Check your connection and try again.",

@@ -12,7 +12,7 @@ import { Notice } from '@/components/ui/notice';
 import { NoContentSchema } from '@/lib/api-client';
 import { browserApi } from '@/lib/browser-api';
 import { formErrorMap } from '@/lib/form-errors';
-import { errorMessage, hasCode } from '@/lib/messages';
+import { errorMessage, hasCode, WRONG_PASSWORD } from '@/lib/messages';
 import { LOGIN_AGAIN } from './name-form';
 
 export function PasswordForm() {
@@ -43,11 +43,7 @@ export function PasswordForm() {
         return;
       }
       if (hasCode(error, ErrorCode.INVALID_CREDENTIALS)) {
-        setError(
-          'currentPassword',
-          { message: 'That password isn’t right.' },
-          { shouldFocus: true },
-        );
+        setError('currentPassword', { message: WRONG_PASSWORD }, { shouldFocus: true });
       } else if (hasCode(error, ErrorCode.PASSWORD_BREACHED)) {
         setError('newPassword', { message: errorMessage(error) }, { shouldFocus: true });
       } else setFormError(errorMessage(error));

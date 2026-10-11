@@ -13,7 +13,7 @@ import { Notice } from '@/components/ui/notice';
 import { NoContentSchema } from '@/lib/api-client';
 import { browserApi } from '@/lib/browser-api';
 import { formErrorMap } from '@/lib/form-errors';
-import { errorMessage, hasCode } from '@/lib/messages';
+import { errorMessage, hasCode, LINK_EXPIRED } from '@/lib/messages';
 import { stripTokenFromUrl } from '@/lib/strip-token';
 import { useFocusOnMount } from '@/lib/use-focus-on-mount';
 import { cn } from '@/lib/utils';
@@ -122,7 +122,7 @@ function ExpiredLink({ headingRef }: { headingRef?: Ref<HTMLHeadingElement> }) {
         tabIndex={headingRef ? -1 : undefined}
         className="font-display text-5xl leading-none focus:outline-none"
       >
-        This link has expired or has already been used.
+        {LINK_EXPIRED}
       </h1>
       <p className="mt-4 leading-relaxed text-muted-foreground">
         Reset links work once, within an hour.

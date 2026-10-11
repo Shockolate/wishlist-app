@@ -14,7 +14,7 @@ import { Notice } from '@/components/ui/notice';
 import { NoContentSchema } from '@/lib/api-client';
 import { browserApi } from '@/lib/browser-api';
 import { formErrorMap } from '@/lib/form-errors';
-import { errorMessage, fieldErrors, hasCode } from '@/lib/messages';
+import { errorMessage, fieldErrors, FINISH_CHECK, hasCode } from '@/lib/messages';
 import { useFocusOnMount } from '@/lib/use-focus-on-mount';
 
 const FormSchema = SignupRequestSchema.omit({ turnstileToken: true });
@@ -38,7 +38,7 @@ export function SignupForm({ nonce }: { nonce: string | undefined }) {
 
   const submit = handleSubmit(async (values) => {
     if (!token) {
-      setFormError('Finish the check above, then try again.');
+      setFormError(FINISH_CHECK);
       return;
     }
     setFormError(null);

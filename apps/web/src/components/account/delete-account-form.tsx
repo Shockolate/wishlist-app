@@ -12,7 +12,7 @@ import { Notice } from '@/components/ui/notice';
 import { NoContentSchema } from '@/lib/api-client';
 import { browserApi } from '@/lib/browser-api';
 import { formErrorMap } from '@/lib/form-errors';
-import { errorMessage, hasCode } from '@/lib/messages';
+import { errorMessage, hasCode, WRONG_PASSWORD } from '@/lib/messages';
 import { LOGIN_AGAIN } from './name-form';
 
 /** The password is the confirmation: no extra dialog. The API clears the cookie on success. */
@@ -41,7 +41,7 @@ export function DeleteAccountForm() {
         return;
       }
       if (hasCode(error, ErrorCode.INVALID_CREDENTIALS)) {
-        setError('password', { message: 'That password isn’t right.' }, { shouldFocus: true });
+        setError('password', { message: WRONG_PASSWORD }, { shouldFocus: true });
       } else setFormError(errorMessage(error));
     }
   });
