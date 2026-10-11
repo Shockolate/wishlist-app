@@ -341,10 +341,10 @@ projectWishlist(wishlist, items, claims, viewer): WishlistView
 
 - **The cookie:** `__Host-session`, holding a 256-bit random token (base64url).
   - Flags: `HttpOnly; Secure; SameSite=Lax; Path=/`.
-  - `Max-Age` is 30 days.
+  - `Max-Age` is 400 days, the longest browsers keep a cookie. It's set at login and never reissued (D27).
 - **Expiry:** sliding.
   - `expires_at` and `last_seen_at` are refreshed at most once an hour, so reads don't cause a write on every request.
-  - The cookie is reissued on refresh.
+  - The database's `expires_at` is the only authority: a session ends after 30 days without use. The cookie isn't reissued on refresh, because a refresh can happen on a server-to-server call whose `Set-Cookie` never reaches the browser (D27).
 - **Revocation:** logout deletes the session row.
   - Password reset deletes every session for the user.
   - Password change deletes every session except the current one.
@@ -433,11 +433,15 @@ These are the initial values. They're configurable, and every limited endpoint r
 
 - **CSP:**
   - `default-src 'self'`
-  - `script-src 'self' 'nonce-…'`
+  - `script-src 'self' 'nonce-…' 'strict-dynamic'`. A fresh nonce per request, from the web app's proxy; so every page renders dynamically
+  - `style-src 'self' 'unsafe-inline'`. React and `next/font` set style attributes, which a nonce can't cover (Plan 2b)
   - `img-src 'self' https: data:`
-  - `connect-src 'self'` plus Sentry's ingest origin
+  - `font-src 'self'`
+  - `connect-src 'self'` plus Sentry's ingest origin (Plan 5)
+  - `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`
   - `frame-ancestors 'none'`
-  - On the auth pages only, `https://challenges.cloudflare.com` is added to both `script-src` and `frame-src` for Turnstile.
+  - On every page, `https://challenges.cloudflare.com` is added to `script-src`, and `frame-src` allows it, for Turnstile (amended 2026-10-10, Ted). A CSP belongs to the document, and client-side navigation keeps the first page's policy, so a per-page allowance broke the widget after in-app navigation onto an auth page. With `'strict-dynamic'`, CSP3 browsers ignore the `script-src` host, so the effective widening is `frame-src` to that one origin.
+  - Not `upgrade-insecure-requests`: it breaks `http://localhost` E2E, and `.dev` is HSTS-preloaded.
 - **Other headers:** `X-Content-Type-Options: nosniff`, and HSTS (Vercel's default).
 - **Retailer images:** rendered as plain `<img loading="lazy" referrerpolicy="no-referrer">`, **not** `next/image`. Configuring `next/image` to accept images from any host would turn the image-optimization quota into an open image proxy.
 
@@ -489,7 +493,7 @@ These are the initial values. They're configurable, and every limited endpoint r
 - Tailwind with shadcn/ui components, which are copied into the repo and built on Radix primitives.
 - Forms use react-hook-form with the shared Zod schemas.
 - The target is WCAG 2.2 AA.
-- The visual direction is chosen during implementation using the `frontend-design` skill. The share page and the editor are mocked up for review before they're built.
+- The visual direction is **Warm Editorial Minimalism** (D28): a sand ground, espresso type and borders, terracotta for actions only, and sage for fulfilled states. Instrument Serif for headings, Geist for everything else, and 16px cards. The tokens live in `apps/web/src/app/globals.css`. The share page and the editor are mocked up for review before they're built (Plan 3).
 
 ## 8. Testing
 
@@ -676,3 +680,6 @@ As of 2026-10-07 on the development machine:
 | D24 | Secret-free build jobs; secrets only in jobs that run the pinned Vercel CLI, pinned actions, or a `--prod --ignore-scripts` install (2026-10-08) | One job with step-scoped secrets |
 | D25 | `preview-seed` as a schema-only root branch, wiped and migrated from zero, refreshed in place (2026-10-08) | Clone of production then anonymized; a schema-only root branch per PR (exceeds Neon Free's 3 root branches) |
 | D26 | Product name **Hanker** on `hanker.dev` (2026-10-09). The user-facing name changes; code, packages, projects and tables keep `wishlist` | `hanker.app` and `hanker.com` (both registered); keeping the generic "Wishlist" |
+| D27 | A long-lived session cookie (400 days, set only at login); the database's sliding expiry is the only authority (2026-10-10) | A cookie tied to the 30-day session and reissued on refresh, which server-to-server calls lose; the web proxy reissuing it |
+| D28 | Warm Editorial Minimalism: sand, espresso, terracotta and sage, with Instrument Serif and Geist (2026-10-10) | Six mocked directions: Wish Book, Ribbon, Candlelight, Folio, Board, Letter |
+| D29 | Go-live in two steps: the domain, DNS, Resend and the Turnstile widget in Plan 2b; the Turnstile secret, which opens sign-up, in Plan 3 (2026-10-10) | Opening sign-up in Plan 2b, before there is a list to make |

@@ -70,18 +70,33 @@ printf '%s' '{"generate":{"note":"GitHub Actions smoke tests (wishlist-app)"}}' 
   | gh secret set VERCEL_AUTOMATION_BYPASS_SECRET --env preview
 ```
 
+## Domain and DNS
+
+`hanker.dev` is registered at Cloudflare, and DNS stays there (spec §10).
+
+| Record                                                                                                                                | Points at                                                                                         | Proxy                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `hanker.dev` and `www.hanker.dev`                                                                                                     | The records Vercel → `wishlist-web` → Settings → Domains shows. `www` redirects to the apex (308) | **DNS only (grey cloud).** Proxying breaks Vercel's certificates and caching |
+| Resend's records for `mail.hanker.dev`: MX and SPF `TXT` on `send.mail.hanker.dev`, DKIM `TXT` on `resend._domainkey.mail.hanker.dev` | The records Resend → Domains shows                                                                | DNS only                                                                     |
+| `_dmarc.hanker.dev` (`TXT`)                                                                                                           | `v=DMARC1; p=none;`. Monitor first, then tighten                                                  | DNS only                                                                     |
+
+- **Turnstile:** Cloudflare → Turnstile → widget "Hanker", hostname `hanker.dev`, mode Managed. The site key is the `TURNSTILE_SITE_KEY` repo variable. The secret key stays offline until sign-up opens.
+- **The canonical origin:** `APP_ORIGIN` and the `APP_PRODUCTION_ORIGIN` repo variable are both `https://hanker.dev`. State-changing calls from any other origin, including the `*.vercel.app` production alias, get `403 FORBIDDEN_ORIGIN`.
+
 ## Environment variables
 
-| Where                              | Name                                                                                                                          | Value                                                                                                                                   |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Vercel `wishlist-api` → Production | `DATABASE_URL` (sensitive)                                                                                                    | Neon pooled string                                                                                                                      |
-| Vercel `wishlist-api` → Production | `APP_ORIGIN`                                                                                                                  | Web production origin. The CSRF guard compares it exactly, and email links use it                                                       |
-| Vercel `wishlist-api` → Production | `CRON_SECRET` (sensitive)                                                                                                     | 48 random bytes, base64. Vercel Cron sends it as a bearer token. Unset means the cron refuses everyone                                  |
-| Vercel `wishlist-api` → Production | `TURNSTILE_SECRET_KEY` (sensitive)                                                                                            | **Plan 2b.** While unset, signup, resend-verification and reset-request answer `503 CAPTCHA_UNAVAILABLE`. That's how Plan 2a ships dark |
-| Vercel `wishlist-api` → Production | `EMAIL_TRANSPORT=resend`, `EMAIL_FROM=Hanker <no-reply@mail.hanker.dev>`, `RESEND_API_KEY` (sensitive)                        | **Plan 2b.** Until then `EMAIL_TRANSPORT` defaults to `log`                                                                             |
-| Set per preview by CI              | `DATABASE_URL`, `APP_ORIGIN`, `EMAIL_TRANSPORT=log`, `TURNSTILE_SECRET_KEY` (Cloudflare's always-pass test secret), `GIT_SHA` | See `.github/workflows/preview.yml`                                                                                                     |
-| Set per deploy by CI               | `GIT_SHA`                                                                                                                     | The commit being deployed                                                                                                               |
-| Set at build by CI                 | `API_ORIGIN` (web)                                                                                                            | API production origin, or the PR's API preview URL                                                                                      |
+| Where                              | Name                                                                                                                          | Value                                                                                                                                                                                                                 |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vercel `wishlist-api` → Production | `DATABASE_URL` (sensitive)                                                                                                    | Neon pooled string                                                                                                                                                                                                    |
+| Vercel `wishlist-api` → Production | `APP_ORIGIN`                                                                                                                  | Web production origin. The CSRF guard compares it exactly, and email links use it                                                                                                                                     |
+| Vercel `wishlist-api` → Production | `CRON_SECRET` (sensitive)                                                                                                     | 48 random bytes, base64. Vercel Cron sends it as a bearer token. Unset means the cron refuses everyone                                                                                                                |
+| Vercel `wishlist-api` → Production | `TURNSTILE_SECRET_KEY` (sensitive)                                                                                            | **Unset until Plan 3 (D29).** While unset, sign-up, resend-verification and reset-request answer `503 CAPTCHA_UNAVAILABLE`, and the web app says sign-ups are paused. Setting it opens sign-up: see "Opening sign-up" |
+| Vercel `wishlist-api` → Production | `EMAIL_TRANSPORT=resend`, `EMAIL_FROM=Hanker <no-reply@mail.hanker.dev>`, `RESEND_API_KEY` (sensitive)                        | Set in Plan 2b. The API refuses to boot in production with Turnstile set and `EMAIL_TRANSPORT=log`                                                                                                                    |
+| Set per preview by CI              | `DATABASE_URL`, `APP_ORIGIN`, `EMAIL_TRANSPORT=log`, `TURNSTILE_SECRET_KEY` (Cloudflare's always-pass test secret), `GIT_SHA` | See `.github/workflows/preview.yml`                                                                                                                                                                                   |
+| Set per deploy by CI               | `GIT_SHA`                                                                                                                     | The commit being deployed                                                                                                                                                                                             |
+| Set at build by CI                 | `API_ORIGIN` (web)                                                                                                            | API production origin, or the PR's API preview URL                                                                                                                                                                    |
+| GitHub repo variable               | `TURNSTILE_SITE_KEY`                                                                                                          | The production widget's public site key (Cloudflare → Turnstile → Hanker). The production web build fails without it                                                                                                  |
+| Set at build by CI                 | `TURNSTILE_SITE_KEY` (web)                                                                                                    | The repo variable in `deploy.yml`; Cloudflare's always-pass test key in CI and previews                                                                                                                               |
 
 Set a sensitive production variable without it touching disk or shell history. For example, `CRON_SECRET`:
 
@@ -104,6 +119,18 @@ The response lists the counts.
 
 - **Check it ran:** Vercel → `wishlist-api` → Settings → Cron Jobs shows the schedule and has a **Run** button. The run's logs show the JSON counts.
 - **It refuses** any request without `Authorization: Bearer $CRON_SECRET` with a `401`.
+
+## Opening sign-up (Plan 3)
+
+Sign-up is dark until the Turnstile secret is set (D29). To open it:
+
+```bash
+read -rs TURNSTILE_SECRET && printf %s "$TURNSTILE_SECRET" \
+  | npx --yes vercel@62.5.0 env add TURNSTILE_SECRET_KEY production --sensitive --project wishlist-api --scope shockolate
+unset TURNSTILE_SECRET
+```
+
+Then redeploy (or merge to `main`). Sign up with a real address on https://hanker.dev, and check that the verification email arrives from `no-reply@mail.hanker.dev`.
 
 ## GitHub configuration
 

@@ -1,6 +1,6 @@
-# Wishlist
+# Hanker
 
-A wishlist app for family and friends. Owners keep one list of gifts they'd like and share a secret link; anyone with the link can claim items so nobody buys the same gift twice.
+Hanker is a wishlist app for family and friends, at https://hanker.dev. Owners keep one list of gifts they'd like and share a secret link; anyone with the link can claim items so nobody buys the same gift twice.
 
 - **Design spec:** [docs/superpowers/specs/2026-10-07-wishlist-app-design.md](docs/superpowers/specs/2026-10-07-wishlist-app-design.md)
 - **Roadmap:** [docs/superpowers/plans/2026-10-07-roadmap.md](docs/superpowers/plans/2026-10-07-roadmap.md)

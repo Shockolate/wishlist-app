@@ -31,7 +31,7 @@ Hanker is a wishlist app for family and friends: Next.js (web), NestJS (API), Po
 - pnpm 12.10.1, pinned by `packageManager`.
 - Docker for `pnpm dev`, integration tests (Testcontainers) and E2E.
 - Turbo builds `packages/contracts` before its dependents. If you run Vitest directly and `@wishlist/contracts` won't import, run `pnpm --filter @wishlist/contracts build`.
-- Building the web app needs `API_ORIGIN`, for example `API_ORIGIN=http://localhost:3001`. Only `next dev` reads it from `apps/web/.env.development`.
+- Building the web app needs `API_ORIGIN` and `TURNSTILE_SITE_KEY`, for example `API_ORIGIN=http://localhost:3001 TURNSTILE_SITE_KEY=1x00000000000000000000AA` (Cloudflare's test key). Only `next dev` reads them from `apps/web/.env.development`.
 
 ## Verify before you say it's done
 
@@ -39,7 +39,7 @@ Run what CI runs, and read the output:
 
 ```bash
 pnpm format:check
-API_ORIGIN=http://localhost:3001 pnpm turbo run lint typecheck test build
+API_ORIGIN=http://localhost:3001 TURNSTILE_SITE_KEY=1x00000000000000000000AA pnpm turbo run lint typecheck test build
 pnpm test:integration   # Docker
 pnpm test:e2e           # Docker; when a user-facing flow changes
 ```
@@ -58,6 +58,11 @@ Don't weaken or delete a test to get green. If a test is wrong, say why.
 - **Tests:** unit tests are `*.spec.ts` and never touch Docker. Integration tests are `apps/api/test/*.int-spec.ts`; their files run serially against one Testcontainers Postgres. State-changing requests in tests go through `test/support/client.ts`, which sends the `Origin` and JSON content type the CSRF guard requires. Behavior changes are written test-first.
 - **Migrations:** edit `schema.ts`, then `pnpm --filter @wishlist/api db:generate --name <what_changed>`, and review the SQL. A migration must work alongside the API that is currently deployed (expand, then contract).
 - **Naming:** people see **Hanker** (pages, emails, sender names). Code, packages, tables and Vercel projects say `wishlist`.
+- **Web:**
+  - `apps/web/src/proxy.ts` gives every page a nonce CSP and does cookie-presence redirects. The API decides who is signed in.
+  - Account forms call the API through `browserApi` (the `/api` rewrite), never Server Actions.
+  - Error copy lives only in `src/lib/messages.ts`.
+  - UI pieces are hand-copied, shadcn/ui-style, in `src/components/ui`, on the theme tokens in `globals.css`. Terracotta (`primary`) never carries text.
 
 ## Git and pull requests
 
