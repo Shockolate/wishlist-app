@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { ChangePasswordRequest, MeResponse } from '@wishlist/contracts';
 import { and, eq, ne } from 'drizzle-orm';
 import { CLOCK, type Clock } from '../core/clock.js';
-import { DB, type Database } from '../db/database.module.js';
+import { DB, type Database, type Transaction } from '../db/database.module.js';
 import { sessions, users } from '../db/schema.js';
 import { unauthenticated } from '../http/errors.js';
 import { rateLimitKey } from '../rate-limit/keys.js';
@@ -39,20 +39,7 @@ export class AccountService {
     await this.passwordPolicy.assertNotBreached(input.newPassword);
     const passwordHash = await hashPassword(input.newPassword);
     await this.db.transaction(async (tx) => {
-      // Re-check under the row lock: a reset or another change may have landed while this one
-      // hashed, and this request's own session may have been revoked meanwhile (rule 17).
-      const [user] = await tx
-        .select({ passwordHash: users.passwordHash })
-        .from(users)
-        .where(eq(users.id, auth.user.id))
-        .for('update');
-      if (user?.passwordHash !== verifiedHash) throw wrongPassword();
-      const [own] = await tx
-        .select({ id: sessions.id })
-        .from(sessions)
-        .where(eq(sessions.id, auth.sessionId));
-      if (!own) throw unauthenticated();
-
+      await this.recheckUnderLock(tx, auth, verifiedHash);
       await tx
         .update(users)
         .set({ passwordHash, updatedAt: this.clock.now() })
@@ -67,8 +54,34 @@ export class AccountService {
 
   /** Deleting the user cascades to the wishlist, sessions and email tokens (spec §4). */
   async deleteAccount(auth: AuthContext, password: string): Promise<void> {
-    await this.confirmPassword(auth, password);
-    await this.db.delete(users).where(eq(users.id, auth.user.id));
+    const verifiedHash = await this.confirmPassword(auth, password);
+    await this.db.transaction(async (tx) => {
+      await this.recheckUnderLock(tx, auth, verifiedHash);
+      await tx.delete(users).where(eq(users.id, auth.user.id));
+    });
+  }
+
+  /**
+   * Locks the user's row and re-checks what confirmPassword saw: a reset or a password change may
+   * have landed during the slow hash check, and this request's own session may have been revoked
+   * meanwhile (Plan 2b rule 17). The lock holds until the caller's transaction ends.
+   */
+  private async recheckUnderLock(
+    tx: Transaction,
+    auth: AuthContext,
+    verifiedHash: string,
+  ): Promise<void> {
+    const [user] = await tx
+      .select({ passwordHash: users.passwordHash })
+      .from(users)
+      .where(eq(users.id, auth.user.id))
+      .for('update');
+    if (user?.passwordHash !== verifiedHash) throw wrongPassword();
+    const [own] = await tx
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(eq(sessions.id, auth.sessionId));
+    if (!own) throw unauthenticated();
   }
 
   /**

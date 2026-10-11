@@ -6,6 +6,24 @@ import { ADA, lastEmail, logIn, signUpVerified, TURNSTILE_OK } from './support/a
 import { createAuthTestApp, type AuthTestApp } from './support/auth-app.js';
 import { client, linkToken, setCookies, type ApiResponse } from './support/client.js';
 import { openTestDatabase } from './support/database.js';
+import type * as Passwords from '../src/security/passwords.js';
+
+// Runs once, right after the next password verification: the window between confirming a password
+// and acting on it, where a concurrent reset or a revoked session can land.
+const afterVerify = vi.hoisted(() => ({ once: undefined as (() => Promise<void>) | undefined }));
+vi.mock('../src/security/passwords.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof Passwords>();
+  return {
+    ...actual,
+    verifyPassword: async (passwordHash: string, password: string) => {
+      const verified = await actual.verifyPassword(passwordHash, password);
+      const hook = afterVerify.once;
+      afterVerify.once = undefined;
+      await hook?.();
+      return verified;
+    },
+  };
+});
 
 const db = openTestDatabase();
 let t: AuthTestApp;
@@ -26,6 +44,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  afterVerify.once = undefined;
 });
 
 const NEW_PASSWORD = 'a brand new passphrase 2';
@@ -164,6 +183,30 @@ describe('DELETE /me (spec §5)', () => {
     const res = await client(t.app, cookie).delete('/me', { password: 'not my password' });
     expect([res.status, codeOf(res)]).toEqual([403, ErrorCode.INVALID_CREDENTIALS]);
     expect((await client(t.app, cookie).get('/me')).status).toBe(200);
+  });
+
+  it('refuses the delete if the password changed meanwhile, and keeps the account (Plan 2b rule 17)', async () => {
+    await signUpVerified(t);
+    const cookie = await logIn(t);
+    afterVerify.once = async () => {
+      await db.pool.query(`update users set password_hash = 'changed elsewhere'`);
+    };
+
+    const res = await client(t.app, cookie).delete('/me', { password: ADA.password });
+    expect([res.status, codeOf(res)]).toEqual([403, ErrorCode.INVALID_CREDENTIALS]);
+    expect(await count('users')).toBe(1);
+  });
+
+  it('refuses the delete if this session was revoked meanwhile, and keeps the account (Plan 2b rule 17)', async () => {
+    await signUpVerified(t);
+    const cookie = await logIn(t);
+    afterVerify.once = async () => {
+      await db.pool.query('delete from sessions');
+    };
+
+    const res = await client(t.app, cookie).delete('/me', { password: ADA.password });
+    expect([res.status, codeOf(res)]).toEqual([401, ErrorCode.UNAUTHENTICATED]);
+    expect((await login(ADA.password)).status).toBe(204);
   });
 
   it('deletes the account and everything it owns, signs out every device, and clears the cookie', async () => {
