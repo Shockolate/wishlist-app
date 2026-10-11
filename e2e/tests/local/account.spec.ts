@@ -56,6 +56,17 @@ test('changes the password, keeps this device, and the old password stops workin
   await nav.getByRole('link', { name: 'Settings' }).click();
   await expect(page).toHaveURL('/settings');
 
+  // A logout that never reaches the API says so, and leaves the person where they were.
+  await page.route('**/api/auth/logout', (route) => route.abort());
+  await page.getByRole('button', { name: 'Log out' }).click();
+  // Filtered by text: Next's route announcer is also role="alert".
+  await expect(
+    page.getByRole('alert').filter({ hasText: "We couldn't reach Hanker. Check your connection" }),
+  ).toBeVisible();
+  await expect(page).toHaveURL('/settings');
+  await expect(page.getByRole('button', { name: 'Log out' })).toBeEnabled();
+  await page.unroute('**/api/auth/logout');
+
   await page.getByRole('button', { name: 'Log out' }).click();
   await expect(page).toHaveURL('/');
   // Back must not restore the signed-in page from the router's in-memory cache.

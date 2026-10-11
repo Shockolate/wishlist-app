@@ -52,6 +52,24 @@ test('Back to a token page shows its button again, because stripping the token k
   await expect(page.getByRole('button', { name: 'Confirm my email' })).toBeVisible();
 });
 
+test('a stripped token stays out of the router, so a refresh neither sends nor shows it', async ({
+  page,
+}) => {
+  await page.goto(`/verify-email?token=${'A'.repeat(43)}`);
+  await expect(page.getByRole('button', { name: 'Confirm my email' })).toBeVisible();
+  await expect.poll(() => page.url()).not.toContain('token=');
+
+  // What the error page's "Try again" does. A router that still remembered ?token= would fetch
+  // the page with it and write it back into the address bar.
+  const refresh = page.waitForRequest((request) => request.headers()['rsc'] === '1');
+  await page.evaluate(() =>
+    (globalThis as unknown as { next: { router: { refresh(): void } } }).next.router.refresh(),
+  );
+  expect((await refresh).url()).not.toContain('token=');
+  await page.waitForLoadState('load');
+  expect(page.url()).not.toContain('token=');
+});
+
 test('sends a new verification link from /verify-email', async ({ page, baseURL }) => {
   const email = uniqueEmail('resend');
   await signUpViaApi(page.request, baseURL ?? '', email);
