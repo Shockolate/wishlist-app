@@ -44,9 +44,10 @@ class FetchFailure extends Error {
  * - The connection goes to an address that was checked, through undici's `connect.lookup`, so
  *   DNS can't change between the check and the connection (rebinding).
  * - Redirects are followed by hand, each hop checked again.
- * - One deadline covers every hop: DNS, connect, TLS, headers and body. undici ignores an abort
- *   until the socket connects, so `untilAborted` enforces it and the connector gets the same
- *   timeout. The body is cut off at `maxBytes`.
+ * - One deadline covers every hop: DNS, connect, TLS, headers and body, and the result comes back
+ *   within it. undici ignores an abort until the socket connects, so `untilAborted` enforces it;
+ *   a socket still in the TLS handshake is then closed shortly after by the connector's own
+ *   timeout, set to the same value. The body is cut off at `maxBytes`.
  */
 export class PageFetcher {
   private readonly policy: AddressPolicy;
@@ -77,27 +78,36 @@ export class PageFetcher {
     const signal = AbortSignal.timeout(this.timeoutMs);
     try {
       for (let redirects = 0; ; redirects++) {
+        // No hop starts after the deadline.
+        signal.throwIfAborted();
         await this.vet(url, vetted, signal);
         // undici acts on an abort only once the socket is connected, so a server that stalls TCP
-        // or the TLS handshake would outlast the deadline. untilAborted() enforces it; the
-        // abandoned request rejects later, when `finally` destroys the agent.
+        // or the TLS handshake would outlast the deadline. untilAborted() enforces it. If it wins
+        // the race, the abandoned request rejects later, when `finally` destroys the agent, and
+        // untilAborted() has always observed that rejection.
         const res = await untilAborted(
           request(url, { dispatcher: agent, method: 'GET', headers: REQUEST_HEADERS, signal }),
           signal,
         );
         if (res.statusCode >= 300 && res.statusCode < 400) {
           await res.body.dump();
+          // dump() resolves on close, so a deadline that passed while draining must be TIMEOUT.
+          signal.throwIfAborted();
           if (redirects === this.maxRedirects) throw new FetchFailure('TOO_MANY_REDIRECTS');
           url = nextHop(res.headers.location, url);
           continue;
         }
         if (res.statusCode >= 400) {
           await res.body.dump();
+          // dump() resolves on close, so a deadline that passed while draining must be TIMEOUT.
+          signal.throwIfAborted();
           throw new FetchFailure('BLOCKED_BY_SITE');
         }
         const type = res.headers['content-type'];
         if (typeof type !== 'string' || mediaType(type) !== 'text/html') {
           await res.body.dump();
+          // dump() resolves on close, so a deadline that passed while draining must be TIMEOUT.
+          signal.throwIfAborted();
           throw new FetchFailure('NOT_HTML');
         }
         const body = decoded(res.body, res.headers['content-encoding']);
@@ -238,6 +248,9 @@ function decodeHtml(bytes: Buffer, contentType: string): string {
 
 /** Rejects with the signal's reason as soon as it aborts, whatever `work` is still doing. */
 function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  // Observe `work` first. If the race is lost (or never run, below), `work` may still reject
+  // later, and an unobserved rejection would take the whole process down.
+  work.catch(() => undefined);
   if (signal.aborted) return Promise.reject(signal.reason as Error);
   return new Promise<T>((resolve, reject) => {
     const abort = () => reject(signal.reason as Error);

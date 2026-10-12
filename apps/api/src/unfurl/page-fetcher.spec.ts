@@ -63,6 +63,18 @@ beforeAll(async () => {
         return res.end(`<p>${'x'.repeat(1_100_000)}</p>`);
       case '/gzip':
         return html(res, gzipSync(PAGE), { 'content-encoding': 'gzip' });
+      case '/stalled-redirect-ip':
+      case '/stalled-redirect-host':
+        // A redirect whose body never finishes: 1 byte of the 100 promised, then silence.
+        res.writeHead(302, {
+          location:
+            req.url === '/stalled-redirect-ip'
+              ? `http://127.0.0.1:${port}/page`
+              : 'http://nowhere.test/',
+          'content-length': '100',
+        });
+        res.write('x');
+        return;
       case '/bomb':
         return html(res, gzipSync(Buffer.alloc(5_000_000)), { 'content-encoding': 'gzip' });
       case '/latin1':
@@ -248,6 +260,18 @@ describe('PageFetcher (spec §6.8)', () => {
     expect(await fetcher().fetch(at('/bomb'))).toMatchObject({ ok: false, reason: 'TOO_LARGE' });
   });
 
+  it.each(['/stalled-redirect-ip', '/stalled-redirect-host'])(
+    'times out, without an unhandled rejection, when the deadline passes while draining a redirect (%s)',
+    async (path) => {
+      expect(await fetcher({ timeoutMs: 200 }).fetch(at(path))).toMatchObject({
+        ok: false,
+        reason: 'TIMEOUT',
+      });
+      // Let any abandoned promise reject; Vitest fails the run if one is unhandled.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    },
+  );
+
   it('gives up on a server that accepts the connection but never completes the TLS handshake', async () => {
     const sockets = new Set<Socket>();
     const silent = createNetServer((socket) => {
@@ -264,7 +288,7 @@ describe('PageFetcher (spec §6.8)', () => {
         resolve: hosts({ 'slow-tls.test': ['127.0.0.1'] }),
       }).fetch(`https://slow-tls.test:${silentPort}/`);
       expect(page).toMatchObject({ ok: false, reason: 'TIMEOUT' });
-      expect(Date.now() - started).toBeLessThan(1000);
+      expect(Date.now() - started).toBeLessThan(450);
     } finally {
       for (const socket of sockets) socket.destroy();
       await new Promise((resolve) => silent.close(resolve));
