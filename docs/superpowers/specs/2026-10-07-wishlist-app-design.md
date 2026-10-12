@@ -437,7 +437,7 @@ These are the initial values. They're configurable, and every limited endpoint r
 - **Images:** the extracted image URL is resolved against the final page URL and must be https, and the server never fetches it.
 - **Identification:** requests send `User-Agent: Mozilla/5.0 (compatible; Hanker/1.0; +https://hanker.dev)` and `Accept: text/html`. No browser or crawler impersonation (D34).
 - **Logs** carry the hostname and the failure reason, never the full URL: query strings can carry personal data.
-- **Failure:** any failure returns `200` with empty fields and a `failureReason` code from a fixed list in `packages/contracts` (Plan 3a): `INVALID_URL`, `DISALLOWED_ADDRESS`, `DNS_FAILED`, `TIMEOUT`, `TOO_MANY_REDIRECTS`, `BLOCKED_BY_SITE` (the site answered 4xx or 5xx), `NOT_HTML`, `TOO_LARGE` or `NO_METADATA`.
+- **Failure:** any failure returns `200` with empty fields and a `failureReason` code from a fixed list in `packages/contracts` (Plan 3a): `INVALID_URL`, `DISALLOWED_ADDRESS`, `DNS_FAILED`, `UNREACHABLE` (the connection or TLS handshake failed), `TIMEOUT`, `TOO_MANY_REDIRECTS`, `BLOCKED_BY_SITE` (the site answered 4xx or 5xx), `NOT_HTML`, `TOO_LARGE` or `NO_METADATA`.
 
 ### 6.9 Headers
 
