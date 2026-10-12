@@ -27,6 +27,10 @@ describe('isPublicAddress (spec §6.8: an allowlist)', () => {
     ['2002:7f00:1::', '6to4'],
     ['2001::1', 'Teredo'],
     ['2001:db8::1', 'documentation'],
+    ['::7f00:1', 'IPv4-compatible loopback'],
+    ['::a9fe:a9fe', 'IPv4-compatible link-local'],
+    ['::a00:1', 'IPv4-compatible private'],
+    ['4000::1', 'outside 2000::/3'],
     ['not an address', 'garbage'],
   ])('refuses %s (%s)', (address) => {
     expect(isPublicAddress(address)).toBe(false);

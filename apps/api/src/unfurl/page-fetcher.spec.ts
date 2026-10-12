@@ -4,7 +4,7 @@ import {
   type Server,
   type ServerResponse,
 } from 'node:http';
-import type { AddressInfo } from 'node:net';
+import { createServer as createNetServer, type AddressInfo, type Socket } from 'node:net';
 import { gzipSync } from 'node:zlib';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { PUBLIC_WEB, type AddressPolicy } from './address-policy.js';
@@ -63,6 +63,8 @@ beforeAll(async () => {
         return res.end(`<p>${'x'.repeat(1_100_000)}</p>`);
       case '/gzip':
         return html(res, gzipSync(PAGE), { 'content-encoding': 'gzip' });
+      case '/bomb':
+        return html(res, gzipSync(Buffer.alloc(5_000_000)), { 'content-encoding': 'gzip' });
       case '/latin1':
         res.writeHead(200, { 'content-type': 'text/html; charset=windows-1252' });
         return res.end(CAFE_1252);
@@ -135,6 +137,7 @@ describe('PageFetcher (spec §6.8)', () => {
     'http://[::1]/',
     'http://169.254.169.254/latest/meta-data',
     'http://[::ffff:127.0.0.1]/',
+    'http://[::127.0.0.1]/',
     'http://2130706433/',
     'http://0x7f.1/',
     'http://10.0.0.1/',
@@ -239,6 +242,33 @@ describe('PageFetcher (spec §6.8)', () => {
       resolve: () => new Promise<string[]>(() => undefined),
     }).fetch('http://slow-dns.test/');
     expect(page).toMatchObject({ ok: false, reason: 'TIMEOUT' });
+  });
+
+  it('cuts off a compression bomb by its decoded size (Plan 3a rule 8)', async () => {
+    expect(await fetcher().fetch(at('/bomb'))).toMatchObject({ ok: false, reason: 'TOO_LARGE' });
+  });
+
+  it('gives up on a server that accepts the connection but never completes the TLS handshake', async () => {
+    const sockets = new Set<Socket>();
+    const silent = createNetServer((socket) => {
+      sockets.add(socket);
+      socket.on('error', () => undefined);
+    });
+    await new Promise<void>((resolve) => silent.listen(0, '127.0.0.1', resolve));
+    const silentPort = (silent.address() as AddressInfo).port;
+    try {
+      const started = Date.now();
+      const page = await new PageFetcher({
+        timeoutMs: 200,
+        policy: { allows: (address, p) => address === '127.0.0.1' && p === silentPort },
+        resolve: hosts({ 'slow-tls.test': ['127.0.0.1'] }),
+      }).fetch(`https://slow-tls.test:${silentPort}/`);
+      expect(page).toMatchObject({ ok: false, reason: 'TIMEOUT' });
+      expect(Date.now() - started).toBeLessThan(1000);
+    } finally {
+      for (const socket of sockets) socket.destroy();
+      await new Promise((resolve) => silent.close(resolve));
+    }
   });
 
   it('decodes a gzipped page it did not ask for (Plan 3a rule 8)', async () => {

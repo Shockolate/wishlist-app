@@ -44,7 +44,9 @@ class FetchFailure extends Error {
  * - The connection goes to an address that was checked, through undici's `connect.lookup`, so
  *   DNS can't change between the check and the connection (rebinding).
  * - Redirects are followed by hand, each hop checked again.
- * - One deadline covers every hop, DNS included, and the body is cut off at `maxBytes`.
+ * - One deadline covers every hop: DNS, connect, TLS, headers and body. undici ignores an abort
+ *   until the socket connects, so `untilAborted` enforces it and the connector gets the same
+ *   timeout. The body is cut off at `maxBytes`.
  */
 export class PageFetcher {
   private readonly policy: AddressPolicy;
@@ -71,17 +73,18 @@ export class PageFetcher {
     // The hostnames checked during this fetch, with the addresses that passed. pinnedLookup serves
     // only these, and the agent dies with this fetch (Plan 3a rule 10).
     const vetted = new Map<string, string[]>();
-    const agent = new Agent({ connect: { lookup: pinnedLookup(vetted) } });
+    const agent = new Agent({ connect: { lookup: pinnedLookup(vetted), timeout: this.timeoutMs } });
     const signal = AbortSignal.timeout(this.timeoutMs);
     try {
       for (let redirects = 0; ; redirects++) {
         await this.vet(url, vetted, signal);
-        const res = await request(url, {
-          dispatcher: agent,
-          method: 'GET',
-          headers: REQUEST_HEADERS,
+        // undici acts on an abort only once the socket is connected, so a server that stalls TCP
+        // or the TLS handshake would outlast the deadline. untilAborted() enforces it; the
+        // abandoned request rejects later, when `finally` destroys the agent.
+        const res = await untilAborted(
+          request(url, { dispatcher: agent, method: 'GET', headers: REQUEST_HEADERS, signal }),
           signal,
-        });
+        );
         if (res.statusCode >= 300 && res.statusCode < 400) {
           await res.body.dump();
           if (redirects === this.maxRedirects) throw new FetchFailure('TOO_MANY_REDIRECTS');
