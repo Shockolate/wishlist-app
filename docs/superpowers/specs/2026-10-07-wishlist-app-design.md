@@ -302,6 +302,9 @@ These require a session and a verified email. The list is always derived from th
 
 An item ID that belongs to another user's list returns `404`, the same as one that doesn't exist.
 
+- **`showClaimsToOwner` arrives with claims, in Plan 4 (D33).** Until then `PATCH /wishlist` takes `{title}` only.
+- **List changes are serialized per list (Plan 3a).** Every change to a list or its items first locks the owner's `wishlists` row `FOR UPDATE`. Inside that lock a create takes the next position and enforces the 200-item cap, and a reorder compares the submitted IDs with the current set before rewriting positions `0…n−1`. The lock order is users → wishlists → items, the order an account deletion's cascade takes.
+
 ### Public endpoints (capability tokens)
 
 | Method & path | Body | Result |
@@ -423,13 +426,18 @@ These are the initial values. They're configurable, and every limited endpoint r
   - loopback, private, link-local, CGNAT, unique-local, multicast or unspecified, or
   - an IPv4-mapped or IPv4-translated IPv6 form of any of those.
 
-  Classification uses `ipaddr.js` range matching.
+  Classification uses `ipaddr.js` and is an **allowlist** (Plan 3a): after an IPv4-mapped address is converted to the IPv4 address it carries, an address passes only if `ipaddr.js` classes it as `unicast`. Every special-purpose range is refused by default, including NAT64, 6to4, Teredo and reserved space, so a range nobody thought to list can't slip through.
 - **DNS rebinding:** the connection goes to the **vetted IP**, through a custom `lookup` on the undici agent, so the address can't change between the check and the connection. The original Host header and SNI are kept.
+  - The fetcher uses the `undici` package's own `request()`, never Node's global `fetch`: Node's bundled undici can drift from the npm copy, and a global dispatcher would route the API's other outbound calls through this policy too (Plan 3a).
+  - The `lookup` answers both the single-address call and the `all: true` list call that Node's default `autoSelectFamily` makes.
 - **Redirects:** followed manually, at most 3 hops, with every hop checked the same way.
 - **Limits:** 5-second total timeout. A 1 MB response cap, enforced while streaming. Only `text/html` is accepted.
 - **Parsing:** done with a real HTML parser. Sources are tried in this order: Open Graph tags, then JSON-LD `Product` (name, image, offers price and currency), then `<title>`.
-- **Images:** the extracted image URL must be https, and the server never fetches it.
-- **Failure:** any failure returns `200` with empty fields and a `failureReason` code, e.g. `BLOCKED_BY_SITE`, `TIMEOUT`, `NOT_HTML` or `DISALLOWED_ADDRESS`.
+- **Output (Plan 3a):** a JSON-LD price and currency become a display string with `Intl.NumberFormat('en-US')`, e.g. `"$24.99"`. Titles are trimmed to 200 characters.
+- **Images:** the extracted image URL is resolved against the final page URL and must be https, and the server never fetches it.
+- **Identification:** requests send `User-Agent: Mozilla/5.0 (compatible; Hanker/1.0; +https://hanker.dev)` and `Accept: text/html`. No browser or crawler impersonation (D34).
+- **Logs** carry the hostname and the failure reason, never the full URL: query strings can carry personal data.
+- **Failure:** any failure returns `200` with empty fields and a `failureReason` code from a fixed list in `packages/contracts` (Plan 3a): `INVALID_URL`, `DISALLOWED_ADDRESS`, `DNS_FAILED`, `UNREACHABLE` (the connection or TLS handshake failed), `TIMEOUT`, `TOO_MANY_REDIRECTS`, `BLOCKED_BY_SITE` (the site answered 4xx or 5xx), `NOT_HTML`, `TOO_LARGE` or `NO_METADATA`.
 
 ### 6.9 Headers
 
@@ -684,4 +692,9 @@ As of 2026-10-07 on the development machine:
 | D26 | Product name **Hanker** on `hanker.dev` (2026-10-09). The user-facing name changes; code, packages, projects and tables keep `wishlist` | `hanker.app` and `hanker.com` (both registered); keeping the generic "Wishlist" |
 | D27 | A long-lived session cookie (400 days, set only at login); the database's sliding expiry is the only authority (2026-10-10) | A cookie tied to the 30-day session and reissued on refresh, which server-to-server calls lose; the web proxy reissuing it |
 | D28 | Warm Editorial Minimalism: sand, espresso, terracotta and sage, with Instrument Serif and Geist (2026-10-10) | Six mocked directions: Wish Book, Ribbon, Candlelight, Folio, Board, Letter |
-| D29 | Go-live in two steps: the domain, DNS, Resend and the Turnstile widget in Plan 2b; the Turnstile secret, which opens sign-up, in Plan 3 (2026-10-10) | Opening sign-up in Plan 2b, before there is a list to make |
+| D29 | Go-live in two steps: the domain, DNS, Resend and the Turnstile widget in Plan 2b; the Turnstile secret, which opens sign-up, in Plan 3 (2026-10-10; **amended by D31**) | Opening sign-up in Plan 2b, before there is a list to make |
+| D30 | Plan 3 split into 3a, the owner API (shipped dark), and 3b, the editor and settings UI (2026-10-12) | One Plan 3, with a final review the size of Plan 2b's and stacks past Neon's preview cap |
+| D31 | Sign-up opens at the end of Plan 4, once a list can be shared and claimed; amends D29 (2026-10-12) | The end of Plan 3 with the share link hidden; a read-only share page pulled forward from Plan 4 |
+| D32 | No priority field on items: the owner's order is the priority, and terracotta stays for actions (2026-10-12) | A "most wanted" flag; priority levels |
+| D33 | `showClaimsToOwner`, its API field and its settings toggle, ship in Plan 4 with the claims it controls (2026-10-12) | Shipping the toggle in Plan 3, with nothing for it to show |
+| D34 | Unfurl identifies itself honestly, as `Mozilla/5.0 (compatible; Hanker/1.0; +https://hanker.dev)` (2026-10-12) | A browser user agent; posing as a social network's crawler |
