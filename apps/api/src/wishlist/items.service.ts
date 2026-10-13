@@ -114,7 +114,23 @@ export class ItemsService {
   }
 }
 
-/** What a PATCH sent. Undefined means "leave it", and null means "clear it" (Plan 3a rule 1). */
-function sentFields(input: UpdateItemRequest): Partial<UpdateItemRequest> {
-  return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
+/** The columns a PATCH may write. An id, a position or a list is never one of them. */
+type ItemChanges = Partial<
+  Pick<typeof items.$inferInsert, 'title' | 'url' | 'imageUrl' | 'priceText' | 'note' | 'quantity'>
+>;
+
+/**
+ * What a PATCH sent, picked field by field: undefined means "leave it", and null means "clear it"
+ * (Plan 3a rule 1). Naming the six fields keeps `wishlistId`, `position` and `id` out of the
+ * UPDATE even if the request schema is ever loosened.
+ */
+function sentFields(input: UpdateItemRequest): ItemChanges {
+  return {
+    ...(input.title !== undefined && { title: input.title }),
+    ...(input.url !== undefined && { url: input.url }),
+    ...(input.imageUrl !== undefined && { imageUrl: input.imageUrl }),
+    ...(input.priceText !== undefined && { priceText: input.priceText }),
+    ...(input.note !== undefined && { note: input.note }),
+    ...(input.quantity !== undefined && { quantity: input.quantity }),
+  };
 }

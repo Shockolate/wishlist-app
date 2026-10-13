@@ -204,6 +204,42 @@ describe('PATCH /wishlist/items/:id (spec §5)', () => {
     expect((await listOf(cookie)).items.map((i) => i.title)).toEqual(['Kettle']);
   });
 
+  it('writes only the six item fields: an id, a position or another list in the body change nothing', async () => {
+    const bob = await owner(BOB);
+    await created(bob, 'Bike');
+    const cookie = await owner();
+    await created(cookie, 'First');
+    const item = await created(cookie, 'Kettle');
+    const bobsList = (
+      await db.pool.query<{ id: string }>(
+        'select w.id from wishlists w join users u on u.id = w.owner_id where u.email = $1',
+        [BOB.email],
+      )
+    ).rows[0]?.id;
+
+    const res = await client(t.app, cookie).patch(`/wishlist/items/${item.id}`, {
+      title: 'X',
+      wishlistId: bobsList,
+      position: 99,
+      id: UNKNOWN_ID,
+    });
+
+    expect(res.status).toBe(200);
+    expect(ItemSchema.parse(res.body)).toMatchObject({ id: item.id, title: 'X', position: 1 });
+    expect((await listOf(cookie)).items.map((i) => [i.id, i.position])).toContainEqual([
+      item.id,
+      1,
+    ]);
+    expect((await listOf(cookie)).items).toHaveLength(2);
+    const bobs = await listOf(bob);
+    expect(bobs.items.map((i) => i.title)).toEqual(['Bike']);
+    const { rows } = await db.pool.query<{ wishlist_id: string }>(
+      'select wishlist_id from items where id = $1',
+      [item.id],
+    );
+    expect(rows[0]?.wishlist_id).not.toBe(bobsList);
+  });
+
   it('validates what it changes', async () => {
     const cookie = await owner();
     const item = await created(cookie, 'Kettle');
