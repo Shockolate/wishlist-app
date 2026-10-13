@@ -112,3 +112,67 @@ test('a failed account deletion puts focus on the error in the dialog', async ({
   await dialog.getByRole('button', { name: 'Delete account' }).click();
   await expect(dialog.getByRole('alert').filter({ hasText: SOMETHING_WRONG })).toBeFocused();
 });
+
+test('an old error doesn’t take focus again when the list refetches later (N1)', async ({
+  page,
+  baseURL,
+}) => {
+  const base = baseURL ?? '';
+  await verifiedOwner(page, base, 'focus-old');
+  for (let n = 1; n <= 10; n++) await addItemViaApi(page.request, base, { title: `Item ${n}` });
+  await page.setViewportSize({ width: 390, height: 600 });
+  await page.goto('/list');
+  await page.route('**/api/wishlist/items/*', (route) =>
+    route.request().method() === 'PATCH' ? serverError(route) : route.fallback(),
+  );
+  const failureRefetch = page.waitForResponse(
+    (r) => r.url().endsWith('/api/wishlist') && r.request().method() === 'GET',
+  );
+  await page.getByRole('button', { name: /^Item 1 / }).click();
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(errorNotice(page)).toBeFocused();
+  await failureRefetch;
+  await page.getByRole('button', { name: 'Cancel' }).click();
+
+  // The owner scrolls down and clicks nothing in particular: focus is on the page.
+  const scrolled = await page.evaluate(() => {
+    const g = globalThis as unknown as {
+      document: {
+        activeElement: { blur(): void } | null;
+        documentElement: { scrollHeight: number };
+      };
+      scrollTo(x: number, y: number): void;
+      scrollY: number;
+    };
+    g.document.activeElement?.blur();
+    g.scrollTo(0, g.document.documentElement.scrollHeight);
+    return g.scrollY;
+  });
+  expect(scrolled).toBeGreaterThan(0);
+
+  // Coming back to the tab refetches the list; the old error must stay where it is.
+  const laterRefetch = page.waitForResponse(
+    (r) => r.url().endsWith('/api/wishlist') && r.request().method() === 'GET',
+  );
+  await page.evaluate(() => {
+    const { document, Event } = globalThis as unknown as {
+      document: { dispatchEvent(event: unknown): void };
+      Event: new (type: string, init: { bubbles: boolean }) => unknown;
+    };
+    document.dispatchEvent(new Event('visibilitychange', { bubbles: true }));
+  });
+  await laterRefetch;
+  // Let the refetch's answer render before looking.
+  await page.evaluate(
+    () =>
+      new Promise((resolve) =>
+        (
+          globalThis as unknown as { requestAnimationFrame(cb: () => void): void }
+        ).requestAnimationFrame(() => resolve(null)),
+      ),
+  );
+  expect(await whereIsFocus(page)).toBe('the page');
+  expect(await page.evaluate(() => (globalThis as unknown as { scrollY: number }).scrollY)).toBe(
+    scrolled,
+  );
+});
