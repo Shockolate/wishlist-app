@@ -19,13 +19,17 @@ type JsonObject = Record<string, unknown>;
 
 /**
  * What a product page says about itself (spec §6.8). Each field comes from the first source that
- * has it: Open Graph tags, then a JSON-LD Product, then <title> (Plan 3a rule 11).
+ * has it: Open Graph tags, then a JSON-LD Product, then <title> (Plan 3a rule 11). A title that is
+ * only the site's name doesn't count.
  */
 export function extractMetadata(html: string, pageUrl: URL): PageMetadata {
   const page = scan(html);
   const product = findProduct(page.jsonLd);
 
-  const title = text(page.meta.get('og:title')) ?? jsonText(product?.name) ?? text(page.title);
+  const siteNames = siteNamesOf(page.meta.get('og:site_name'), pageUrl);
+  const title = [text(page.meta.get('og:title')), jsonText(product?.name), text(page.title)].find(
+    (candidate) => candidate !== undefined && !siteNames.has(candidate.toLowerCase()),
+  );
   const imageUrl = [
     page.meta.get('og:image:secure_url'),
     page.meta.get('og:image'),
@@ -122,6 +126,17 @@ function scan(html: string): { meta: Map<string, string>; jsonLd: string[]; titl
   parser.write(html);
   parser.end();
   return { meta, jsonLd, title };
+}
+
+/**
+ * The site's own names, lower-cased: its og:site_name and its host without "www.". A title that
+ * says only one of these names the site, not the product, as a bot check's page does ("Amazon.com").
+ */
+function siteNamesOf(siteName: string | undefined, pageUrl: URL): Set<string> {
+  const names = new Set([pageUrl.hostname.replace(/^www\./, '')]);
+  const named = text(siteName);
+  if (named) names.add(named.toLowerCase());
+  return names;
 }
 
 /** The first schema.org Product in any JSON-LD block, looking inside arrays and @graph. */

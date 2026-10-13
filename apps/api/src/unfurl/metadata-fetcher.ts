@@ -32,7 +32,8 @@ export class HttpMetadataFetcher implements MetadataFetcher {
       return this.failed('NO_METADATA', page.url.hostname);
     }
     if (!metadata.title && !metadata.imageUrl && !metadata.priceText) {
-      return this.failed('NO_METADATA', page.url.hostname);
+      // A page cut off at the cap may say what it is further down: "too large" is the truer answer.
+      return this.failed(page.truncated ? 'TOO_LARGE' : 'NO_METADATA', page.url.hostname);
     }
     return metadata;
   }

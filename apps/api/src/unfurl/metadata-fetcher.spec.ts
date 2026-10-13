@@ -27,6 +27,19 @@ beforeAll(async () => {
         '<meta property="og:title" content="Kettle"><meta property="product:price:amount" content="40"><meta property="product:price:currency" content="USD">',
       );
     }
+    if (req.url === '/huge-kettle') {
+      // Retail pages run past 1 MB, with their metadata in <head>.
+      res.writeHead(200, { 'content-type': 'text/html' });
+      return res.end(
+        `<head><meta property="og:title" content="Kettle"></head><body>${'x'.repeat(1_100_000)}</body>`,
+      );
+    }
+    if (req.url === '/huge-empty') {
+      res.writeHead(200, { 'content-type': 'text/html' });
+      return res.end(
+        `<p>${'x'.repeat(1_100_000)}</p><meta property="og:title" content="Too late">`,
+      );
+    }
     if (req.url === '/empty') {
       res.writeHead(200, { 'content-type': 'text/html' });
       return res.end('<p>Nothing here</p>');
@@ -66,6 +79,14 @@ describe('HttpMetadataFetcher (spec §6.8)', () => {
 
   it('says NO_METADATA when a page has nothing usable', async () => {
     expect(await fetcher().fetch(at('/empty'))).toEqual({ failureReason: 'NO_METADATA' });
+  });
+
+  it('reads a page past 1 MB from its first megabyte', async () => {
+    expect(await fetcher().fetch(at('/huge-kettle'))).toEqual({ title: 'Kettle' });
+  });
+
+  it('says TOO_LARGE when the first megabyte has nothing usable', async () => {
+    expect(await fetcher().fetch(at('/huge-empty'))).toEqual({ failureReason: 'TOO_LARGE' });
   });
 
   it("passes the fetcher's failure through", async () => {

@@ -431,13 +431,13 @@ These are the initial values. They're configurable, and every limited endpoint r
   - The fetcher uses the `undici` package's own `request()`, never Node's global `fetch`: Node's bundled undici can drift from the npm copy, and a global dispatcher would route the API's other outbound calls through this policy too (Plan 3a).
   - The `lookup` answers both the single-address call and the `all: true` list call that Node's default `autoSelectFamily` makes.
 - **Redirects:** followed manually, at most 3 hops, with every hop checked the same way.
-- **Limits:** 5-second total timeout. A 1 MB response cap, enforced while streaming. Only `text/html` is accepted.
-- **Parsing:** done with a real HTML parser. Sources are tried in this order: Open Graph tags, then JSON-LD `Product` (name, image, offers price and currency), then `<title>`.
+- **Limits:** 5-second total timeout. Reading stops at 1 MB, counted after decompression, and a longer page is parsed from what arrived: a product page's metadata is in its `<head>` (Plan 3a follow-up). Only a `200` with `text/html` is accepted.
+- **Parsing:** done with a real HTML parser. Sources are tried in this order: Open Graph tags, then JSON-LD `Product` (name, image, offers price and currency), then `<title>`. A title that is only the site's name (`og:site_name`, or the host without `www.`) is skipped, as on a bot check's page (Plan 3a follow-up).
 - **Output (Plan 3a):** a JSON-LD price and currency become a display string with `Intl.NumberFormat('en-US')`, e.g. `"$24.99"`. Titles are trimmed to 200 characters.
 - **Images:** the extracted image URL is resolved against the final page URL and must be https, and the server never fetches it.
 - **Identification:** requests send `User-Agent: Mozilla/5.0 (compatible; Hanker/1.0; +https://hanker.dev)` and `Accept: text/html`. No browser or crawler impersonation (D34).
 - **Logs** carry the hostname and the failure reason, never the full URL: query strings can carry personal data.
-- **Failure:** any failure returns `200` with empty fields and a `failureReason` code from a fixed list in `packages/contracts` (Plan 3a): `INVALID_URL`, `DISALLOWED_ADDRESS`, `DNS_FAILED`, `UNREACHABLE` (the connection or TLS handshake failed), `TIMEOUT`, `TOO_MANY_REDIRECTS`, `BLOCKED_BY_SITE` (the site answered 4xx or 5xx), `NOT_HTML`, `TOO_LARGE` or `NO_METADATA`.
+- **Failure:** any failure returns `200` with empty fields and a `failureReason` code from a fixed list in `packages/contracts` (Plan 3a): `INVALID_URL`, `DISALLOWED_ADDRESS`, `DNS_FAILED`, `UNREACHABLE` (the connection or TLS handshake failed), `TIMEOUT`, `TOO_MANY_REDIRECTS`, `BLOCKED_BY_SITE` (after redirects, the site answered anything but `200`: a 4xx, a 5xx, or a bot check's `202`), `NOT_HTML`, `TOO_LARGE` (the first megabyte of a longer page had nothing usable) or `NO_METADATA`.
 
 ### 6.9 Headers
 
