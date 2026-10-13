@@ -26,8 +26,13 @@ export interface PageFetcherOptions {
   maxRedirects?: number;
 }
 
+/**
+ * A page, or why there isn't one. `truncated` means the page went on past `maxBytes`, and `html` is
+ * its start.
+ */
 export type FetchedPage =
-  { ok: true; url: URL; html: string } | { ok: false; reason: UnfurlFailureReason; host?: string };
+  | { ok: true; url: URL; html: string; truncated: boolean }
+  | { ok: false; reason: UnfurlFailureReason; host?: string };
 
 /** A failure with a known reason. fetch() throws these internally and returns them as results. */
 class FetchFailure extends Error {
@@ -48,7 +53,9 @@ class FetchFailure extends Error {
  *   within it. undici ignores an abort until the socket connects, so `untilAborted` enforces it;
  *   a connection that began just before the deadline is then closed by the connector's own timeout,
  *   set to the same value, so it can live up to `timeoutMs` past the deadline. That is bounded; it
- *   only delays releasing the socket, not the answer. The body is cut off at `maxBytes`.
+ *   only delays releasing the socket, not the answer.
+ * - Reading stops at `maxBytes`, counted after decompression. A longer page comes back as its
+ *   start, marked `truncated`: a product page's metadata is in its <head>.
  */
 export class PageFetcher {
   private readonly policy: AddressPolicy;
@@ -113,8 +120,8 @@ export class PageFetcher {
           throw new FetchFailure('NOT_HTML');
         }
         const body = decoded(res.body, res.headers['content-encoding']);
-        const bytes = await readCapped(body, this.maxBytes);
-        return { ok: true, url, html: decodeHtml(bytes, type) };
+        const { bytes, truncated } = await readCapped(body, this.maxBytes);
+        return { ok: true, url, html: decodeHtml(bytes, type), truncated };
       }
     } catch (error) {
       return { ok: false, reason: reasonFor(error, signal), host: url.hostname };
@@ -221,17 +228,27 @@ function decoded(body: Readable, encoding: string | string[] | undefined): Reada
   }
 }
 
-/** Reads the whole body, but gives up once it passes `max` bytes, counted after decompression. */
-async function readCapped(stream: Readable, max: number): Promise<Buffer> {
+/** The body's first `max` bytes, counted after decompression, and whether there was more. */
+async function readCapped(
+  stream: Readable,
+  max: number,
+): Promise<{ bytes: Buffer; truncated: boolean }> {
   const chunks: Buffer[] = [];
   let total = 0;
   for await (const chunk of stream) {
     const buffer = chunk as Buffer;
+    if (total + buffer.length > max) {
+      chunks.push(buffer.subarray(0, max - total));
+      // Leaving the loop destroys the stream, so the rest is never downloaded or decompressed.
+      // An undici body destroyed before its end emits an abort 'error'. Node's async iterator
+      // happens to leave a listener for it; this one means we don't depend on that.
+      stream.on('error', () => undefined);
+      return { bytes: Buffer.concat(chunks), truncated: true };
+    }
     total += buffer.length;
-    if (total > max) throw new FetchFailure('TOO_LARGE');
     chunks.push(buffer);
   }
-  return Buffer.concat(chunks);
+  return { bytes: Buffer.concat(chunks), truncated: false };
 }
 
 /**

@@ -68,6 +68,11 @@ beforeAll(async () => {
       case '/huge':
         res.writeHead(200, { 'content-type': 'text/html' });
         return res.end(`<p>${'x'.repeat(1_100_000)}</p>`);
+      case '/huge-unfinished':
+        // More than 1 MB, then the response never ends.
+        res.writeHead(200, { 'content-type': 'text/html' });
+        res.write('x'.repeat(1_100_000));
+        return;
       case '/gzip':
         return html(res, gzipSync(PAGE), { 'content-encoding': 'gzip' });
       case '/stalled-redirect-ip':
@@ -138,6 +143,7 @@ describe('PageFetcher (spec §6.8)', () => {
       ok: true,
       url: new URL(at('/page')),
       html: PAGE,
+      truncated: false,
     });
   });
 
@@ -252,8 +258,19 @@ describe('PageFetcher (spec §6.8)', () => {
     expect(await fetcher().fetch(at('/json'))).toMatchObject({ ok: false, reason: 'NOT_HTML' });
   });
 
-  it('stops reading past 1 MB', async () => {
-    expect(await fetcher().fetch(at('/huge'))).toMatchObject({ ok: false, reason: 'TOO_LARGE' });
+  it('stops reading at 1 MB, and returns what arrived', async () => {
+    const page = await fetcher().fetch(at('/huge'));
+    expect(page).toMatchObject({ ok: true, truncated: true });
+    expect(page.ok && page.html).toBe(`<p>${'x'.repeat(1_048_573)}`);
+    // Let the abandoned body emit; Vitest fails the run on an unhandled 'error'.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  });
+
+  it('returns at 1 MB without waiting for the rest of the response', async () => {
+    const page = await fetcher({ timeoutMs: 1_000 }).fetch(at('/huge-unfinished'));
+    expect(page).toMatchObject({ ok: true, truncated: true });
+    expect(page.ok && page.html.length).toBe(1_048_576);
+    await new Promise((resolve) => setTimeout(resolve, 50));
   });
 
   it('gives up on a site that is too slow', async () => {
@@ -271,8 +288,11 @@ describe('PageFetcher (spec §6.8)', () => {
     expect(page).toMatchObject({ ok: false, reason: 'TIMEOUT' });
   });
 
-  it('cuts off a compression bomb by its decoded size (Plan 3a rule 8)', async () => {
-    expect(await fetcher().fetch(at('/bomb'))).toMatchObject({ ok: false, reason: 'TOO_LARGE' });
+  it('stops decompressing a compression bomb at 1 MB decoded (Plan 3a rule 8)', async () => {
+    const page = await fetcher().fetch(at('/bomb'));
+    expect(page).toMatchObject({ ok: true, truncated: true });
+    expect(page.ok && page.html.length).toBe(1_048_576);
+    await new Promise((resolve) => setTimeout(resolve, 50));
   });
 
   it.each(['/stalled-redirect-ip', '/stalled-redirect-host'])(
