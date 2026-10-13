@@ -46,6 +46,8 @@ This starts Postgres, rebuilds `packages/contracts` on change, and runs the API 
 | `pnpm test:e2e`                 | Playwright against production builds on ports 3100/3101 and the `wishlist_e2e` database | Yes          |
 | `pnpm turbo run lint typecheck` | ESLint and TypeScript                                                                   | No           |
 
+Testcontainers looks for Docker at `/var/run/docker.sock`. With Docker Desktop on Linux, point it at Desktop's socket: `DOCKER_HOST=unix://$HOME/.docker/desktop/docker.sock TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock pnpm test:integration`.
+
 ## Database
 
 - Change the schema in `apps/api/src/db/schema.ts`, then generate a migration: `pnpm --filter @wishlist/api db:generate --name <what_changed>`.
@@ -70,6 +72,22 @@ curl -i -b /tmp/jar "$API/me"
 ```
 
 curl keeps the `__Host-session` cookie over plain http because it's localhost.
+
+## Trying the owner API
+
+The owner endpoints need a confirmed email: sign up and verify as in "Trying the auth API", keeping the cookie jar.
+
+```bash
+curl -s -b /tmp/jar "$API/wishlist"
+curl -s -b /tmp/jar -X POST "$API/wishlist/items" -H "Origin: $ORIGIN" -H 'content-type: application/json' \
+  -d '{"title":"Stovetop kettle","url":"https://shop.example/kettle","priceText":"$40"}'
+curl -s -b /tmp/jar -X POST "$API/wishlist/unfurl" -H "Origin: $ORIGIN" -H 'content-type: application/json' \
+  -d '{"url":"https://example.com/"}'
+```
+
+- Every state change needs the `Origin` header and a JSON body, so a `DELETE` sends `-d '{}'`.
+- Unfurl makes real requests from your machine. A private or loopback address answers `{"failureReason":"DISALLOWED_ADDRESS"}`, as it should.
+- Reordering sends every item ID: `PUT /wishlist/items/order` with `{"itemIds":[…]}`. Anything but the list's exact item set is `409 ORDER_CONFLICT`.
 
 ## Trying the pages
 

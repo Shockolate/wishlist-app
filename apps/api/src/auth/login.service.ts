@@ -20,7 +20,7 @@ export class LoginService {
   /**
    * Spec §5, §6.4, §6.6. Both limits apply before the lookup, so a 429 says nothing about whether
    * the address exists. An unknown address still costs a full argon2 check. Unverified users may
-   * log in; owner endpoints check verification (Plan 3).
+   * log in; owner endpoints check verification (Plan 3a).
    */
   async login(input: LoginRequest, ip: string): Promise<{ token: string }> {
     await this.limiter.enforce(ipRateLimitKey('login:ip', ip), LOGIN_PER_IP);
