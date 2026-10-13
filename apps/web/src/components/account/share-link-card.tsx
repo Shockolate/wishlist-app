@@ -4,6 +4,7 @@ import { ErrorCode, RotateShareTokenResponseSchema } from '@wishlist/contracts';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { CopyIcon } from '@/components/list/icons';
+import { updateCachedList } from '@/components/query-provider';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -57,6 +58,7 @@ export function ShareLinkCard({ shareUrl: initial }: { shareUrl: string }) {
         RotateShareTokenResponseSchema,
       );
       setShareUrl(rotated.shareUrl);
+      updateCachedList((list) => ({ ...list, shareUrl: rotated.shareUrl }));
       say('New link ready. The old one no longer works.');
       // The router keeps the pages it has rendered, and Back would restore them with the old link.
       router.refresh();

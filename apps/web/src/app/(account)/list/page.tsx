@@ -40,7 +40,7 @@ export default async function ListPage() {
     <>
       <AccountHeader current="list" />
       <main className={MAIN}>
-        <QueryProvider>
+        <QueryProvider userId={me.id}>
           <ListEditor initial={list} />
         </QueryProvider>
       </main>
