@@ -246,6 +246,50 @@ describe('the list’s mutation queue (spec §7, Plan 3b rules 2–4)', () => {
     await vi.waitFor(() => expect(t.order()).toEqual([item(2).id, item(1).id]));
   });
 
+  it('cancels a refetch in flight when an add starts, and refetches once the add has settled', async () => {
+    const t = setup(item(1));
+    t.watch();
+    void t.client.invalidateQueries({ queryKey: WISHLIST_KEY });
+    await vi.waitFor(() => expect(t.sent).toHaveLength(1));
+    expect(t.sent[0]?.method).toBe('GET');
+    const adding = t.run(t.mutations.create, { title: 'Item 2', quantity: 1 });
+    await vi.waitFor(() => expect(t.sent).toHaveLength(2));
+    expect(t.sent[1]?.method).toBe('POST');
+    // The GET that was cancelled would have answered from before the add. Its late answer is dropped.
+    t.answer(0, json(200, t.serverList(item(1))));
+    t.answer(1, json(201, item(2)));
+    await adding;
+    expect(t.order()).toEqual([item(1).id, item(2).id]);
+    // Now the list is refetched, so the server's version is what stays.
+    await vi.waitFor(() => expect(t.sent).toHaveLength(3));
+    expect(t.sent[2]).toMatchObject({ method: 'GET', path: '/api/wishlist' });
+    t.answer(2, json(200, t.serverList(item(1), item(2))));
+    await vi.waitFor(() => expect(t.invalidated()).toBe(false));
+    expect(t.order()).toEqual([item(1).id, item(2).id]);
+  });
+
+  it('cancels a refetch in flight when a save starts, and refetches once the save has settled', async () => {
+    const t = setup(item(1, { priceText: '$40' }));
+    t.watch();
+    void t.client.invalidateQueries({ queryKey: WISHLIST_KEY });
+    await vi.waitFor(() => expect(t.sent).toHaveLength(1));
+    expect(t.sent[0]?.method).toBe('GET');
+    const editing = t.run(t.mutations.update, { id: item(1).id, body: { priceText: '$48' } });
+    await vi.waitFor(() => expect(t.sent).toHaveLength(2));
+    expect(t.sent[1]?.method).toBe('PATCH');
+    // The cancelled GET would have brought back the old price after the save.
+    t.answer(0, json(200, t.serverList(item(1, { priceText: '$40' }))));
+    t.answer(1, json(200, item(1, { priceText: '$48' })));
+    await editing;
+    const price = () => t.client.getQueryData<WishlistResponse>(WISHLIST_KEY)?.items[0]?.priceText;
+    expect(price()).toBe('$48');
+    await vi.waitFor(() => expect(t.sent).toHaveLength(3));
+    expect(t.sent[2]).toMatchObject({ method: 'GET', path: '/api/wishlist' });
+    t.answer(2, json(200, t.serverList(item(1, { priceText: '$48' }))));
+    await vi.waitFor(() => expect(t.invalidated()).toBe(false));
+    expect(price()).toBe('$48');
+  });
+
   it.each([
     ['an add that finds the list full', 422, ErrorCode.LIST_FULL],
     ['an add that the server fails', 500, ErrorCode.INTERNAL_ERROR],

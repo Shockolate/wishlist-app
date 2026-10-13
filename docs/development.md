@@ -94,7 +94,7 @@ curl -s -b /tmp/jar -X POST "$API/wishlist/unfurl" -H "Origin: $ORIGIN" -H 'cont
 With `pnpm dev` running, sign up at http://localhost:3000/signup, confirm the email from Mailpit, log in, and open `/list`.
 
 - Pasting a shop link unfurls it from your machine. A link to a `.invalid` host, such as `https://hanker-e2e.invalid/kettle`, fails fast with "We couldn’t find that site", which is how the E2E tests reach the add form without depending on a real shop.
-- The editor keeps the list in one TanStack Query cache (`apps/web/src/lib/list-cache.ts`), and every change goes through one mutation queue (`apps/web/src/lib/list-mutations.ts`). A failure marks the list stale, and it is refetched once the queue drains, rather than a snapshot being restored. Components get the queue from `useListMutations()`, which shares one instance per page. The unit tests run the queue against a real `QueryClient`.
+- The editor keeps the list in one TanStack Query cache (`apps/web/src/lib/list-cache.ts`), and every change goes through one mutation queue (`apps/web/src/lib/list-mutations.ts`). A failure marks the list stale, and it is refetched once the queue drains, rather than a snapshot being restored. Components get the queue from `useListMutations()`, which shares one instance per QueryClient, and there is one QueryClient per browser document (`components/query-provider.tsx`). A remount from Next's router cache, as on Back, therefore reuses the live cache instead of reseeding from a stale server render, and `/list` also refetches on mount when no change is queued. The unit tests run the queue against a real `QueryClient`.
 
 ## Trying the pages
 
