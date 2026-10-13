@@ -104,6 +104,8 @@ describe('formatPrice (spec §2: prices are display strings)', () => {
     ['24.99', undefined, '24.99'],
     ['about 20', 'USD', 'about 20 USD'],
     ['24.99', 'XX', '24.99 XX'],
+    ['24.99', 'ABC', '24.99 ABC'],
+    ['24.99', 'TBD', '24.99 TBD'],
     ['', 'USD', undefined],
     [undefined, 'USD', undefined],
     ['9'.repeat(60), 'USD', undefined],

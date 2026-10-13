@@ -11,6 +11,9 @@ const TITLE_MAX = 200;
 const PRICE_MAX = 50;
 const URL_MAX = 2048;
 
+/** Intl formats an unknown but well-formed code ("ABC") as "ABC 24.99", so only known codes go to it. */
+const KNOWN_CURRENCIES = new Set(Intl.supportedValuesOf('currency'));
+
 type JsonObject = Record<string, unknown>;
 
 /**
@@ -53,13 +56,13 @@ export function formatPrice(amount: unknown, currency: unknown): string | undefi
   if (!value) return undefined;
   const code = typeof currency === 'string' ? currency.trim().toUpperCase() : '';
   let formatted = code ? `${value} ${code}` : value;
-  if (code && /^\d+(\.\d+)?$/.test(value)) {
+  if (KNOWN_CURRENCIES.has(code) && /^\d+(\.\d+)?$/.test(value)) {
     try {
       formatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: code }).format(
         Number(value),
       );
     } catch {
-      // A malformed currency code: keep "<amount> <CODE>".
+      // Belt and braces: KNOWN_CURRENCIES should rule this out. Keep "<amount> <CODE>".
     }
   }
   return formatted.length <= PRICE_MAX ? formatted : undefined;
