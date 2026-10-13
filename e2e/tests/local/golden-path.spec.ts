@@ -62,7 +62,9 @@ test('a new person signs up, confirms, logs in, renames, resets the password and
   await expect(page.getByRole('heading', { level: 1, name: "Ada's wishlist" })).toBeVisible();
 
   await mainNav.getByRole('link', { name: 'Settings' }).click();
-  await page.getByLabel('Your password').fill(NEW_PASSWORD);
   await page.getByRole('button', { name: 'Delete account' }).click();
+  const deleteDialog = page.getByRole('alertdialog', { name: 'Delete your account?' });
+  await deleteDialog.getByLabel('Your password').fill(NEW_PASSWORD);
+  await deleteDialog.getByRole('button', { name: 'Delete account' }).click();
   await expect(page).toHaveURL('/');
 });

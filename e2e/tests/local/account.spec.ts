@@ -86,8 +86,10 @@ test('deletes the account after the password, and signs out', async ({ page, bas
     .getByRole('link', { name: 'Settings' })
     .click();
   await expect(page).toHaveURL('/settings');
-  await page.getByLabel('Your password').fill(PASSWORD);
   await page.getByRole('button', { name: 'Delete account' }).click();
+  const deleteDialog = page.getByRole('alertdialog', { name: 'Delete your account?' });
+  await deleteDialog.getByLabel('Your password').fill(PASSWORD);
+  await deleteDialog.getByRole('button', { name: 'Delete account' }).click();
   await expect(page).toHaveURL('/');
   // Back must not show the deleted account's pages from the router's in-memory cache.
   await page.goBack();
