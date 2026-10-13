@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { WishlistResponseSchema, type WishlistResponse } from '@wishlist/contracts';
 import { browserApi } from '@/lib/browser-api';
 import { WISHLIST_KEY } from '@/lib/list-cache';
+import { AddItem } from './add-item';
 import { ItemList } from './item-list';
 import { ListStatusLine, ListStatusProvider } from './list-status';
 import { ShareActions } from './share-actions';
@@ -40,6 +41,7 @@ function Editor({ initial }: { initial: WishlistResponse }) {
           : 'Add the things you’d love. When you’re ready, send one link to family and friends.'}
       </p>
       {hasItems ? <ShareActions title={list.title} shareUrl={list.shareUrl} /> : null}
+      <AddItem />
       <ListStatusLine />
       {hasItems ? <ItemList items={list.items} /> : <EmptyList />}
     </>
