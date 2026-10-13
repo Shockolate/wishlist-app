@@ -158,9 +158,11 @@ describe('the list’s mutation queue (spec §7, Plan 3b rules 2–4)', () => {
     const removing = t.run(t.mutations.remove, item(1).id);
     await vi.waitFor(() => expect(t.order()).toEqual([item(2).id]));
     await vi.waitFor(() => expect(t.sent).toHaveLength(1));
-    expect(t.sent[0]).toMatchObject({
+    expect(t.sent[0]).toEqual({
       method: 'DELETE',
       path: `/api/wishlist/items/${item(1).id}`,
+      // The CSRF guard refuses a state-changing request that isn't JSON, so a delete sends {}.
+      body: {},
     });
     t.answer(0, problem(404, ErrorCode.NOT_FOUND));
     await expect(removing).rejects.toThrow('404 NOT_FOUND');

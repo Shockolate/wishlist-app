@@ -1,15 +1,45 @@
 import type { Item } from '@wishlist/contracts';
+import type { ReactNode, Ref } from 'react';
 import { shopName } from '@/lib/item-display';
+import { cn } from '@/lib/utils';
 import { ItemPhoto } from './item-photo';
 
-/** One row of the list (D37). Task 4 opens it in place; Task 5 adds the handle and the arrows. */
-export function ItemRow({ item }: { item: Item }) {
+/** One row of the list (D37). Its title button opens the item's form in place, below it. */
+export function ItemRow({
+  item,
+  open,
+  onToggle,
+  titleButtonRef,
+  children,
+}: {
+  item: Item;
+  open: boolean;
+  onToggle: () => void;
+  titleButtonRef: Ref<HTMLButtonElement>;
+  children: ReactNode;
+}) {
+  const formId = `edit-${item.id}`;
   return (
-    <li className="flex items-center gap-1.5 border-t border-foreground/15 py-2.5 pr-1 pl-2.5 first:border-t-0">
-      <ItemPhoto item={item} />
-      <div className="min-w-0 flex-1 px-1.5">
-        <ItemSummary item={item} />
+    <li
+      className={cn(
+        'border-t border-foreground/15 first:border-t-0',
+        open && 'bg-background shadow-[inset_3px_0_0_var(--foreground)]',
+      )}
+    >
+      <div className="flex items-center gap-1.5 py-2.5 pr-1 pl-2.5">
+        <ItemPhoto item={item} />
+        <button
+          ref={titleButtonRef}
+          type="button"
+          aria-expanded={open}
+          aria-controls={open ? formId : undefined}
+          onClick={onToggle}
+          className="min-h-14 min-w-0 flex-1 rounded-control px-1.5 text-left"
+        >
+          <ItemSummary item={item} />
+        </button>
       </div>
+      {open ? <div id={formId}>{children}</div> : null}
     </li>
   );
 }
