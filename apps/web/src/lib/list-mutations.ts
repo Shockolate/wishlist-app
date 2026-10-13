@@ -25,9 +25,10 @@ export interface ItemEdit {
 }
 
 /**
- * Whether a failed change refetches the list. The refetch is the rollback: restoring a snapshot
- * would also undo the changes queued after it (spec §7). Not after a form's own validation errors,
- * and not after a lost session, which leaves the page (Plan 3b rule 4).
+ * Whether a failed change leaves the list stale, to be refetched once the queue drains. The refetch
+ * is the rollback: restoring a snapshot would also undo the changes queued after it (spec §7). Not
+ * after a form's own validation errors, and not after a lost session, which leaves the page
+ * (Plan 3b rule 4).
  */
 export function refetchesAfter(error: unknown): boolean {
   return !hasCode(error, ErrorCode.VALIDATION_FAILED) && !hasCode(error, ErrorCode.UNAUTHENTICATED);
@@ -38,15 +39,32 @@ export function refetchesAfter(error: unknown): boolean {
  * so a unit test can run them against a real QueryClient, without React. TanStack runs a scoped
  * mutation's onMutate at once and its mutationFn when the scope is free, so a move or a delete shows
  * immediately and its request waits its turn.
+ *
+ * A failure marks the list stale rather than refetching it. A refetch isn't in the mutation scope,
+ * so one that landed while changes were still queued would overwrite their optimistic state, and
+ * nothing would re-apply it (a deleted item would come back). The refetch runs when the last
+ * pending change settles.
  */
 export function listMutations(client: QueryClient, api: ApiClient) {
+  // Shared by the four changes: set by a failure or a cancelled refetch, cleared by the refetch.
+  let stale = false;
   const change = (edit: (list: WishlistResponse) => WishlistResponse) => {
     client.setQueryData<WishlistResponse>(WISHLIST_KEY, (list) => (list ? edit(list) : list));
   };
-  // An optimistic change mustn't be overwritten by a refetch that started before it.
-  const holdRefetches = () => client.cancelQueries({ queryKey: WISHLIST_KEY });
+  // An optimistic change mustn't be overwritten by a refetch that started before it. If it cancels
+  // one in flight, the list is stale: it's refetched again when the queue drains.
+  const holdRefetches = () => {
+    if (client.isFetching({ queryKey: WISHLIST_KEY }) > 0) stale = true;
+    return client.cancelQueries({ queryKey: WISHLIST_KEY });
+  };
   const onError = (error: unknown) => {
-    if (refetchesAfter(error)) void client.invalidateQueries({ queryKey: WISHLIST_KEY });
+    if (refetchesAfter(error)) stale = true;
+  };
+  // A settling mutation still counts itself in isMutating, as do the ones queued behind it.
+  const onSettled = () => {
+    if (!stale || client.isMutating() > 1) return;
+    stale = false;
+    void client.invalidateQueries({ queryKey: WISHLIST_KEY });
   };
 
   const create: MutationOptions<Item, unknown, CreateItemRequest> = {
@@ -54,12 +72,14 @@ export function listMutations(client: QueryClient, api: ApiClient) {
     mutationFn: (body) => api.post('/wishlist/items', body, ItemSchema),
     onSuccess: (item) => change((list) => appendItem(list, item)),
     onError,
+    onSettled,
   };
   const update: MutationOptions<Item, unknown, ItemEdit> = {
     scope: LIST_SCOPE,
     mutationFn: ({ id, body }) => api.patch(`/wishlist/items/${id}`, body, ItemSchema),
     onSuccess: (item) => change((list) => replaceItem(list, item)),
     onError,
+    onSettled,
   };
   const remove: MutationOptions<undefined, unknown, string> = {
     scope: LIST_SCOPE,
@@ -69,6 +89,7 @@ export function listMutations(client: QueryClient, api: ApiClient) {
       change((list) => removeItem(list, id));
     },
     onError,
+    onSettled,
   };
   const move: MutationOptions<undefined, unknown, Move> = {
     scope: LIST_SCOPE,
@@ -85,6 +106,7 @@ export function listMutations(client: QueryClient, api: ApiClient) {
       change((list) => moveItem(list, id, toIndex));
     },
     onError,
+    onSettled,
   };
   return { create, update, remove, move };
 }

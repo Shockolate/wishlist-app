@@ -1,5 +1,15 @@
-import { MutationObserver, QueryClient, type MutationOptions } from '@tanstack/react-query';
-import { ErrorCode, type Item, type WishlistResponse } from '@wishlist/contracts';
+import {
+  MutationObserver,
+  QueryClient,
+  QueryObserver,
+  type MutationOptions,
+} from '@tanstack/react-query';
+import {
+  ErrorCode,
+  WishlistResponseSchema,
+  type Item,
+  type WishlistResponse,
+} from '@wishlist/contracts';
 import { describe, expect, it, vi } from 'vitest';
 import { createApiClient } from './api-client';
 import { orderOf, WISHLIST_KEY } from './list-cache';
@@ -63,7 +73,32 @@ function setup(...items: Item[]) {
     new MutationObserver(client, options).mutate(variables);
   const order = () => orderOf(client.getQueryData<WishlistResponse>(WISHLIST_KEY));
   const invalidated = () => client.getQueryState(WISHLIST_KEY)?.isInvalidated ?? false;
-  return { client, mutations: listMutations(client, api), sent, answer, run, order, invalidated };
+  // The page's own subscription to the list, so that invalidating it really refetches (a GET in `sent`).
+  const watch = () =>
+    new QueryObserver(client, {
+      queryKey: WISHLIST_KEY,
+      queryFn: () => api.get('/wishlist', WishlistResponseSchema),
+      staleTime: Infinity,
+    }).subscribe(() => undefined);
+  // Lets anything that was going to happen next happen, so a test can assert that it didn't.
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const serverList = (...items: Item[]): WishlistResponse => ({
+    title: 'Ada’s wishlist',
+    shareUrl: 'https://hanker.test/s/abcdefghijklmnopqrstuv',
+    items,
+  });
+  return {
+    client,
+    mutations: listMutations(client, api),
+    sent,
+    answer,
+    run,
+    order,
+    invalidated,
+    watch,
+    settle,
+    serverList,
+  };
 }
 
 describe('the list’s mutation queue (spec §7, Plan 3b rules 2–4)', () => {
@@ -132,18 +167,120 @@ describe('the list’s mutation queue (spec §7, Plan 3b rules 2–4)', () => {
     expect(t.invalidated()).toBe(true);
   });
 
-  it('refetches after a stale order, and keeps running what was queued behind it', async () => {
+  it('refetches after a stale order only once what was queued behind it has run', async () => {
     const t = setup(item(1), item(2));
     const moving = t.run(t.mutations.move, { id: item(2).id, toIndex: 0 });
     const removing = t.run(t.mutations.remove, item(1).id);
     await vi.waitFor(() => expect(t.sent).toHaveLength(1));
     t.answer(0, problem(409, ErrorCode.ORDER_CONFLICT));
     await expect(moving).rejects.toThrow('409 ORDER_CONFLICT');
-    expect(t.invalidated()).toBe(true);
+    // The list is stale, but the refetch waits: the delete behind it is still to run.
+    expect(t.invalidated()).toBe(false);
     await vi.waitFor(() => expect(t.sent).toHaveLength(2));
     expect(t.sent[1]?.method).toBe('DELETE');
     t.answer(1, noContent());
     await removing;
+    expect(t.invalidated()).toBe(true);
+  });
+
+  it('does not let a refetch bring back an item whose delete is still queued (no ghost)', async () => {
+    const t = setup(item(1), item(2));
+    t.watch();
+    const moving = t.run(t.mutations.move, { id: item(2).id, toIndex: 0 });
+    const removing = t.run(t.mutations.remove, item(1).id);
+    await vi.waitFor(() => expect(t.sent).toHaveLength(1));
+    t.answer(0, problem(409, ErrorCode.ORDER_CONFLICT));
+    await expect(moving).rejects.toThrow('409 ORDER_CONFLICT');
+    await vi.waitFor(() => expect(t.sent).toHaveLength(2));
+    await t.settle();
+    // Only the DELETE is out: no GET while it is pending.
+    expect(t.sent.map((r) => r.method)).toEqual(['PUT', 'DELETE']);
+    expect(t.order()).toEqual([item(2).id]);
+    t.answer(1, noContent());
+    await removing;
+    await vi.waitFor(() => expect(t.sent).toHaveLength(3));
+    expect(t.sent[2]).toMatchObject({ method: 'GET', path: '/api/wishlist' });
+    t.answer(2, json(200, t.serverList(item(2, { title: 'Server copy' }))));
+    await vi.waitFor(() =>
+      expect(t.client.getQueryData<WishlistResponse>(WISHLIST_KEY)?.items).toEqual([
+        item(2, { title: 'Server copy' }),
+      ]),
+    );
+    await t.settle();
+    expect(t.sent).toHaveLength(3);
+  });
+
+  it('refetches straight away after a failure with nothing queued behind it', async () => {
+    const t = setup(item(1), item(2));
+    t.watch();
+    const removing = t.run(t.mutations.remove, item(1).id);
+    await vi.waitFor(() => expect(t.sent).toHaveLength(1));
+    t.answer(0, problem(404, ErrorCode.NOT_FOUND));
+    await expect(removing).rejects.toThrow('404 NOT_FOUND');
+    await vi.waitFor(() => expect(t.sent).toHaveLength(2));
+    expect(t.sent[1]).toMatchObject({ method: 'GET', path: '/api/wishlist' });
+    t.answer(1, json(200, t.serverList(item(2))));
+    await vi.waitFor(() => expect(t.order()).toEqual([item(2).id]));
+    await t.settle();
+    expect(t.sent).toHaveLength(2);
+  });
+
+  it('refetches again once a change that cancelled a refetch in flight has settled', async () => {
+    const t = setup(item(1), item(2));
+    t.watch();
+    void t.client.invalidateQueries({ queryKey: WISHLIST_KEY });
+    await vi.waitFor(() => expect(t.sent).toHaveLength(1));
+    expect(t.sent[0]?.method).toBe('GET');
+    const moving = t.run(t.mutations.move, { id: item(2).id, toIndex: 0 });
+    await vi.waitFor(() => expect(t.sent).toHaveLength(2));
+    expect(t.sent[1]?.method).toBe('PUT');
+    expect(t.order()).toEqual([item(2).id, item(1).id]);
+    t.answer(1, noContent());
+    await moving;
+    // The GET the move cancelled runs again, now that the queue is empty.
+    await vi.waitFor(() => expect(t.sent).toHaveLength(3));
+    expect(t.sent[2]).toMatchObject({ method: 'GET', path: '/api/wishlist' });
+    t.answer(2, json(200, t.serverList(item(2), item(1))));
+    await vi.waitFor(() => expect(t.order()).toEqual([item(2).id, item(1).id]));
+  });
+
+  it.each([
+    ['an add that finds the list full', 422, ErrorCode.LIST_FULL],
+    ['an add that the server fails', 500, ErrorCode.INTERNAL_ERROR],
+  ])('refetches the list after %s', async (_name, status, code) => {
+    const t = setup(item(1));
+    t.watch();
+    const adding = t.run(t.mutations.create, { title: 'Item 2', quantity: 1 });
+    await vi.waitFor(() => expect(t.sent).toHaveLength(1));
+    t.answer(0, problem(status, code));
+    await expect(adding).rejects.toThrow(code);
+    await vi.waitFor(() => expect(t.sent).toHaveLength(2));
+    expect(t.sent[1]).toMatchObject({ method: 'GET', path: '/api/wishlist' });
+  });
+
+  it('refetches the list after an edit of an item that was already gone', async () => {
+    const t = setup(item(1));
+    t.watch();
+    const editing = t.run(t.mutations.update, { id: item(1).id, body: { title: 'Kettle' } });
+    await vi.waitFor(() => expect(t.sent).toHaveLength(1));
+    t.answer(0, problem(404, ErrorCode.NOT_FOUND));
+    await expect(editing).rejects.toThrow('404 NOT_FOUND');
+    await vi.waitFor(() => expect(t.sent).toHaveLength(2));
+    expect(t.sent[1]).toMatchObject({ method: 'GET', path: '/api/wishlist' });
+  });
+
+  it.each([
+    ['a validation error, which the form shows', 400, ErrorCode.VALIDATION_FAILED],
+    ['a lost session, which leaves the page', 401, ErrorCode.UNAUTHENTICATED],
+  ])('does not refetch the list after %s', async (_name, status, code) => {
+    const t = setup(item(1));
+    t.watch();
+    const adding = t.run(t.mutations.create, { title: 'x', quantity: 1 });
+    await vi.waitFor(() => expect(t.sent).toHaveLength(1));
+    t.answer(0, problem(status, code));
+    await expect(adding).rejects.toThrow(code);
+    await t.settle();
+    expect(t.sent).toHaveLength(1);
   });
 
   it('adds the item the API returns, and replaces an edited one with the API’s copy', async () => {
