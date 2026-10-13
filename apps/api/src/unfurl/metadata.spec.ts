@@ -65,6 +65,26 @@ describe('extractMetadata (spec §6.8, Plan 3a rule 11)', () => {
     expect(extractMetadata('<p>Hello</p>', SHOP)).toEqual({});
   });
 
+  it("skips a title that is only the site's host, as on a bot check's page", () => {
+    const amazon = new URL('https://www.amazon.com/dp/B07C3FBNQ4');
+    expect(extractMetadata('<title dir="ltr">Amazon.com</title>', amazon)).toEqual({});
+    expect(extractMetadata('<title>SHOP.EXAMPLE</title>', SHOP)).toEqual({});
+  });
+
+  it("skips a title that is only the site's og:site_name, and tries the next source", () => {
+    const html = `<meta property="og:site_name" content="Kettle Co">
+<meta property="og:title" content="kettle co">
+<script type="application/ld+json">{"@type":"Product","name":"Stovetop Kettle"}</script>`;
+    expect(extractMetadata(html, SHOP)).toEqual({ title: 'Stovetop Kettle' });
+  });
+
+  it('keeps a title that names the product as well as the site', () => {
+    const amazon = new URL('https://www.amazon.com/dp/B07C3FBNQ4');
+    expect(extractMetadata('<title>Amazon.com: Garmin Approach CT10</title>', amazon)).toEqual({
+      title: 'Amazon.com: Garmin Approach CT10',
+    });
+  });
+
   it('cuts a long title to 200 characters without splitting an emoji', () => {
     const title = `${'a'.repeat(199)}😀b`;
     expect(extractMetadata(`<title>${title}</title>`, SHOP).title).toBe('a'.repeat(199));
