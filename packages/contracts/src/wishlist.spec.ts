@@ -2,13 +2,17 @@ import { describe, expect, it } from 'vitest';
 import {
   CreateItemRequestSchema,
   ImageUrlSchema,
+  ItemTitleSchema,
   ItemUrlSchema,
   MAX_ITEMS,
+  NoteSchema,
+  PriceTextSchema,
   ReorderItemsRequestSchema,
   UnfurlRequestSchema,
   UnfurlResponseSchema,
   UpdateItemRequestSchema,
   UpdateWishlistRequestSchema,
+  WishlistTitleSchema,
 } from './wishlist.js';
 
 const ID = '0199a3b2-0000-7000-8000-000000000001';
@@ -132,5 +136,72 @@ describe('UnfurlRequestSchema and UnfurlResponseSchema (spec §5, §6.8)', () =>
   it('only knows the fixed failure codes', () => {
     expect(UnfurlResponseSchema.safeParse({ failureReason: 'UNREACHABLE' }).success).toBe(true);
     expect(UnfurlResponseSchema.safeParse({ failureReason: 'SOMETHING_ELSE' }).success).toBe(false);
+  });
+});
+
+// Postgres refuses U+0000 in a text column, which turned it into a 500. It is invisible, so the
+// message says what to do rather than what is wrong.
+describe('a NUL character is refused in every owner text field', () => {
+  const NUL_MESSAGE = 'Remove the invisible character';
+  const VISIBLE_MESSAGE = 'Use visible characters only';
+
+  it.each([
+    ['WishlistTitleSchema', WishlistTitleSchema, 'Birth\u0000day', VISIBLE_MESSAGE],
+    ['ItemTitleSchema', ItemTitleSchema, 'Ket\u0000tle', VISIBLE_MESSAGE],
+    ['ItemUrlSchema', ItemUrlSchema, 'https://shop.example/ket\u0000tle', NUL_MESSAGE],
+    ['ImageUrlSchema', ImageUrlSchema, 'https://cdn.example/ket\u0000tle.jpg', NUL_MESSAGE],
+    ['PriceTextSchema', PriceTextSchema, '$4\u00000', NUL_MESSAGE],
+    ['NoteSchema', NoteSchema, 'Blue\u0000 one', NUL_MESSAGE],
+  ])('%s', (_name, schema, value, message) => {
+    const result = schema.safeParse(value);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.message)).toEqual([message]);
+  });
+
+  it('refuses a NUL in a link host, with the same message', () => {
+    const result = ItemUrlSchema.safeParse('https://shop\u0000.example/kettle');
+    expect(result.error?.issues.map((issue) => issue.message)).toEqual([NUL_MESSAGE]);
+  });
+
+  it('names the field in a whole request', () => {
+    const result = CreateItemRequestSchema.safeParse({ title: 'Ket\u0000tle' });
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([['title']]);
+  });
+
+  it('still accepts a note with a newline and a tab', () => {
+    expect(NoteSchema.parse('Line one\n\tLine two')).toBe('Line one\n\tLine two');
+  });
+});
+
+// D35: list and item titles follow the display-name rule (visible characters only).
+describe.each([
+  ['WishlistTitleSchema', WishlistTitleSchema],
+  ['ItemTitleSchema', ItemTitleSchema],
+])('%s: visible characters only (D35)', (_name, schema) => {
+  it.each([
+    ['Ein Fahrrad \u{1F6B2}'],
+    ['\u{1F469}\u200D\u{1F373} Kitchen'],
+    ['\u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u0645'],
+  ])('accepts %s', (title) => {
+    expect(schema.safeParse(title).success).toBe(true);
+  });
+
+  it.each([
+    ['a newline', 'Ket\ntle'],
+    ['a tab', 'Ket\ttle'],
+    ['a right-to-left override', 'Kettle\u202Eelttek'],
+    ['a zero-width space', 'Ket\u200Btle'],
+    ['a soft hyphen', 'Ket\u00ADtle'],
+    ['only joiners and spaces', '\u200D \u200D'],
+  ])('refuses %s with one issue', (_label, title) => {
+    const result = schema.safeParse(title);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.message)).toEqual([
+      'Use visible characters only',
+    ]);
+  });
+
+  it('reports an empty title once, as too short', () => {
+    expect(schema.safeParse('  ').error?.issues.map((issue) => issue.code)).toEqual(['too_small']);
   });
 });

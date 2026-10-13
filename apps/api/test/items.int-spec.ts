@@ -6,7 +6,7 @@ import {
   type Item,
 } from '@wishlist/contracts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { ADA, logIn, signUpVerified, type Account } from './support/accounts.js';
+import { ADA, logIn, signUp, signUpVerified, type Account } from './support/accounts.js';
 import { createAuthTestApp, type AuthTestApp } from './support/auth-app.js';
 import { client, type ApiResponse } from './support/client.js';
 import { openTestDatabase } from './support/database.js';
@@ -117,6 +117,20 @@ describe('POST /wishlist/items (spec §2, §5)', () => {
     expect([res.status, codeOf(res)]).toEqual([400, ErrorCode.VALIDATION_FAILED]);
   });
 
+  it.each([
+    { title: 'Ket\u0000tle' },
+    { title: 'Bike\u202E' },
+    { title: 'Kettle', note: 'Blue\u0000 one' },
+    { title: 'Kettle', priceText: '$4\u00000' },
+    { title: 'Kettle', url: 'https://shop.example/ket\u0000tle' },
+    { title: 'Kettle', imageUrl: 'https://cdn.example/ket\u0000tle.jpg' },
+  ])('refuses %j with 400, not 500', async (body) => {
+    const cookie = await owner();
+    const res = await create(cookie, body);
+    expect([res.status, codeOf(res)]).toEqual([400, ErrorCode.VALIDATION_FAILED]);
+    expect((await listOf(cookie)).items).toEqual([]);
+  });
+
   it('refuses the 201st item with 422 LIST_FULL', async () => {
     const cookie = await owner();
     await seedItems(ADA.email, 200);
@@ -178,6 +192,52 @@ describe('PATCH /wishlist/items/:id (spec §5)', () => {
       priceText: null,
       note: null,
     });
+  });
+
+  it('refuses a NUL in a changed field with 400 and leaves the item alone', async () => {
+    const cookie = await owner();
+    const item = await created(cookie, 'Kettle');
+    const res = await client(t.app, cookie).patch(`/wishlist/items/${item.id}`, {
+      title: 'Ket\u0000tle',
+    });
+    expect([res.status, codeOf(res)]).toEqual([400, ErrorCode.VALIDATION_FAILED]);
+    expect((await listOf(cookie)).items.map((i) => i.title)).toEqual(['Kettle']);
+  });
+
+  it('writes only the six item fields: an id, a position or another list in the body change nothing', async () => {
+    const bob = await owner(BOB);
+    await created(bob, 'Bike');
+    const cookie = await owner();
+    await created(cookie, 'First');
+    const item = await created(cookie, 'Kettle');
+    const bobsList = (
+      await db.pool.query<{ id: string }>(
+        'select w.id from wishlists w join users u on u.id = w.owner_id where u.email = $1',
+        [BOB.email],
+      )
+    ).rows[0]?.id;
+
+    const res = await client(t.app, cookie).patch(`/wishlist/items/${item.id}`, {
+      title: 'X',
+      wishlistId: bobsList,
+      position: 99,
+      id: UNKNOWN_ID,
+    });
+
+    expect(res.status).toBe(200);
+    expect(ItemSchema.parse(res.body)).toMatchObject({ id: item.id, title: 'X', position: 1 });
+    expect((await listOf(cookie)).items.map((i) => [i.id, i.position])).toContainEqual([
+      item.id,
+      1,
+    ]);
+    expect((await listOf(cookie)).items).toHaveLength(2);
+    const bobs = await listOf(bob);
+    expect(bobs.items.map((i) => i.title)).toEqual(['Bike']);
+    const { rows } = await db.pool.query<{ wishlist_id: string }>(
+      'select wishlist_id from items where id = $1',
+      [item.id],
+    );
+    expect(rows[0]?.wishlist_id).not.toBe(bobsList);
   });
 
   it('validates what it changes', async () => {
@@ -243,5 +303,40 @@ describe('the item endpoints need a verified owner', () => {
   it('answer 401 without a session', async () => {
     const res = await client(t.app).post('/wishlist/items', { title: 'Kettle' });
     expect([res.status, codeOf(res)]).toEqual([401, ErrorCode.UNAUTHENTICATED]);
+  });
+});
+
+describe('every item route needs a signed-in, verified owner (spec §5)', () => {
+  const routes = [
+    ['POST', '/wishlist/items', { title: 'Kettle' }],
+    ['PATCH', `/wishlist/items/${UNKNOWN_ID}`, { title: 'Kettle' }],
+    ['DELETE', `/wishlist/items/${UNKNOWN_ID}`, {}],
+    ['PUT', '/wishlist/items/order', { itemIds: [] }],
+  ] as const;
+
+  const call = (
+    method: (typeof routes)[number][0],
+    path: string,
+    body: object,
+    cookie?: string,
+  ) => {
+    const api = client(t.app, cookie);
+    return {
+      POST: api.post,
+      PATCH: api.patch,
+      DELETE: api.delete,
+      PUT: api.put,
+    }[method](path, body);
+  };
+
+  it.each(routes)('%s %s answers 401 without a session', async (method, path, body) => {
+    const res = await call(method, path, body);
+    expect([res.status, codeOf(res)]).toEqual([401, ErrorCode.UNAUTHENTICATED]);
+  });
+
+  it.each(routes)('%s %s answers 403 to an unverified email', async (method, path, body) => {
+    await signUp(t);
+    const res = await call(method, path, body, await logIn(t));
+    expect([res.status, codeOf(res)]).toEqual([403, ErrorCode.EMAIL_NOT_VERIFIED]);
   });
 });

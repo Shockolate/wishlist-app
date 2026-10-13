@@ -1,3 +1,4 @@
+import { visibleOnly } from '@wishlist/contracts';
 import { Parser } from 'htmlparser2';
 
 /** What a page says about the product on it. Every field is optional (spec §6.8). */
@@ -52,9 +53,13 @@ export function extractMetadata(html: string, pageUrl: URL): PageMetadata {
  */
 export function formatPrice(amount: unknown, currency: unknown): string | undefined {
   const value =
-    typeof amount === 'number' ? String(amount) : typeof amount === 'string' ? amount.trim() : '';
+    typeof amount === 'number'
+      ? String(amount)
+      : typeof amount === 'string'
+        ? withoutControls(amount).trim()
+        : '';
   if (!value) return undefined;
-  const code = typeof currency === 'string' ? currency.trim().toUpperCase() : '';
+  const code = typeof currency === 'string' ? withoutControls(currency).trim().toUpperCase() : '';
   let formatted = code ? `${value} ${code}` : value;
   if (KNOWN_CURRENCIES.has(code) && /^\d+(\.\d+)?$/.test(value)) {
     try {
@@ -186,10 +191,25 @@ function isObject(value: unknown): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** Whitespace collapsed and trimmed. Empty is "nothing". */
+/**
+ * Well-formed UTF-16 with the control characters that aren't whitespace removed. NUL is the one
+ * Postgres refuses; the rest are invisible, and a prefill is stored as it is shown.
+ */
+function withoutControls(value: string): string {
+  return value.toWellFormed().replace(/(?!\s)\p{Cc}/gu, '');
+}
+
+/** Format characters (bidirectional overrides, zero-width spaces) except the two joiners (D35). */
+const HIDDEN_FORMAT = /(?![\u200C\u200D])\p{Cf}/gu;
+
+/**
+ * A title as the item contract accepts it (D35): visible characters only, whitespace collapsed and
+ * trimmed. Empty, or nothing visible, is "nothing".
+ */
 function text(value: string | undefined): string | undefined {
-  const collapsed = value?.replace(/\s+/g, ' ').trim();
-  return collapsed || undefined;
+  if (value === undefined) return undefined;
+  const collapsed = withoutControls(value.replace(HIDDEN_FORMAT, '')).replace(/\s+/g, ' ').trim();
+  return collapsed && visibleOnly(collapsed) ? collapsed : undefined;
 }
 
 /** A JSON-LD string: <script> text isn't entity-decoded, so the basic entities are decoded here. */
@@ -214,8 +234,10 @@ function decodeEntities(value: string): string {
   });
 }
 
+/** A surrogate has no character of its own, so it becomes U+FFFD, as HTML does. */
 function codePoint(n: number): string | undefined {
-  return Number.isInteger(n) && n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : undefined;
+  if (!Number.isInteger(n) || n <= 0 || n > 0x10ffff) return undefined;
+  return n >= 0xd800 && n <= 0xdfff ? '\uFFFD' : String.fromCodePoint(n);
 }
 
 /** At most `max` UTF-16 units, never ending on half of a surrogate pair. */

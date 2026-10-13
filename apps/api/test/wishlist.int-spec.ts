@@ -89,6 +89,14 @@ describe('PATCH /wishlist (spec §5)', () => {
     expect([res.status, codeOf(res)]).toEqual([400, ErrorCode.VALIDATION_FAILED]);
   });
 
+  it('refuses a NUL in the title, which Postgres cannot store, with 400 and not 500', async () => {
+    const cookie = await owner();
+    const res = await client(t.app, cookie).patch('/wishlist', { title: 'Birth\u0000day' });
+    expect([res.status, codeOf(res)]).toEqual([400, ErrorCode.VALIDATION_FAILED]);
+    const list = WishlistResponseSchema.parse((await client(t.app, cookie).get('/wishlist')).body);
+    expect(list.title).toBe("Ada's wishlist");
+  });
+
   it('ignores showClaimsToOwner until Plan 4 (D33)', async () => {
     const res = await client(t.app, await owner()).patch('/wishlist', {
       title: 'Birthday',

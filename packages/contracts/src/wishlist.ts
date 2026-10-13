@@ -1,10 +1,22 @@
 import { z } from 'zod';
+import { VISIBLE_ONLY_MESSAGE, visibleOnly } from './text.js';
 
 /** A list holds at most this many items (spec §2). */
 export const MAX_ITEMS = 200;
 
-export const WishlistTitleSchema = z.string().trim().min(1).max(100);
-export const ItemTitleSchema = z.string().trim().min(1).max(200);
+// Titles follow the display-name rule: visible characters only (D35).
+export const WishlistTitleSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(100)
+  .refine(visibleOnly, VISIBLE_ONLY_MESSAGE);
+export const ItemTitleSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .refine(visibleOnly, VISIBLE_ONLY_MESSAGE);
 export const QuantitySchema = z.number().int().min(1).max(99);
 
 // Optional text fields (Plan 3a rule 1): trimmed, and null or blank is stored as null. Wrapped in
@@ -12,18 +24,30 @@ export const QuantitySchema = z.number().int().min(1).max(99);
 const blankToNull = (value: string | null) => (value === '' ? null : value);
 
 /**
+ * Postgres can't store U+0000 in a text column, so it would be a 500. Notes, prices and links
+ * refuse only that one character: a note keeps its newlines and tabs.
+ */
+const NUL_MESSAGE = 'Remove the invisible character';
+const hasNoNul = (value: string) => !value.includes('\u0000');
+
+/**
  * A link field: blank, or a URL whose scheme matches `protocol`. Zod's URL check does the parsing:
  * this package compiles without DOM or Node types, so it can't name `URL` itself.
  */
 function link(protocol: RegExp, message: string) {
   const url = z.url({ protocol });
-  return z
-    .string()
-    .trim()
-    .max(2048)
-    .refine((value) => value === '' || url.safeParse(value).success, message)
-    .nullable()
-    .transform(blankToNull);
+  return (
+    z
+      .string()
+      .trim()
+      .max(2048)
+      // First, and aborting: `new URL()` percent-encodes a NUL in the path, so the URL check alone
+      // accepts it while the raw string is what gets stored.
+      .refine(hasNoNul, { message: NUL_MESSAGE, abort: true })
+      .refine((value) => value === '' || url.safeParse(value).success, message)
+      .nullable()
+      .transform(blankToNull)
+  );
 }
 
 /** A product link: http or https (spec §2). */
@@ -32,8 +56,20 @@ export const ItemUrlSchema = link(/^https?$/, 'Enter a link that starts with htt
 /** Only ever https: shown as a plain <img>, and never fetched by the server (spec §2, §6.9). */
 export const ImageUrlSchema = link(/^https$/, 'Enter an image link that starts with https://');
 
-export const PriceTextSchema = z.string().trim().max(50).nullable().transform(blankToNull);
-export const NoteSchema = z.string().trim().max(1000).nullable().transform(blankToNull);
+export const PriceTextSchema = z
+  .string()
+  .trim()
+  .max(50)
+  .refine(hasNoNul, NUL_MESSAGE)
+  .nullable()
+  .transform(blankToNull);
+export const NoteSchema = z
+  .string()
+  .trim()
+  .max(1000)
+  .refine(hasNoNul, NUL_MESSAGE)
+  .nullable()
+  .transform(blankToNull);
 
 export const CreateItemRequestSchema = z.object({
   title: ItemTitleSchema,

@@ -46,8 +46,9 @@ class FetchFailure extends Error {
  * - Redirects are followed by hand, each hop checked again.
  * - One deadline covers every hop: DNS, connect, TLS, headers and body, and the result comes back
  *   within it. undici ignores an abort until the socket connects, so `untilAborted` enforces it;
- *   a socket still in the TLS handshake is then closed shortly after by the connector's own
- *   timeout, set to the same value. The body is cut off at `maxBytes`.
+ *   a connection that began just before the deadline is then closed by the connector's own timeout,
+ *   set to the same value, so it can live up to `timeoutMs` past the deadline. That is bounded; it
+ *   only delays releasing the socket, not the answer. The body is cut off at `maxBytes`.
  */
 export class PageFetcher {
   private readonly policy: AddressPolicy;
