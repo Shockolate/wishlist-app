@@ -32,6 +32,7 @@ export function ShareLinkCard({ shareUrl: initial }: { shareUrl: string }) {
   async function copy() {
     try {
       await navigator.clipboard.writeText(shareUrl);
+      setFormError(null);
       say('Link copied.');
     } catch {
       say(`Copy this link: ${shareUrl}`);
@@ -97,7 +98,11 @@ export function ShareLinkCard({ shareUrl: initial }: { shareUrl: string }) {
         </AlertDialog>
       </div>
       <div role="status">
-        {message ? (
+        {rotating ? (
+          <Notice tone="success" announce={false} className="mt-4">
+            Getting your new link…
+          </Notice>
+        ) : message ? (
           <Notice key={message.id} tone="success" announce={false} className="mt-4">
             {message.text}
           </Notice>

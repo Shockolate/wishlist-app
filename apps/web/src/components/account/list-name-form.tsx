@@ -28,7 +28,8 @@ export function ListNameForm({ title }: { title: string }) {
     register,
     handleSubmit,
     setError,
-    formState: { errors, isSubmitting },
+    reset,
+    formState: { errors, isDirty, isSubmitting },
   } = useForm({
     resolver: zodResolver(UpdateWishlistRequestSchema, { error: formErrorMap }),
     defaultValues: { title },
@@ -38,7 +39,9 @@ export function ListNameForm({ title }: { title: string }) {
     setSaved(false);
     setFormError(null);
     try {
-      await browserApi.patch('/wishlist', values, WishlistSettingsResponseSchema);
+      const settings = await browserApi.patch('/wishlist', values, WishlistSettingsResponseSchema);
+      // Show what the server stored, and make the form clean again.
+      reset({ title: settings.title });
       setSaved(true);
       router.refresh();
     } catch (error) {
@@ -71,7 +74,7 @@ export function ListNameForm({ title }: { title: string }) {
         </Button>
       </form>
       <div role="status">
-        {saved ? (
+        {saved && !isDirty ? (
           <Notice tone="success" announce={false} className="mt-4">
             List name saved
           </Notice>

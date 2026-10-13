@@ -72,6 +72,8 @@ export function DeleteAccountForm() {
       <AlertDialog
         open={open}
         onOpenChange={(next) => {
+          // Escape and the like can't close it mid-request: the delete is already on its way.
+          if (!next && isSubmitting) return;
           setOpen(next);
           if (!next) {
             reset();
@@ -108,7 +110,7 @@ export function DeleteAccountForm() {
             </Field>
             {formError ? <Notice tone="error">{formError}</Notice> : null}
             <AlertDialogFooter className="mt-1">
-              <AlertDialogCancel>Keep my account</AlertDialogCancel>
+              <AlertDialogCancel disabled={isSubmitting}>Keep my account</AlertDialogCancel>
               {/* A plain submit, not AlertDialogAction, so a wrong password keeps the dialog open. */}
               <Button type="submit" variant="strong" disabled={isSubmitting}>
                 Delete account
