@@ -1,4 +1,4 @@
-import { ErrorCode, type Problem } from '@wishlist/contracts';
+import { ErrorCode, UNFURL_FAILURE_REASONS, type Problem } from '@wishlist/contracts';
 import { describe, expect, it } from 'vitest';
 import { ApiError, ContractMismatchError } from './api-client';
 import {
@@ -8,6 +8,10 @@ import {
   hasCode,
   ITEM_GONE,
   listErrorMessage,
+  prefillMessage,
+  UNFURL_FAILED,
+  UNFURL_MESSAGES,
+  UNFURL_RATE_LIMITED,
 } from './messages';
 
 const apiError = (code: string, extra: Partial<Problem> = {}) =>
@@ -88,6 +92,28 @@ describe('listErrorMessage (Plan 3b rule 4)', () => {
   it('falls back to errorMessage for everything else', () => {
     expect(listErrorMessage(new TypeError('Failed to fetch'))).toBe(
       "We couldn't reach Hanker. Check your connection and try again.",
+    );
+  });
+});
+
+describe('prefillMessage (Plan 3b rule 6)', () => {
+  it.each(UNFURL_FAILURE_REASONS)('explains %s in a sentence', (reason) => {
+    expect(prefillMessage({ response: { failureReason: reason } }, 'https://x.example/')).toBe(
+      UNFURL_MESSAGES[reason],
+    );
+  });
+
+  it('names the shop a prefill came from', () => {
+    expect(
+      prefillMessage({ response: { title: 'Kettle' } }, 'https://www.hearthware.example/k'),
+    ).toBe('Filled in from hearthware.example. Check it, then add it.');
+  });
+
+  it('says why when unfurl itself failed', () => {
+    const limited = apiError(ErrorCode.RATE_LIMITED, { status: 429 });
+    expect(prefillMessage({ error: limited }, 'https://x.example/')).toBe(UNFURL_RATE_LIMITED);
+    expect(prefillMessage({ error: new TypeError('offline') }, 'https://x.example/')).toBe(
+      UNFURL_FAILED,
     );
   });
 });

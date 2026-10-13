@@ -1,4 +1,4 @@
-import { LoginRequestSchema, SignupRequestSchema } from '@wishlist/contracts';
+import { LoginRequestSchema, QuantitySchema, SignupRequestSchema } from '@wishlist/contracts';
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 import { formErrorMap } from './form-errors';
@@ -38,5 +38,16 @@ describe('formErrorMap (Plan 2b rule 23)', () => {
     expect(messages(NameOnly, { displayName: 'Ada\u202E' })).toEqual({
       displayName: 'Use visible characters only',
     });
+  });
+});
+
+describe('formErrorMap for numbers', () => {
+  it('speaks about a quantity, not characters', () => {
+    expect(QuantitySchema.safeParse(0, { error: formErrorMap }).error?.issues[0]?.message).toBe(
+      'Choose at least 1.',
+    );
+    expect(QuantitySchema.safeParse(100, { error: formErrorMap }).error?.issues[0]?.message).toBe(
+      'Choose 99 or fewer.',
+    );
   });
 });
