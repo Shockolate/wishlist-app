@@ -8,13 +8,16 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   UseGuards,
 } from '@nestjs/common';
 import {
   CreateItemRequestSchema,
+  ReorderItemsRequestSchema,
   UpdateItemRequestSchema,
   type CreateItemRequest,
   type Item,
+  type ReorderItemsRequest,
   type UpdateItemRequest,
 } from '@wishlist/contracts';
 import { CurrentAuth, SessionGuard, type AuthContext } from '../auth/session.guard.js';
@@ -54,5 +57,14 @@ export class ItemsController {
   @HttpCode(204)
   async delete(@CurrentAuth() auth: AuthContext, @Param('id') id: string): Promise<void> {
     await this.items.delete(auth.user.id, id);
+  }
+
+  @Put('order')
+  @HttpCode(204)
+  async reorder(
+    @CurrentAuth() auth: AuthContext,
+    @Body(new ZodValidationPipe(ReorderItemsRequestSchema)) body: ReorderItemsRequest,
+  ): Promise<void> {
+    await this.items.reorder(auth.user.id, body.itemIds);
   }
 }

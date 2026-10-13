@@ -20,6 +20,7 @@ export function client(app: INestApplication, cookie?: string) {
     get: (path: string) => signedIn(http(app).get(`/api${path}`)),
     post: (path: string, body: object = {}) => mutate(http(app).post(`/api${path}`), body),
     patch: (path: string, body: object = {}) => mutate(http(app).patch(`/api${path}`), body),
+    put: (path: string, body: object = {}) => mutate(http(app).put(`/api${path}`), body),
     delete: (path: string, body: object = {}) => mutate(http(app).delete(`/api${path}`), body),
   };
 }

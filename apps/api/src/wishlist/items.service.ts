@@ -5,7 +5,7 @@ import {
   type Item,
   type UpdateItemRequest,
 } from '@wishlist/contracts';
-import { and, count, eq, max } from 'drizzle-orm';
+import { and, count, eq, max, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { CLOCK, type Clock } from '../core/clock.js';
 import { newId } from '../core/ids.js';
@@ -13,7 +13,7 @@ import { DB, type Database } from '../db/database.module.js';
 import { items } from '../db/schema.js';
 import { ITEM_COLUMNS } from './item-columns.js';
 import { lockOwnWishlist } from './own-wishlist.js';
-import { itemNotFound, listFull } from './wishlist-errors.js';
+import { itemNotFound, listFull, orderConflict } from './wishlist-errors.js';
 
 const ItemIdSchema = z.uuid();
 
@@ -80,6 +80,36 @@ export class ItemsService {
         .where(and(eq(items.id, itemId), eq(items.wishlistId, wishlistId)))
         .returning({ id: items.id });
       if (deleted.length === 0) throw itemNotFound();
+    });
+  }
+
+  /**
+   * Rewrites the whole order (spec §5). The IDs must be exactly the list's current items, each
+   * once. Anything else means another tab changed the list, and the editor refetches (409).
+   */
+  async reorder(ownerId: string, itemIds: string[]): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      const wishlistId = await lockOwnWishlist(tx, ownerId);
+      const current = await tx
+        .select({ id: items.id })
+        .from(items)
+        .where(eq(items.wishlistId, wishlistId));
+      const wanted = new Set(itemIds);
+      const exact =
+        wanted.size === itemIds.length &&
+        wanted.size === current.length &&
+        current.every((row) => wanted.has(row.id));
+      if (!exact) throw orderConflict();
+      if (itemIds.length === 0) return;
+      // One statement: each item's new position is its index in itemIds.
+      const positions = sql.join(
+        itemIds.map((id, index) => sql`when ${id}::uuid then ${index}::int`),
+        sql` `,
+      );
+      await tx
+        .update(items)
+        .set({ position: sql`case ${items.id} ${positions} end`, updatedAt: this.clock.now() })
+        .where(eq(items.wishlistId, wishlistId));
     });
   }
 }
