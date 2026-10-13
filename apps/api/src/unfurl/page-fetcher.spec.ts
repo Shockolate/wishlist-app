@@ -75,6 +75,11 @@ beforeAll(async () => {
         });
         res.write('x');
         return;
+      case '/zstd':
+        return html(res, '<title>z</title>', { 'content-encoding': 'zstd' });
+      case '/double-encoding':
+        res.setHeader('content-encoding', ['gzip', 'br']);
+        return html(res, gzipSync(PAGE));
       case '/bomb':
         return html(res, gzipSync(Buffer.alloc(5_000_000)), { 'content-encoding': 'gzip' });
       case '/latin1':
@@ -294,6 +299,15 @@ describe('PageFetcher (spec §6.8)', () => {
       await new Promise((resolve) => silent.close(resolve));
     }
   });
+
+  it.each(['/zstd', '/double-encoding'])(
+    'refuses an unknown or repeated Content-Encoding as NOT_HTML, without crashing (%s, Plan 3a rule 7)',
+    async (path) => {
+      expect(await fetcher().fetch(at(path))).toMatchObject({ ok: false, reason: 'NOT_HTML' });
+      // Let the destroyed body emit; Vitest fails the run on an unhandled 'error'.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    },
+  );
 
   it('decodes a gzipped page it did not ask for (Plan 3a rule 8)', async () => {
     expect(await fetcher().fetch(at('/gzip'))).toMatchObject({ ok: true, html: PAGE });

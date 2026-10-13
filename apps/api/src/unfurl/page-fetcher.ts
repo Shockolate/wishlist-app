@@ -196,8 +196,9 @@ function mediaType(contentType: string): string | undefined {
  * 8). pipeline() destroys both sides on an error, so an abort still ends the read.
  */
 function decoded(body: Readable, encoding: string | string[] | undefined): Readable {
-  const name = typeof encoding === 'string' ? encoding.trim().toLowerCase() : '';
   const ignore = () => undefined;
+  // A repeated header arrives as an array. It's unknown, like any encoding we can't decode.
+  const name = Array.isArray(encoding) ? undefined : (encoding ?? '').trim().toLowerCase();
   switch (name) {
     case '':
     case 'identity':
@@ -210,6 +211,9 @@ function decoded(body: Readable, encoding: string | string[] | undefined): Reada
     case 'br':
       return pipeline(body, createBrotliDecompress(), ignore);
     default:
+      // Destroying an unread undici body emits an 'error' (an abort). When the response has
+      // already completed nobody else listens, and an unhandled 'error' exits the process.
+      body.on('error', ignore);
       body.destroy();
       throw new FetchFailure('NOT_HTML');
   }
