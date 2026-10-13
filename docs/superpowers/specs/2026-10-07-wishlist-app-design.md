@@ -51,7 +51,7 @@ These are explicit so they don't creep in:
 
 - One per user. It's created in the same transaction as the user, with the default title `"<displayName>'s wishlist"`.
 - Settings:
-  - `title`, 1–100 characters.
+  - `title`, 1–100 visible characters (D35).
   - `showClaimsToOwner`, default `false`.
   - The share token, which the owner can rotate.
 
@@ -62,7 +62,7 @@ These are explicit so they don't creep in:
 
   | Field | Rules |
   |---|---|
-  | `title` | Required, 1–200 characters |
+  | `title` | Required, 1–200 visible characters (D35) |
   | `url` | Optional, http or https, at most 2048 characters |
   | `imageUrl` | Optional, https only |
   | `priceText` | Optional, at most 50 characters |
@@ -698,3 +698,4 @@ As of 2026-10-07 on the development machine:
 | D32 | No priority field on items: the owner's order is the priority, and terracotta stays for actions (2026-10-12) | A "most wanted" flag; priority levels |
 | D33 | `showClaimsToOwner`, its API field and its settings toggle, ship in Plan 4 with the claims it controls (2026-10-12) | Shipping the toggle in Plan 3, with nothing for it to show |
 | D34 | Unfurl identifies itself honestly, as `Mozilla/5.0 (compatible; Hanker/1.0; +https://hanker.dev)` (2026-10-12) | A browser user agent; posing as a social network's crawler |
+| D35 | List and item titles follow the display-name rule: visible characters only; control and format characters (newlines, bidirectional overrides, zero-width spaces) are refused, except the joiners emoji and Persian need (Ted, 2026-10-12) | Refusing only NUL, the one character Postgres rejects |
