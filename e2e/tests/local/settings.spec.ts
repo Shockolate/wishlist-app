@@ -71,6 +71,43 @@ test('gets a new share link only after asking, then shows and copies it', async 
   expect(copied).toBe(fresh);
 });
 
+test('after a new link, Back to Settings shows and copies the new one (final review, I1)', async ({
+  page,
+  baseURL,
+  context,
+}) => {
+  const base = baseURL ?? '';
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await verifiedOwner(page, base, 'back-settings');
+  await page.goto('/settings');
+  await page.getByRole('button', { name: 'Get a new link' }).click();
+  await page
+    .getByRole('alertdialog', { name: 'Get a new share link?' })
+    .getByRole('button', { name: 'Get a new link' })
+    .click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'New link ready. The old one no longer works.' }),
+  ).toBeVisible();
+  const fresh = await shareUrlOf(page);
+
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Your list' })
+    .click();
+  await expect(page).toHaveURL('/list');
+  await page.goBack();
+  await expect(page).toHaveURL('/settings');
+  await expect(page.getByText(fresh)).toBeVisible();
+  await page.getByRole('button', { name: 'Copy link' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Link copied.' })).toBeVisible();
+  const copied = await page.evaluate(() =>
+    (
+      globalThis as unknown as { navigator: { clipboard: { readText(): Promise<string> } } }
+    ).navigator.clipboard.readText(),
+  );
+  expect(copied).toBe(fresh);
+});
+
 test('deletes the account only from its dialog, with the right password (D38)', async ({
   page,
   baseURL,

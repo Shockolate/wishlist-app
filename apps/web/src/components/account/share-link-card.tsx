@@ -1,6 +1,7 @@
 'use client';
 
 import { ErrorCode, RotateShareTokenResponseSchema } from '@wishlist/contracts';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { CopyIcon } from '@/components/list/icons';
 import {
@@ -22,12 +23,18 @@ import { LOGIN_AGAIN } from './name-form';
 
 /** The share link: copy it, or replace it after a confirmation (spec §2, Plan 3b rule 13). */
 export function ShareLinkCard({ shareUrl: initial }: { shareUrl: string }) {
+  const router = useRouter();
   const [shareUrl, setShareUrl] = useState(initial);
-  const [message, setMessage] = useState<{ text: string; id: number } | null>(null);
+  const [message, setMessage] = useState<{
+    text: string;
+    tone: 'success' | 'info';
+    id: number;
+  } | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [rotating, setRotating] = useState(false);
 
-  const say = (text: string) => setMessage((last) => ({ text, id: (last?.id ?? 0) + 1 }));
+  const say = (text: string, tone: 'success' | 'info' = 'success') =>
+    setMessage((last) => ({ text, tone, id: (last?.id ?? 0) + 1 }));
 
   async function copy() {
     try {
@@ -35,7 +42,7 @@ export function ShareLinkCard({ shareUrl: initial }: { shareUrl: string }) {
       setFormError(null);
       say('Link copied.');
     } catch {
-      say(`Copy this link: ${shareUrl}`);
+      say(`Copy this link: ${shareUrl}`, 'info');
     }
   }
 
@@ -51,6 +58,8 @@ export function ShareLinkCard({ shareUrl: initial }: { shareUrl: string }) {
       );
       setShareUrl(rotated.shareUrl);
       say('New link ready. The old one no longer works.');
+      // The router keeps the pages it has rendered, and Back would restore them with the old link.
+      router.refresh();
     } catch (error) {
       if (hasCode(error, ErrorCode.UNAUTHENTICATED)) {
         window.location.replace(LOGIN_AGAIN);
@@ -99,11 +108,11 @@ export function ShareLinkCard({ shareUrl: initial }: { shareUrl: string }) {
       </div>
       <div role="status">
         {rotating ? (
-          <Notice tone="success" announce={false} className="mt-4">
+          <Notice tone="info" announce={false} className="mt-4">
             Getting your new link…
           </Notice>
         ) : message ? (
-          <Notice key={message.id} tone="success" announce={false} className="mt-4">
+          <Notice key={message.id} tone={message.tone} announce={false} className="mt-4">
             {message.text}
           </Notice>
         ) : null}
