@@ -9,7 +9,9 @@ import {
   FakeCaptcha,
   FakeClock,
   FakeEmailSender,
+  FakeMetadataFetcher,
 } from '../../src/testing/fakes.js';
+import { METADATA_FETCHER } from '../../src/unfurl/metadata-fetcher.js';
 import { createTestApp } from './app.js';
 
 export const TEST_START = new Date('2026-10-01T12:00:00.000Z');
@@ -20,6 +22,7 @@ export interface AuthTestApp {
   emails: FakeEmailSender;
   captcha: FakeCaptcha;
   breaches: FakeBreachedPasswords;
+  unfurl: FakeMetadataFetcher;
   /** Rewinds the clock and clears every fake. Call it in beforeEach. */
   reset(): void;
 }
@@ -33,6 +36,7 @@ export async function createAuthTestApp(
   const emails = new FakeEmailSender();
   const captcha = new FakeCaptcha();
   const breaches = new FakeBreachedPasswords();
+  const unfurl = new FakeMetadataFetcher();
   const app = await createTestApp({
     databaseUrl,
     env,
@@ -45,7 +49,9 @@ export async function createAuthTestApp(
         .overrideProvider(CAPTCHA_VERIFIER)
         .useValue(captcha)
         .overrideProvider(BREACHED_PASSWORD_CHECKER)
-        .useValue(breaches),
+        .useValue(breaches)
+        .overrideProvider(METADATA_FETCHER)
+        .useValue(unfurl),
   });
   return {
     app,
@@ -53,6 +59,7 @@ export async function createAuthTestApp(
     emails,
     captcha,
     breaches,
+    unfurl,
     reset() {
       clock.set(TEST_START);
       emails.sent.length = 0;
@@ -61,6 +68,8 @@ export async function createAuthTestApp(
       captcha.tokens.length = 0;
       breaches.breached.clear();
       breaches.checked.length = 0;
+      unfurl.next = { failureReason: 'NO_METADATA' };
+      unfurl.urls.length = 0;
     },
   };
 }
