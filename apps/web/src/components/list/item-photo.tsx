@@ -37,7 +37,7 @@ export function ItemPhoto({ item }: { item: Pick<Item, 'url' | 'imageUrl'> }) {
     );
   }
   return (
-    <div className={`${TILE} bg-placeholder text-input`}>
+    <div data-photo="placeholder" className={`${TILE} bg-placeholder text-input`}>
       <PhotoIcon />
     </div>
   );

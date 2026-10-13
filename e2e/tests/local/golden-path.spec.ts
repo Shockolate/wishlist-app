@@ -33,6 +33,21 @@ test('a new person signs up, confirms, logs in, builds a list, renames, resets t
 
   // Signing up doesn't log you in: the list sends you to login, and back.
   await expect(page).toHaveURL('/login?next=%2Flist');
+  // Reached by a client-side navigation, so the login page reloads itself (D38). Fill the fresh
+  // document, not the one that is about to go. Evaluating in a document that is being replaced
+  // throws, which just means the reload has begun.
+  await expect
+    .poll(() =>
+      page
+        .evaluate(() => {
+          const { performance } = globalThis as unknown as {
+            performance: { getEntriesByType(type: string): { name: string }[] };
+          };
+          return performance.getEntriesByType('navigation')[0]?.name;
+        })
+        .catch(() => undefined),
+    )
+    .toContain('/login?next=');
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(PASSWORD);
   await page.getByRole('button', { name: 'Log in' }).click();
