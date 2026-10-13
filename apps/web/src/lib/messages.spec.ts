@@ -1,7 +1,14 @@
 import { ErrorCode, type Problem } from '@wishlist/contracts';
 import { describe, expect, it } from 'vitest';
 import { ApiError, ContractMismatchError } from './api-client';
-import { ERROR_MESSAGES, errorMessage, fieldErrors, hasCode } from './messages';
+import {
+  ERROR_MESSAGES,
+  errorMessage,
+  fieldErrors,
+  hasCode,
+  ITEM_GONE,
+  listErrorMessage,
+} from './messages';
 
 const apiError = (code: string, extra: Partial<Problem> = {}) =>
   new ApiError({ type: 'about:blank', title: 'x', status: 400, code, requestId: 'r', ...extra });
@@ -60,5 +67,27 @@ describe('hasCode', () => {
     expect(hasCode(apiError(ErrorCode.INVALID_TOKEN), ErrorCode.INVALID_TOKEN)).toBe(true);
     expect(hasCode(apiError(ErrorCode.INVALID_TOKEN), ErrorCode.RATE_LIMITED)).toBe(false);
     expect(hasCode(new Error('x'), ErrorCode.INVALID_TOKEN)).toBe(false);
+  });
+});
+
+describe('listErrorMessage (Plan 3b rule 4)', () => {
+  it('says a missing item was already removed', () => {
+    expect(listErrorMessage(apiError(ErrorCode.NOT_FOUND, { status: 404 }))).toBe(ITEM_GONE);
+    expect(ITEM_GONE).toBe('That item was already removed, so we’ve reloaded your list.');
+  });
+
+  it('explains a stale order and a full list', () => {
+    expect(listErrorMessage(apiError(ErrorCode.ORDER_CONFLICT, { status: 409 }))).toBe(
+      'Your list changed on another device, so we’ve reloaded it.',
+    );
+    expect(listErrorMessage(apiError(ErrorCode.LIST_FULL, { status: 422 }))).toBe(
+      'Your list is full: 200 items is the most it can hold.',
+    );
+  });
+
+  it('falls back to errorMessage for everything else', () => {
+    expect(listErrorMessage(new TypeError('Failed to fetch'))).toBe(
+      "We couldn't reach Hanker. Check your connection and try again.",
+    );
   });
 });

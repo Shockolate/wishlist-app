@@ -23,6 +23,9 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   [ErrorCode.UNAUTHENTICATED]: "You're signed out. Log in to continue.",
   [ErrorCode.VALIDATION_FAILED]: 'Some details need fixing.',
   [ErrorCode.FORBIDDEN_ORIGIN]: 'This page is out of date. Reload it and try again.',
+  [ErrorCode.ORDER_CONFLICT]: 'Your list changed on another device, so we’ve reloaded it.',
+  [ErrorCode.LIST_FULL]: 'Your list is full: 200 items is the most it can hold.',
+  [ErrorCode.EMAIL_NOT_VERIFIED]: 'Confirm your email first, then try again.',
 };
 
 const FALLBACK = 'Something went wrong on our side. Try again in a moment.';
@@ -51,4 +54,12 @@ export function fieldErrors(error: unknown): Record<string, string> {
 
 export function hasCode(error: unknown, code: string): boolean {
   return error instanceof ApiError && error.problem.code === code;
+}
+
+/** A change to an item that another device already deleted (a 404 on an item route). */
+export const ITEM_GONE = 'That item was already removed, so we’ve reloaded your list.';
+
+/** errorMessage for the list editor, where a 404 can only mean the item is gone (Plan 3b rule 4). */
+export function listErrorMessage(error: unknown): string {
+  return hasCode(error, ErrorCode.NOT_FOUND) ? ITEM_GONE : errorMessage(error);
 }
