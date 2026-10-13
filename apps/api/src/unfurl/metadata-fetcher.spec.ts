@@ -79,4 +79,18 @@ describe('HttpMetadataFetcher (spec §6.8)', () => {
     expect(message).toBe('unfurl BLOCKED_BY_SITE host=shop.test');
     expect(message).not.toMatch(/secret|ada@example\.com/);
   });
+
+  it('says NO_METADATA, and logs only the host, when reading the page throws', async () => {
+    const throwing = new HttpMetadataFetcher(
+      new PageFetcher({ policy: FIXTURE, resolve: () => Promise.resolve(['127.0.0.1']) }),
+      () => {
+        throw new Error('boom: a parser bug on hostile input');
+      },
+    );
+    expect(await throwing.fetch(at('/kettle'))).toEqual({
+      failureReason: 'NO_METADATA',
+    });
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(String(log.mock.calls[0]?.[0])).toBe('unfurl NO_METADATA host=shop.test');
+  });
 });
