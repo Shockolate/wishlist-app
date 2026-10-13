@@ -24,6 +24,8 @@ export async function createTestApp({
   const app = configureApp(
     moduleRef.createNestApplication<NestExpressApplication>({ ...APP_OPTIONS, logger: false }),
   );
-  await app.init();
+  // Listen once, on loopback: supertest would otherwise bind the server anew for every request,
+  // and concurrent requests would stack listeners on it.
+  await app.listen(0, '127.0.0.1');
   return app;
 }
