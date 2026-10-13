@@ -34,7 +34,7 @@ test('a new person signs up, confirms, logs in, renames, resets the password and
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(PASSWORD);
   await page.getByRole('button', { name: 'Log in' }).click();
-  await expect(page.getByRole('heading', { level: 1, name: 'Hello, Ada.' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: "Ada's wishlist" })).toBeVisible();
   await expect(page.getByText('Confirm your email to start your list')).toHaveCount(0);
 
   await mainNav.getByRole('link', { name: 'Settings' }).click();
@@ -59,7 +59,7 @@ test('a new person signs up, confirms, logs in, renames, resets the password and
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(NEW_PASSWORD);
   await page.getByRole('button', { name: 'Log in' }).click();
-  await expect(page.getByRole('heading', { level: 1, name: 'Hello, Ada Lovelace.' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: "Ada's wishlist" })).toBeVisible();
 
   await mainNav.getByRole('link', { name: 'Settings' }).click();
   await page.getByLabel('Your password').fill(NEW_PASSWORD);

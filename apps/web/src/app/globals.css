@@ -19,6 +19,7 @@
   --success: #6b8e78;
   --success-foreground: #3f5a49;
   --success-wash: #e6eee8;
+  --placeholder: #efe6d8;
   --destructive: #b42318;
 }
 
@@ -36,6 +37,7 @@
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
   --color-success-wash: var(--success-wash);
+  --color-placeholder: var(--placeholder);
   --color-destructive: var(--destructive);
   --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-instrument-serif), ui-serif, Georgia, serif;
