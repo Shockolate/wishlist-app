@@ -1,4 +1,5 @@
 import type { APIRequestContext } from '@playwright/test';
+import { resetRateLimits } from './rate-limits.js';
 
 export const PASSWORD = 'correct horse battery 1';
 
@@ -10,13 +11,17 @@ export function uniqueEmail(label: string): string {
 /** Cloudflare's test secret accepts this token (Plan 2a Task 13). */
 const TEST_TURNSTILE_TOKEN = 'XXXX.DUMMY.TOKEN.XXXX';
 
-/** Signs up through the API, as the browser would, without driving the form. */
+/**
+ * Signs up through the API, as the browser would, without driving the form. It first resets the
+ * API's rate limits, since every test signs up from the same IP (see resetRateLimits).
+ */
 export async function signUpViaApi(
   request: APIRequestContext,
   baseURL: string,
   email: string,
   displayName = 'Ada',
 ): Promise<void> {
+  resetRateLimits();
   const res = await request.post('/api/auth/signup', {
     headers: { origin: baseURL },
     data: { email, password: PASSWORD, displayName, turnstileToken: TEST_TURNSTILE_TOKEN },
