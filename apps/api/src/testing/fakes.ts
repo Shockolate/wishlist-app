@@ -1,7 +1,9 @@
+import type { UnfurlResponse } from '@wishlist/contracts';
 import type { Clock } from '../core/clock.js';
 import type { EmailMessage, EmailSender } from '../email/email-sender.js';
 import type { BreachedPasswordChecker } from '../security/breached-passwords.js';
 import type { CaptchaVerdict, CaptchaVerifier } from '../security/captcha.js';
+import type { MetadataFetcher } from '../unfurl/metadata-fetcher.js';
 
 /** A clock tests move by hand. */
 export class FakeClock implements Clock {
@@ -62,5 +64,16 @@ export class FakeEmailSender implements EmailSender {
       return Promise.reject(new Error('email provider is down'));
     }
     return Promise.resolve();
+  }
+}
+
+/** Unfurl stand-in. Set `next`; `urls` records every URL asked for. */
+export class FakeMetadataFetcher implements MetadataFetcher {
+  next: UnfurlResponse = { failureReason: 'NO_METADATA' };
+  readonly urls: string[] = [];
+
+  fetch(url: string): Promise<UnfurlResponse> {
+    this.urls.push(url);
+    return Promise.resolve(this.next);
   }
 }
