@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { expectAccessible, expectFitsPhone } from '../../support/a11y.js';
+import { expectAccessible, expectFitsPhone, expectNoSidewaysScroll } from '../../support/a11y.js';
 import { addItemViaApi, verifiedOwner } from '../../support/owner.js';
 
 const rowsOf = (page: Page) =>
@@ -82,9 +82,45 @@ test('a photo that won’t load shows the placeholder tile (Review Focus 3)', as
   await expect(rowsOf(page).first().locator('img')).toHaveCount(0);
 });
 
-test('a long unbroken title wraps on a phone (Review Focus 5)', async ({ page, baseURL }) => {
+// One test, so one owner: the suite signs up as many people as the API's per-IP mail limit allows
+// in an hour (20), and every sign-up counts against it.
+test('long unbroken text wraps on a phone: a title, and the link in a copy-failed notice (Review Focus 5)', async ({
+  page,
+  baseURL,
+}) => {
   const base = baseURL ?? '';
   await verifiedOwner(page, base, 'long');
   await addItemViaApi(page.request, base, { title: 'K'.repeat(200), note: 'N'.repeat(400) });
+
+  // A real share link breaks after its slashes, so make the page hold one that can't break anywhere.
+  const longUrl = `https://hanker.example/${'k'.repeat(120)}`;
+  await page.route('**/api/wishlist', async (route) => {
+    const real = (await (await route.fetch()).json()) as object;
+    await route.fulfill({ json: { ...real, shareUrl: longUrl } });
+  });
+  // e2e has no DOM lib, so the page's globals are typed by hand.
+  await page.addInitScript(() => {
+    const { navigator } = globalThis as unknown as {
+      navigator: { clipboard: { writeText(text: string): Promise<void> } };
+    };
+    navigator.clipboard.writeText = () => Promise.reject(new Error('blocked'));
+  });
+
   await expectFitsPhone(page, '/list');
+
+  const status = page.getByRole('status').filter({ hasText: 'Copy this link:' });
+  // Coming back to the tab refetches the list, which then carries the long link. Retried as a
+  // whole, since the page may not have hydrated (so isn't listening) the first time.
+  await expect(async () => {
+    await page.evaluate(() => {
+      const { document, Event } = globalThis as unknown as {
+        document: { dispatchEvent(event: unknown): void };
+        Event: new (type: string, init: { bubbles: boolean }) => unknown;
+      };
+      document.dispatchEvent(new Event('visibilitychange', { bubbles: true }));
+    });
+    await page.getByRole('button', { name: 'Copy share link' }).click();
+    await expect(status).toContainText(longUrl, { timeout: 500 });
+  }).toPass();
+  await expectNoSidewaysScroll(page);
 });

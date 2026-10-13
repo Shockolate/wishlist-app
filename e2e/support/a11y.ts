@@ -28,6 +28,11 @@ export async function expectFitsPhone(page: Page, path: string) {
   if (TURNSTILE_PAGES.has(path)) {
     await passTurnstile(page);
   }
+  await expectNoSidewaysScroll(page);
+}
+
+/** Measures sideways overflow of the page as it is now, without navigating. */
+export async function expectNoSidewaysScroll(page: Page) {
   // e2e has no DOM lib, so the page's globals are typed by hand.
   const overflow = await page.evaluate(() => {
     const { document, innerWidth } = globalThis as unknown as {

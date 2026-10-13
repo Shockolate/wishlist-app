@@ -46,7 +46,7 @@ export function Notice({
           />
         </svg>
       ) : null}
-      <div>{children}</div>
+      <div className="[overflow-wrap:anywhere]">{children}</div>
     </div>
   );
 }
