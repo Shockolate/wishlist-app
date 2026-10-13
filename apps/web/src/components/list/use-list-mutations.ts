@@ -44,6 +44,7 @@ export function useListMutation<D, V>(
   return useMutation<D, unknown, V>({
     ...options,
     onError: (error, ...rest) => {
+      // Not awaited: the original onError is synchronous (it only marks the list stale).
       void options.onError?.(error, ...rest);
       onFailure(error);
     },

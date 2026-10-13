@@ -54,6 +54,8 @@ export function ItemEditForm({
 
   useEffect(() => {
     onDirtyChange(isDirty);
+    // A form that goes away (closed, or its item removed by a refetch) leaves nothing unsaved.
+    return () => onDirtyChange(false);
   }, [isDirty, onDirtyChange]);
 
   useEffect(() => {
@@ -114,7 +116,7 @@ export function ItemEditForm({
           </AlertDialogContent>
         </AlertDialog>
         <div className="flex-1" />
-        <Button variant="secondary" onClick={onDone}>
+        <Button variant="secondary" onClick={onDone} disabled={update.isPending}>
           Cancel
         </Button>
         <Button type="submit" disabled={update.isPending}>

@@ -144,3 +144,71 @@ test('an item deleted on another device can’t be saved here (Review Focus 4)',
   ).toBeVisible();
   await expect(rowsOf(page)).toHaveCount(0);
 });
+
+test('deleting the only item moves focus to the add box', async ({ page, baseURL }) => {
+  const base = baseURL ?? '';
+  await verifiedOwner(page, base, 'delete-only');
+  await addItemViaApi(page.request, base, { title: 'Kettle' });
+  await page.goto('/list');
+  await titleButton(page, 'Kettle').click();
+  await page.getByRole('button', { name: 'Delete' }).click();
+  await page
+    .getByRole('alertdialog', { name: 'Delete “Kettle”?' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await expect(rowsOf(page)).toHaveCount(0);
+  await expect(page.getByLabel('Add to your list')).toBeFocused();
+});
+
+test('an open item that vanishes in a refetch doesn’t block opening another', async ({
+  page,
+  baseURL,
+}) => {
+  const base = baseURL ?? '';
+  await verifiedOwner(page, base, 'vanish');
+  const kettle = await addItemViaApi(page.request, base, { title: 'Kettle' });
+  await addItemViaApi(page.request, base, { title: 'Socks' });
+  await page.goto('/list');
+  await titleButton(page, 'Kettle').click();
+  await page.getByLabel('Title').fill('Kettle, blue');
+  const gone = await page.request.delete(`/api/wishlist/items/${kettle.id}`, {
+    headers: { origin: base },
+    data: {},
+  });
+  expect(gone.status()).toBe(204);
+  // The focus refetch is what brings the server's list in.
+  await expect(async () => {
+    await page.evaluate(() => {
+      const { document, Event } = globalThis as unknown as {
+        document: { dispatchEvent(event: unknown): void };
+        Event: new (type: string, init: { bubbles: boolean }) => unknown;
+      };
+      document.dispatchEvent(new Event('visibilitychange', { bubbles: true }));
+    });
+    await expect(rowsOf(page)).toHaveCount(1, { timeout: 500 });
+  }).toPass();
+  await titleButton(page, 'Socks').click();
+  await expect(page.getByLabel('Title')).toHaveValue('Socks');
+  await expect(status(page, 'Save or cancel the item you’re editing first.')).toHaveCount(0);
+});
+
+test('Cancel waits while a save is in flight', async ({ page, baseURL }) => {
+  const base = baseURL ?? '';
+  await verifiedOwner(page, base, 'saving');
+  await addItemViaApi(page.request, base, { title: 'Kettle' });
+  await page.goto('/list');
+  let release = (): void => undefined;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route('**/api/wishlist/items/*', async (route) => {
+    if (route.request().method() !== 'PATCH') return route.continue();
+    await held;
+    return route.continue();
+  });
+  await titleButton(page, 'Kettle').click();
+  await page.getByLabel('Title').fill('Kettle, blue');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('button', { name: 'Saving…' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+  release();
+  await expect(status(page, 'Saved “Kettle, blue”.')).toBeVisible();
+});
