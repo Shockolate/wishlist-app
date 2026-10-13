@@ -57,7 +57,11 @@ export function AddForm({
           <Button
             variant="link"
             size="compact"
-            onClick={() => setValue('imageUrl', '', { shouldDirty: true })}
+            onClick={() => {
+              setValue('imageUrl', '', { shouldDirty: true });
+              // This button is about to unmount; keep focus in the form.
+              setFocus('imageUrl');
+            }}
           >
             Remove photo
           </Button>
@@ -65,10 +69,11 @@ export function AddForm({
       ) : null}
       <ItemFields form={form} idPrefix="add" />
       <div className="flex flex-wrap justify-end gap-2">
-        <Button variant="secondary" onClick={onCancel}>
+        <Button variant="secondary" onClick={onCancel} disabled={create.isPending}>
           Cancel
         </Button>
-        <Button type="submit" disabled={create.isPending}>
+        {/* isSubmitting covers the tick before TanStack reports isPending, so a fast double press adds once. */}
+        <Button type="submit" disabled={create.isPending || form.formState.isSubmitting}>
           {create.isPending ? 'Adding…' : 'Add to list'}
         </Button>
       </div>

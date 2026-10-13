@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef } from 'react';
 import { MinusIcon, PlusIcon } from './icons';
 
 const MIN = 1;
@@ -17,6 +18,14 @@ export function QuantityStepper({
   onChange: (value: number) => void;
 }) {
   const labelId = `${id}-label`;
+  const fewer = useRef<HTMLButtonElement>(null);
+  const more = useRef<HTMLButtonElement>(null);
+  // A button that disables itself drops focus to <body>; hand it to the other one first.
+  const step = (next: number) => {
+    onChange(next);
+    if (next <= MIN) more.current?.focus();
+    if (next >= MAX) fewer.current?.focus();
+  };
   return (
     <div className="flex flex-col gap-1.5">
       <span id={labelId} className="text-[15px] font-semibold">
@@ -29,9 +38,10 @@ export function QuantityStepper({
       >
         <button
           type="button"
+          ref={fewer}
           aria-label="Fewer"
           disabled={value <= MIN}
-          onClick={() => onChange(value - 1)}
+          onClick={() => step(value - 1)}
           className={STEP}
         >
           <MinusIcon />
@@ -41,9 +51,10 @@ export function QuantityStepper({
         </output>
         <button
           type="button"
+          ref={more}
           aria-label="More"
           disabled={value >= MAX}
-          onClick={() => onChange(value + 1)}
+          onClick={() => step(value + 1)}
           className={STEP}
         >
           <PlusIcon />

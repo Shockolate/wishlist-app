@@ -69,16 +69,78 @@ test('a shop address without https:// is read as a link', async ({ page, baseURL
   );
 });
 
-test('says why the box can’t take what was typed', async ({ page, baseURL }) => {
+test('says why the box can’t take what was typed, and announces it every time', async ({
+  page,
+  baseURL,
+}) => {
   await verifiedOwner(page, baseURL ?? '', 'refused');
   await page.goto('/list');
+  const alert = (text: string) => page.getByRole('alert').filter({ hasText: text });
   await addThroughTheBox(page, '   ');
-  await expect(page.getByText('Paste a link or type an idea.')).toBeVisible();
+  await expect(alert('Paste a link or type an idea.')).toBeVisible();
+  await expect(page.getByLabel('Add to your list')).toHaveAccessibleDescription(
+    'Paste a link or type an idea.',
+  );
+  // The same refusal again must be a new alert, or a screen reader says nothing the second time.
+  await alert('Paste a link or type an idea.').evaluate((el) => el.setAttribute('data-seen', ''));
+  await addThroughTheBox(page, '   ');
+  await expect(alert('Paste a link or type an idea.')).toBeVisible();
+  await expect(alert('Paste a link or type an idea.')).not.toHaveAttribute('data-seen', '');
   await addThroughTheBox(page, 'ftp://files.example/kettle');
-  await expect(page.getByText('Links must start with http:// or https://')).toBeVisible();
+  await expect(alert('Links must start with http:// or https://')).toBeVisible();
   await addThroughTheBox(page, 'K'.repeat(201));
-  await expect(page.getByText('Use 200 characters or fewer.')).toBeVisible();
+  await expect(alert('Use 200 characters or fewer.')).toBeVisible();
   await expect(rowsOf(page)).toHaveCount(0);
+});
+
+test('says the page is being read while unfurl runs', async ({ page, baseURL }) => {
+  await verifiedOwner(page, baseURL ?? '', 'reading');
+  await page.route('**/api/wishlist/unfurl', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ title: 'Kettle' }),
+    });
+  });
+  await page.goto('/list');
+  await addThroughTheBox(page, 'https://hanker-e2e.invalid/kettle');
+  await expect(status(page, 'Reading the page…')).toBeVisible();
+  await expect(page.getByLabel('Title')).toHaveValue('Kettle');
+});
+
+test('the quantity stepper hands focus on when a button reaches its limit', async ({
+  page,
+  baseURL,
+}) => {
+  await verifiedOwner(page, baseURL ?? '', 'stepper');
+  await page.goto('/list');
+  await addThroughTheBox(page, 'https://hanker-e2e.invalid/kettle');
+  const more = page.getByRole('button', { name: 'More' });
+  const fewer = page.getByRole('button', { name: 'Fewer' });
+  await more.click();
+  await expect(page.getByRole('group', { name: 'How many' })).toContainText('2');
+  await fewer.click();
+  await expect(fewer).toBeDisabled();
+  await expect(more).toBeFocused();
+});
+
+test('removing the photo moves focus to the Photo link field', async ({ page, baseURL }) => {
+  await verifiedOwner(page, baseURL ?? '', 'photo');
+  await page.route('**/api/wishlist/unfurl', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ title: 'Kettle', imageUrl: 'https://hanker-e2e.invalid/k.jpg' }),
+    }),
+  );
+  await page.goto('/list');
+  await addThroughTheBox(page, 'https://hanker-e2e.invalid/kettle');
+  await page.getByRole('button', { name: 'Remove photo' }).click();
+  const photoLink = page.getByLabel('Photo link');
+  await expect(photoLink).toHaveValue('');
+  await expect(photoLink).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Remove photo' })).toHaveCount(0);
 });
 
 test('a rate-limited unfurl still opens the form, with the link kept (3a carry)', async ({

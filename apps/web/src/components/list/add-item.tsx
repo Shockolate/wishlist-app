@@ -26,7 +26,9 @@ type Step =
 /** The link-first add box (spec §7 Owner editor, Plan 3b rules 5 and 6). */
 export function AddItem() {
   const [text, setText] = useState('');
-  const [boxError, setBoxError] = useState<string | null>(null);
+  // The id changes with every refusal, so the alert is re-announced even for the same message.
+  const [boxError, setBoxError] = useState<{ message: string; id: number } | null>(null);
+  const refusals = useRef(0);
   const [step, setStep] = useState<Step>({ step: 'box' });
   // Bumped to move focus to the box once it has rendered again.
   const [focusBox, setFocusBox] = useState(0);
@@ -39,7 +41,8 @@ export function AddItem() {
   }, [focusBox]);
 
   function refuse(message: string) {
-    setBoxError(message);
+    refusals.current += 1;
+    setBoxError({ message, id: refusals.current });
     setFocusBox((n) => n + 1);
   }
 
@@ -108,6 +111,7 @@ export function AddItem() {
         {step.step === 'form' ? (
           <p className="mt-1 text-sm text-muted-foreground">{step.message}</p>
         ) : null}
+        {reading ? <p className="mt-1 text-sm text-muted-foreground">Reading the page…</p> : null}
       </div>
       {step.step === 'form' ? (
         <AddForm initial={step.values} onAdded={added} onCancel={cancel} />
@@ -132,8 +136,13 @@ export function AddItem() {
             </Button>
           </div>
           {boxError ? (
-            <p id="add-box-error" className="mt-1.5 text-sm font-medium text-destructive">
-              {boxError}
+            <p
+              key={boxError.id}
+              id="add-box-error"
+              role="alert"
+              className="mt-1.5 text-sm font-medium text-destructive"
+            >
+              {boxError.message}
             </p>
           ) : null}
         </form>
