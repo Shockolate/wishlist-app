@@ -1,6 +1,11 @@
 'use client';
 
-import { useQueryClient, type QueryClient } from '@tanstack/react-query';
+import {
+  useMutation,
+  useQueryClient,
+  type MutationOptions,
+  type QueryClient,
+} from '@tanstack/react-query';
 import { browserApi } from '@/lib/browser-api';
 import { listMutations } from '@/lib/list-mutations';
 
@@ -26,4 +31,21 @@ export function listMutationsFor(client: QueryClient): ListMutations {
 /** The editor's mutation options, bound to this page's QueryClient and the browser API. */
 export function useListMutations(): ListMutations {
   return listMutationsFor(useQueryClient());
+}
+
+/**
+ * A list mutation whose every failure also reaches `onFailure`. Per-call mutate() callbacks fire
+ * only for an observer's latest call, so quick repeated moves or deletes would lose one.
+ */
+export function useListMutation<D, V>(
+  options: MutationOptions<D, unknown, V>,
+  onFailure: (error: unknown) => void,
+) {
+  return useMutation<D, unknown, V>({
+    ...options,
+    onError: (error, ...rest) => {
+      void options.onError?.(error, ...rest);
+      onFailure(error);
+    },
+  });
 }

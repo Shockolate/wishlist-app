@@ -65,6 +65,9 @@ export function listErrorMessage(error: unknown): string {
   return hasCode(error, ErrorCode.NOT_FOUND) ? ITEM_GONE : errorMessage(error);
 }
 
+/** Another row was tapped while the open one had unsaved changes (Plan 3b rule 8). */
+export const FINISH_EDITING = 'Save or cancel the item you’re editing first.';
+
 /** The add box (Plan 3b rule 5). */
 export const ADD_BOX_EMPTY = 'Paste a link or type an idea.';
 export const OTHER_SCHEME_LINK = 'Links must start with http:// or https://';
