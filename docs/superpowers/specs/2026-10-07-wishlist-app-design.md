@@ -463,8 +463,8 @@ These are the initial values. They're configurable, and every limited endpoint r
 |---|---|---|
 | `/` | Server | Landing page. Redirects to `/list` when signed in |
 | `/signup`, `/login`, `/verify-email`, `/reset-password`, `/reset-password/confirm` | Client forms | Call `/api/auth/*` directly, so the `Set-Cookie` lands from the API response |
-| `/list` | Server shell + client editor (TanStack Query) | Optimistic updates for reorder, quantity and delete, rolled back on error |
-| `/settings` | Client | Display name; spoiler toggle with confirmation; rotate the share link; change password; delete account |
+| `/list` | Server-rendered first load + client editor (TanStack Query) | Reorder and delete show at once; a failed change refetches the list (D37) |
+| `/settings` | Client | Display name; list name; share link (copy, and rotate after a confirmation); change password; delete account (confirmation dialog). The spoiler toggle, with its confirmation, arrives in Plan 4 (D33) |
 | `/s/[shareToken]` | Server Component | Readable before JavaScript loads. Claim controls hydrate afterwards |
 | `/c/[manageToken]` | Server Component + client form | Manage one claim |
 
@@ -491,19 +491,32 @@ These are the initial values. They're configurable, and every limited endpoint r
 
 `localStorage` is only a convenience. The manage link is the source of truth.
 
+### Owner editor (Plan 3b)
+
+The editor is layout A from the Plan 3b mockups: compact rows, edited in place (D37).
+
+- **Adding is link-first.** One box takes "a link or an idea":
+  - An `http(s)` URL, or text shaped like a domain (`shop.com/x`, given `https://`), is unfurled, and a prefilled form opens for the owner to check and save.
+  - Anything else becomes an item at once, titled with the text.
+  - A failed or rate-limited unfurl opens the same form with the link kept, and one sentence per failure reason says why.
+- **Rows:** a drag handle, the photo (or an idea tile), the title and price, and up and down buttons. Tapping a row opens its form in place, one row at a time. Quantity is a form field, saved with the rest. Delete asks for confirmation in a dialog.
+- **Sharing from `/list`:** Copy share link, and Share where the Web Share API exists. Both appear once the list has an item.
+- **Server state:** the server render seeds the TanStack Query cache. Every list change runs in one mutation queue, in order, and none is retried. Reorder and delete update the cache at once; adding and saving wait for the API. Any failed change refetches the list, which is the rollback, since restoring a snapshot would also undo the changes queued after it.
+- **Photos** render as `<img alt="">` with `referrerPolicy="no-referrer"`, and fall back to a placeholder if they don't load.
+
 ### Reordering
 
 - dnd-kit, with its keyboard sensor enabled.
 - Visible up and down buttons as well. They make reordering workable on phones and serve as the accessible fallback.
-- Each move sends the full order to `PUT /wishlist/items/order`.
-- On a `409`, the editor refetches the list and shows a toast.
+- Each move sends the full order to `PUT /wishlist/items/order`: the order the list has when the request runs, not when the move was made, so a move queued behind an add includes the new item.
+- On a `409`, the editor refetches the list and says why in its status line, which screen readers announce.
 
 ### UI and accessibility
 
 - Tailwind with shadcn/ui components, which are copied into the repo and built on Radix primitives.
 - Forms use react-hook-form with the shared Zod schemas.
 - The target is WCAG 2.2 AA.
-- The visual direction is **Warm Editorial Minimalism** (D28): a sand ground, espresso type and borders, terracotta for actions only, and sage for fulfilled states. Instrument Serif for headings, Geist for everything else, and 16px cards. The tokens live in `apps/web/src/app/globals.css`. The share page and the editor are mocked up for review before they're built (Plan 3).
+- The visual direction is **Warm Editorial Minimalism** (D28): a sand ground, espresso type and borders, terracotta for actions only, and sage for fulfilled states. Instrument Serif for headings, Geist for everything else, and 16px cards. The tokens live in `apps/web/src/app/globals.css`. The share page and the editor were mocked up for review before they were built (Plan 3b): the editor uses compact rows (D37), and the share page uses cards.
 
 ## 8. Testing
 
@@ -700,3 +713,5 @@ As of 2026-10-07 on the development machine:
 | D34 | Unfurl identifies itself honestly, as `Mozilla/5.0 (compatible; Hanker/1.0; +https://hanker.dev)` (2026-10-12) | A browser user agent; posing as a social network's crawler |
 | D35 | List and item titles follow the display-name rule: visible characters only; control and format characters (newlines, bidirectional overrides, zero-width spaces) are refused, except the joiners emoji and Persian need (Ted, 2026-10-12) | Refusing only NUL, the one character Postgres rejects |
 | D36 | Prices follow the title rule (D35): visible characters only. A price sits beside its title in front of gifters, and no currency Intl formats uses a control or format character (Ted, 2026-10-13) | Refusing only NUL; silently stripping the characters instead of refusing them |
+| D37 | The owner editor is compact rows, edited in place; quantity is a form field saved with Save, so only reorder and delete update before the API answers; the share actions sit on `/list` once it has an item (Ted, 2026-10-13) | Image cards edited in a bottom sheet, with a quantity stepper on each card; rows edited in a sheet |
+| D38 | Plan 2b's "before sign-up opens" fixes split by page: the four on Plan 3b's pages (the delete-account dialog, `/list`'s confirm-email copy, `requireMe`'s router cache, the screen-reader check) land in 3b; the two Turnstile fixes join Plan 4's go-live work, where sign-up opens (Ted, 2026-10-13) | All six in 3b; all six in Plan 4 |
