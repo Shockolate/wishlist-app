@@ -117,6 +117,20 @@ describe('POST /wishlist/items (spec §2, §5)', () => {
     expect([res.status, codeOf(res)]).toEqual([400, ErrorCode.VALIDATION_FAILED]);
   });
 
+  it.each([
+    { title: 'Ket\u0000tle' },
+    { title: 'Bike\u202E' },
+    { title: 'Kettle', note: 'Blue\u0000 one' },
+    { title: 'Kettle', priceText: '$4\u00000' },
+    { title: 'Kettle', url: 'https://shop.example/ket\u0000tle' },
+    { title: 'Kettle', imageUrl: 'https://cdn.example/ket\u0000tle.jpg' },
+  ])('refuses %j with 400, not 500', async (body) => {
+    const cookie = await owner();
+    const res = await create(cookie, body);
+    expect([res.status, codeOf(res)]).toEqual([400, ErrorCode.VALIDATION_FAILED]);
+    expect((await listOf(cookie)).items).toEqual([]);
+  });
+
   it('refuses the 201st item with 422 LIST_FULL', async () => {
     const cookie = await owner();
     await seedItems(ADA.email, 200);
@@ -178,6 +192,16 @@ describe('PATCH /wishlist/items/:id (spec §5)', () => {
       priceText: null,
       note: null,
     });
+  });
+
+  it('refuses a NUL in a changed field with 400 and leaves the item alone', async () => {
+    const cookie = await owner();
+    const item = await created(cookie, 'Kettle');
+    const res = await client(t.app, cookie).patch(`/wishlist/items/${item.id}`, {
+      title: 'Ket\u0000tle',
+    });
+    expect([res.status, codeOf(res)]).toEqual([400, ErrorCode.VALIDATION_FAILED]);
+    expect((await listOf(cookie)).items.map((i) => i.title)).toEqual(['Kettle']);
   });
 
   it('validates what it changes', async () => {

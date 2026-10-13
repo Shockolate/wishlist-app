@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { VISIBLE_ONLY_MESSAGE, visibleOnly } from './text.js';
 
 /** Emails are stored and compared lowercased (spec §4). 254 characters is the longest valid address. */
 export const EmailSchema = z.string().trim().toLowerCase().max(254).pipe(z.email());
@@ -9,26 +10,13 @@ export const PasswordSchema = z.string().min(10).max(128);
 /** For checking a password someone already has: never reveal the policy, but still cap the cost. */
 const ExistingPasswordSchema = z.string().min(1).max(128);
 
-/**
- * Control and format characters: newlines, tabs, bidirectional overrides, zero-width spaces. They
- * can make a name lie about what it says. The two joiners are allowed inside a name: emoji
- * sequences need the zero-width joiner (U+200D), and Persian needs the non-joiner (U+200C).
- */
-const HIDDEN_CHARACTERS = /[\p{Cc}\p{Cf}]/u;
-const JOINERS = /[\u200C\u200D]/gu;
-
+/** Visible characters only; see `visibleOnly`. */
 export const DisplayNameSchema = z
   .string()
   .trim()
   .min(1)
   .max(50)
-  .refine((name) => {
-    // Empty is min(1)'s job: one clear issue per input.
-    if (name.length === 0) return true;
-    const rest = name.replace(JOINERS, '');
-    // Joiners and spaces alone would show as a blank name.
-    return rest.trim().length > 0 && !HIDDEN_CHARACTERS.test(rest);
-  }, 'Use visible characters only');
+  .refine(visibleOnly, VISIBLE_ONLY_MESSAGE);
 
 /** An email-link token: 256 random bits, base64url without padding (spec §4). */
 export const EmailTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/, 'Invalid token');
