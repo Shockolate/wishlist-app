@@ -15,6 +15,7 @@ import { SessionGuard } from './session.guard.js';
 import { SessionsService } from './sessions.service.js';
 import { SignupController } from './signup.controller.js';
 import { SignupService } from './signup.service.js';
+import { VerifiedGuard } from './verified.guard.js';
 
 /** Accounts and sessions (spec §5 Auth, §6.1–§6.6). */
 @Module({
@@ -23,6 +24,7 @@ import { SignupService } from './signup.service.js';
   providers: [
     SessionsService,
     SessionGuard,
+    VerifiedGuard,
     EmailTokensService,
     EmailGate,
     AuthEmails,
@@ -31,5 +33,6 @@ import { SignupService } from './signup.service.js';
     PasswordResetService,
     AccountService,
   ],
+  exports: [SessionsService, SessionGuard, VerifiedGuard],
 })
 export class AuthModule {}

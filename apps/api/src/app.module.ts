@@ -5,8 +5,17 @@ import { DatabaseModule } from './db/database.module.js';
 import { HealthModule } from './health/health.module.js';
 import { HttpSecurityModule } from './http/http-security.module.js';
 import { OpsModule } from './ops/ops.module.js';
+import { WishlistModule } from './wishlist/wishlist.module.js';
 
 @Module({
-  imports: [CoreModule, DatabaseModule, HttpSecurityModule, HealthModule, AuthModule, OpsModule],
+  imports: [
+    CoreModule,
+    DatabaseModule,
+    HttpSecurityModule,
+    HealthModule,
+    AuthModule,
+    WishlistModule,
+    OpsModule,
+  ],
 })
 export class AppModule {}

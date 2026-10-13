@@ -23,3 +23,7 @@ export const invalidCredentials = (): AppError =>
 /** A signed-in user confirmed the wrong password. 403, because a 401 would read as "signed out". */
 export const wrongPassword = (): AppError =>
   new AppError(403, ErrorCode.INVALID_CREDENTIALS, 'That password is incorrect.');
+
+/** Owner endpoints refuse an address nobody has confirmed (spec §5). */
+export const emailNotVerified = (): AppError =>
+  new AppError(403, ErrorCode.EMAIL_NOT_VERIFIED, 'Confirm your email address first.');
