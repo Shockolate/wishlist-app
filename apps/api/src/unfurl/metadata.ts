@@ -51,19 +51,15 @@ export function extractMetadata(html: string, pageUrl: URL): PageMetadata {
 }
 
 /**
- * A display price (spec §2: prices are strings), such as "$24.99". When the amount isn't a plain
- * number or the currency isn't one Intl knows, it reads "<amount> <CODE>". Over 50 characters,
- * it's dropped.
+ * A display price (spec §2: prices are strings), such as "$24.99", in visible characters only, as
+ * the price contract requires (D36). When the amount isn't a plain number or the currency isn't one
+ * Intl knows, it reads "<amount> <CODE>". Over 50 characters, it's dropped.
  */
 export function formatPrice(amount: unknown, currency: unknown): string | undefined {
   const value =
-    typeof amount === 'number'
-      ? String(amount)
-      : typeof amount === 'string'
-        ? withoutControls(amount).trim()
-        : '';
+    typeof amount === 'number' ? String(amount) : typeof amount === 'string' ? text(amount) : '';
   if (!value) return undefined;
-  const code = typeof currency === 'string' ? withoutControls(currency).trim().toUpperCase() : '';
+  const code = typeof currency === 'string' ? (text(currency)?.toUpperCase() ?? '') : '';
   let formatted = code ? `${value} ${code}` : value;
   if (KNOWN_CURRENCIES.has(code) && /^\d+(\.\d+)?$/.test(value)) {
     try {
@@ -218,8 +214,8 @@ function withoutControls(value: string): string {
 const HIDDEN_FORMAT = /(?![\u200C\u200D])\p{Cf}/gu;
 
 /**
- * A title as the item contract accepts it (D35): visible characters only, whitespace collapsed and
- * trimmed. Empty, or nothing visible, is "nothing".
+ * A title, or a price's amount or currency, as the item contract accepts it (D35, D36): visible
+ * characters only, whitespace collapsed and trimmed. Empty, or nothing visible, is "nothing".
  */
 function text(value: string | undefined): string | undefined {
   if (value === undefined) return undefined;

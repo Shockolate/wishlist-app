@@ -150,7 +150,7 @@ describe('a NUL character is refused in every owner text field', () => {
     ['ItemTitleSchema', ItemTitleSchema, 'Ket\u0000tle', VISIBLE_MESSAGE],
     ['ItemUrlSchema', ItemUrlSchema, 'https://shop.example/ket\u0000tle', NUL_MESSAGE],
     ['ImageUrlSchema', ImageUrlSchema, 'https://cdn.example/ket\u0000tle.jpg', NUL_MESSAGE],
-    ['PriceTextSchema', PriceTextSchema, '$4\u00000', NUL_MESSAGE],
+    ['PriceTextSchema', PriceTextSchema, '$4\u00000', VISIBLE_MESSAGE],
     ['NoteSchema', NoteSchema, 'Blue\u0000 one', NUL_MESSAGE],
   ])('%s', (_name, schema, value, message) => {
     const result = schema.safeParse(value);
@@ -203,5 +203,34 @@ describe.each([
 
   it('reports an empty title once, as too short', () => {
     expect(schema.safeParse('  ').error?.issues.map((issue) => issue.code)).toEqual(['too_small']);
+  });
+});
+
+// D36: a price sits beside its title in front of gifters, so it follows the same rule.
+describe('PriceTextSchema: visible characters only (D36)', () => {
+  it.each([['$40.00'], ['CHF\u00A024.99'], ['24,99\u202F€'], ['around £15'], ['$20–30'], ['₪120']])(
+    'accepts %s',
+    (price) => {
+      expect(PriceTextSchema.parse(price)).toBe(price);
+    },
+  );
+
+  it.each([
+    ['a newline', '$40\n.00'],
+    ['a tab', '$40\t.00'],
+    ['a right-to-left override', '$\u202E00.04'],
+    ['a zero-width space', '$4\u200B0'],
+    ['a left-to-right mark', '\u200E$40'],
+    ['only joiners and spaces', '\u200D \u200D'],
+  ])('refuses %s with one issue', (_label, price) => {
+    const result = PriceTextSchema.safeParse(price);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.message)).toEqual([
+      'Use visible characters only',
+    ]);
+  });
+
+  it('still stores a blank price as null', () => {
+    expect(PriceTextSchema.parse('  ')).toBeNull();
   });
 });

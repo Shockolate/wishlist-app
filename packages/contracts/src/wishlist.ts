@@ -24,8 +24,8 @@ export const QuantitySchema = z.number().int().min(1).max(99);
 const blankToNull = (value: string | null) => (value === '' ? null : value);
 
 /**
- * Postgres can't store U+0000 in a text column, so it would be a 500. Notes, prices and links
- * refuse only that one character: a note keeps its newlines and tabs.
+ * Postgres can't store U+0000 in a text column, so it would be a 500. Notes and links refuse only
+ * that one character: a note keeps its newlines and tabs.
  */
 const NUL_MESSAGE = 'Remove the invisible character';
 const hasNoNul = (value: string) => !value.includes('\u0000');
@@ -56,11 +56,12 @@ export const ItemUrlSchema = link(/^https?$/, 'Enter a link that starts with htt
 /** Only ever https: shown as a plain <img>, and never fetched by the server (spec §2, §6.9). */
 export const ImageUrlSchema = link(/^https$/, 'Enter an image link that starts with https://');
 
+/** A price sits beside its title in front of gifters, so it follows the title rule (D36). */
 export const PriceTextSchema = z
   .string()
   .trim()
   .max(50)
-  .refine(hasNoNul, NUL_MESSAGE)
+  .refine(visibleOnly, VISIBLE_ONLY_MESSAGE)
   .nullable()
   .transform(blankToNull);
 export const NoteSchema = z

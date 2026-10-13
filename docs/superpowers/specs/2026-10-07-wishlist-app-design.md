@@ -65,7 +65,7 @@ These are explicit so they don't creep in:
   | `title` | Required, 1–200 visible characters (D35) |
   | `url` | Optional, http or https, at most 2048 characters |
   | `imageUrl` | Optional, https only |
-  | `priceText` | Optional, at most 50 characters |
+  | `priceText` | Optional, at most 50 visible characters (D36) |
   | `note` | Optional, at most 1000 characters. This is the owner's comment to gifters |
   | `quantity` | 1–99 |
   | `position` | Set by the server |
@@ -433,7 +433,7 @@ These are the initial values. They're configurable, and every limited endpoint r
 - **Redirects:** followed manually, at most 3 hops, with every hop checked the same way.
 - **Limits:** 5-second total timeout. Reading stops at 1 MB, counted after decompression, and a longer page is parsed from what arrived: a product page's metadata is in its `<head>` (Plan 3a follow-up). Only a `200` with `text/html` is accepted.
 - **Parsing:** done with a real HTML parser. Sources are tried in this order: Open Graph tags, then JSON-LD `Product` (name, image, offers price and currency), then `<title>`. A title that is only the site's name (`og:site_name`, or the host without `www.`) is skipped, as on a bot check's page (Plan 3a follow-up).
-- **Output (Plan 3a):** a JSON-LD price and currency become a display string with `Intl.NumberFormat('en-US')`, e.g. `"$24.99"`. Titles are trimmed to 200 characters.
+- **Output (Plan 3a):** a JSON-LD price and currency become a display string with `Intl.NumberFormat('en-US')`, e.g. `"$24.99"`. Titles are trimmed to 200 characters. Titles and prices keep only visible characters, so a prefill always passes the item contract (D35, D36).
 - **Images:** the extracted image URL is resolved against the final page URL and must be https, and the server never fetches it.
 - **Identification:** requests send `User-Agent: Mozilla/5.0 (compatible; Hanker/1.0; +https://hanker.dev)` and `Accept: text/html`. No browser or crawler impersonation (D34).
 - **Logs** carry the hostname and the failure reason, never the full URL: query strings can carry personal data.
@@ -699,3 +699,4 @@ As of 2026-10-07 on the development machine:
 | D33 | `showClaimsToOwner`, its API field and its settings toggle, ship in Plan 4 with the claims it controls (2026-10-12) | Shipping the toggle in Plan 3, with nothing for it to show |
 | D34 | Unfurl identifies itself honestly, as `Mozilla/5.0 (compatible; Hanker/1.0; +https://hanker.dev)` (2026-10-12) | A browser user agent; posing as a social network's crawler |
 | D35 | List and item titles follow the display-name rule: visible characters only; control and format characters (newlines, bidirectional overrides, zero-width spaces) are refused, except the joiners emoji and Persian need (Ted, 2026-10-12) | Refusing only NUL, the one character Postgres rejects |
+| D36 | Prices follow the title rule (D35): visible characters only. A price sits beside its title in front of gifters, and no currency Intl formats uses a control or format character (Ted, 2026-10-13) | Refusing only NUL; silently stripping the characters instead of refusing them |
