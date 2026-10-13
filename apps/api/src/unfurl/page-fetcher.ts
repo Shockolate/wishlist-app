@@ -98,7 +98,8 @@ export class PageFetcher {
           url = nextHop(res.headers.location, url);
           continue;
         }
-        if (res.statusCode >= 400) {
+        // Only a 200 is the page. A bot check can answer 202 with a script, and a 204 has nothing.
+        if (res.statusCode !== 200) {
           await res.body.dump();
           // dump() resolves on close, so a deadline that passed while draining must be TIMEOUT.
           signal.throwIfAborted();

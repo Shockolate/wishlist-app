@@ -55,6 +55,13 @@ beforeAll(async () => {
       case '/down':
         res.writeHead(503);
         return res.end();
+      case '/challenge':
+        // A bot check's interstitial: 202 Accepted, no Content-Type, a script that isn't the page.
+        res.writeHead(202);
+        return res.end('<script>solve()</script>');
+      case '/no-content':
+        res.writeHead(204);
+        return res.end();
       case '/json':
         res.writeHead(200, { 'content-type': 'application/json' });
         return res.end('{}');
@@ -231,12 +238,15 @@ describe('PageFetcher (spec §6.8)', () => {
     expect(page).toMatchObject({ ok: false, reason: 'UNREACHABLE' });
   });
 
-  it.each(['/forbidden', '/down'])('reports %s as BLOCKED_BY_SITE', async (path) => {
-    expect(await fetcher().fetch(at(path))).toMatchObject({
-      ok: false,
-      reason: 'BLOCKED_BY_SITE',
-    });
-  });
+  it.each(['/forbidden', '/down', '/challenge', '/no-content'])(
+    'reports %s as BLOCKED_BY_SITE: only a 200 is the page',
+    async (path) => {
+      expect(await fetcher().fetch(at(path))).toMatchObject({
+        ok: false,
+        reason: 'BLOCKED_BY_SITE',
+      });
+    },
+  );
 
   it('refuses anything but HTML', async () => {
     expect(await fetcher().fetch(at('/json'))).toMatchObject({ ok: false, reason: 'NOT_HTML' });
