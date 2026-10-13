@@ -48,9 +48,11 @@ export function ItemRow({
   return (
     <li
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
       className={cn(
-        'relative border-t border-foreground/15 bg-card first:border-t-0',
+        // The list's card is rounded, and the rows can't clip to it (that would cut off a focus ring),
+        // so the first and last row round themselves to match.
+        'relative border-t border-foreground/15 bg-card first:rounded-t-[inherit] first:border-t-0 last:rounded-b-[inherit]',
         open && 'bg-background shadow-[inset_3px_0_0_var(--foreground)]',
         isDragging && 'z-10 shadow-[0_8px_18px_rgba(30,27,24,0.16)]',
       )}

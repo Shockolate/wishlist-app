@@ -9,6 +9,7 @@ import {
   useSensors,
   type Announcements,
   type DragEndEvent,
+  type Modifier,
   type UniqueIdentifier,
 } from '@dnd-kit/core';
 import {
@@ -23,6 +24,9 @@ import { ItemEditForm } from './item-edit-form';
 import { ItemRow } from './item-row';
 import { useListStatus } from './list-status';
 import { useListMutation, useListMutations } from './use-list-mutations';
+
+/** Rows move up and down only: a drag that drifts sideways would be clipped by the card. */
+const verticalOnly: Modifier = ({ transform }) => ({ ...transform, x: 0 });
 
 /** The rows, one open at a time (Plan 3b rule 8). */
 export function ItemList({ items }: { items: Item[] }) {
@@ -119,10 +123,14 @@ export function ItemList({ items }: { items: Item[] }) {
   // dnd-kit reads these to screen readers as a drag goes on (spec §7, Plan 3b rule 12).
   const announcements: Announcements = {
     onDragStart: ({ active }) => `Picked up “${titleOf(active.id)}”, ${placeOf(active.id)}.`,
-    onDragOver: ({ active, over }) =>
-      over
+    // dnd-kit says "over" at once on pickup, with the item over itself. Saying nothing keeps
+    // "Picked up …" from being replaced before a screen reader has read it.
+    onDragOver: ({ active, over }) => {
+      if (over?.id === active.id) return undefined;
+      return over
         ? `“${titleOf(active.id)}” is over ${placeOf(over.id)}.`
-        : `“${titleOf(active.id)}” is outside the list.`,
+        : `“${titleOf(active.id)}” is outside the list.`;
+    },
     onDragEnd: ({ active, over }) =>
       over
         ? `Dropped “${titleOf(active.id)}” at ${placeOf(over.id)}.`
@@ -133,7 +141,12 @@ export function ItemList({ items }: { items: Item[] }) {
 
   return (
     <DndContext
+      // dnd-kit numbers the ids it generates (the handles' aria-describedby) with a module-level
+      // counter that grows on every server render, so without this the page's ids stop matching
+      // the instructions element after the first request.
+      id="item-list-dnd"
       sensors={sensors}
+      modifiers={[verticalOnly]}
       collisionDetection={closestCenter}
       onDragEnd={onDragEnd}
       accessibility={{
@@ -147,7 +160,7 @@ export function ItemList({ items }: { items: Item[] }) {
       <SortableContext items={items.map((item) => item.id)} strategy={verticalListSortingStrategy}>
         <ol
           aria-label="Your items, most wanted first"
-          className="mt-5 overflow-hidden rounded-card border border-border bg-card"
+          className="mt-5 rounded-card border border-border bg-card"
         >
           {items.map((item, index) => (
             <ItemRow
