@@ -7,9 +7,11 @@ const VERIFY = 'Confirm your email for Hanker';
 const RESET = 'Reset your Hanker password';
 const NEW_PASSWORD = 'a brand new passphrase 2';
 
-test('a new person signs up, confirms, logs in, renames, resets the password and leaves (spec §8)', async ({
+test('a new person signs up, confirms, logs in, builds a list, renames, resets the password and leaves (spec §8)', async ({
+  context,
   page,
 }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   // Two Turnstile passes and two mail waits can each take 15 s, more than the default 30 s.
   test.slow();
   const email = uniqueEmail('golden');
@@ -36,6 +38,22 @@ test('a new person signs up, confirms, logs in, renames, resets the password and
   await page.getByRole('button', { name: 'Log in' }).click();
   await expect(page.getByRole('heading', { level: 1, name: "Ada's wishlist" })).toBeVisible();
   await expect(page.getByText('Confirm your email to start your list')).toHaveCount(0);
+
+  // Build a list, reorder it, and copy the link to share (spec §8).
+  const box = page.getByLabel('Add to your list');
+  await box.fill('Pottery class for two');
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Added “Pottery class for two”.' }),
+  ).toBeVisible();
+  await box.fill('Enamel kettle https://hanker-e2e.invalid/kettle');
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Enamel kettle');
+  await page.getByRole('button', { name: 'Add to list' }).click();
+  await page.getByRole('button', { name: 'Move “Enamel kettle” up' }).click();
+  await expect(page.getByRole('listitem').first()).toContainText('Enamel kettle');
+  await page.getByRole('button', { name: 'Copy share link' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Link copied.' })).toBeVisible();
 
   await mainNav.getByRole('link', { name: 'Settings' }).click();
   await page.getByLabel('Display name').fill('Ada Lovelace');
