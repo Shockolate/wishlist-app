@@ -122,6 +122,7 @@ describe('POST /wishlist/items (spec §2, §5)', () => {
     { title: 'Bike\u202E' },
     { title: 'Kettle', note: 'Blue\u0000 one' },
     { title: 'Kettle', priceText: '$4\u00000' },
+    { title: 'Kettle', priceText: '$\u202E00.04' },
     { title: 'Kettle', url: 'https://shop.example/ket\u0000tle' },
     { title: 'Kettle', imageUrl: 'https://cdn.example/ket\u0000tle.jpg' },
   ])('refuses %j with 400, not 500', async (body) => {
