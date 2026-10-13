@@ -27,6 +27,12 @@ export const ErrorCode = {
   CAPTCHA_UNAVAILABLE: 'CAPTCHA_UNAVAILABLE',
   /** 403: a state-changing request that didn't come from APP_ORIGIN (spec §6.2). */
   FORBIDDEN_ORIGIN: 'FORBIDDEN_ORIGIN',
+  /** 403: the signed-in user hasn't confirmed their email; owner endpoints refuse (spec §5). */
+  EMAIL_NOT_VERIFIED: 'EMAIL_NOT_VERIFIED',
+  /** 422: the list already holds 200 items (spec §2). */
+  LIST_FULL: 'LIST_FULL',
+  /** 409: a reorder's item IDs aren't exactly the list's current items (spec §5). */
+  ORDER_CONFLICT: 'ORDER_CONFLICT',
   /** Synthesized by the web client when an error response isn't problem+json (e.g. a Vercel edge page). */
   UNEXPECTED_RESPONSE: 'UNEXPECTED_RESPONSE',
 } as const;

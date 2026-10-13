@@ -103,3 +103,29 @@ export const wishlists = pgTable('wishlists', {
   showClaimsToOwner: boolean('show_claims_to_owner').notNull().default(false),
   ...timestamps(),
 });
+
+/**
+ * Items (spec §2, §4). An idea is an item without a url. The server sets `position`, under a lock
+ * on the owner's wishlist row (spec §5).
+ */
+export const items = pgTable(
+  'items',
+  {
+    id: uuid('id').primaryKey(),
+    wishlistId: uuid('wishlist_id')
+      .notNull()
+      .references(() => wishlists.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    url: text('url'),
+    imageUrl: text('image_url'),
+    priceText: text('price_text'),
+    note: text('note'),
+    quantity: integer('quantity').notNull(),
+    position: integer('position').notNull(),
+    ...timestamps(),
+  },
+  (t) => [
+    index('items_wishlist_id_position_idx').on(t.wishlistId, t.position),
+    check('items_quantity_check', sql`${t.quantity} between 1 and 99`),
+  ],
+);
