@@ -3,6 +3,7 @@
   "compilerOptions": {
     "rootDir": ".",
     "noEmit": true,
+    "lib": ["es2024"],
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "rewriteRelativeImportExtensions": true,

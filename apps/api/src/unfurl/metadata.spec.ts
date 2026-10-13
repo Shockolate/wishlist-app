@@ -113,3 +113,77 @@ describe('formatPrice (spec §2: prices are display strings)', () => {
     expect(formatPrice(amount, currency)).toBe(expected);
   });
 });
+
+// A prefill becomes an item's title and price, so every string must be one the contracts accept
+// and Postgres stores unchanged: no NUL (Postgres refuses it) and no lone surrogate (stored as
+// U+FFFD, so it would not read back as it was sent).
+describe('a prefill is always storable (final review I1)', () => {
+  const productPage = (fields: string) =>
+    `<script type="application/ld+json">{"@type":"Product",${fields}}</script>`;
+  const nameOf = (name: string) => extractMetadata(productPage(`"name":"${name}"`), SHOP).title;
+
+  it('strips a NUL from a JSON-LD name', () => {
+    expect(nameOf('Ket\\u0000tle')).toBe('Kettle');
+  });
+
+  it('strips a raw NUL from an og:title', () => {
+    const html = `<meta property="og:title" content="Ket\u0000tle">`;
+    expect(extractMetadata(html, SHOP).title).toBe('Kettle');
+  });
+
+  it('strips a raw NUL from <title>', () => {
+    expect(extractMetadata('<title>Ket\u0000tle</title>', SHOP).title).toBe('Kettle');
+  });
+
+  it('strips other control characters, and keeps the spaces that were whitespace', () => {
+    expect(nameOf('Ket\\u0001tle\\u007f\\tand\\nlid')).toBe('Kettle and lid');
+  });
+
+  it('strips a NUL from a JSON-LD price', () => {
+    const { priceText } = extractMetadata(productPage('"offers":{"price":"4\\u00000"}'), SHOP);
+    expect(priceText).toBe('40');
+  });
+
+  it('strips a NUL from an og price and its currency', () => {
+    const html = `<meta property="og:price:amount" content="4\u00000"><meta property="og:price:currency" content="U\u0000SD">`;
+    expect(extractMetadata(html, SHOP).priceText).toBe('$40.00');
+  });
+
+  it('strips format characters from a title, so it passes the item contract (D35)', () => {
+    const html = `<meta property="og:title" content="Ket\u200Btle\u202E">`;
+    expect(extractMetadata(html, SHOP).title).toBe('Kettle');
+  });
+
+  it('keeps the joiners an emoji or Persian needs', () => {
+    expect(nameOf('\\ud83d\\udc69\\u200d\\ud83c\\udf73 Chef')).toBe(
+      '\u{1F469}\u200D\u{1F373} Chef',
+    );
+  });
+
+  it('has no title when nothing visible is left, and falls through to the next source', () => {
+    const hidden = `<meta property="og:title" content="\u200B \u202E">`;
+    expect(extractMetadata(hidden, SHOP).title).toBeUndefined();
+    expect(extractMetadata(`${hidden}<title>Kettle</title>`, SHOP).title).toBe('Kettle');
+    const joinersOnly = `<meta property="og:title" content="\u200D \u200D">`;
+    expect(extractMetadata(joinersOnly, SHOP).title).toBeUndefined();
+  });
+
+  it('turns a numeric entity for a surrogate into U+FFFD, as HTML does', () => {
+    expect(nameOf('A&#xD800;B')).toBe('A\uFFFDB');
+    expect(nameOf('A&#57343;B')).toBe('A\uFFFDB');
+  });
+
+  it('makes a lone surrogate from a JSON escape well-formed', () => {
+    const title = nameOf('A\\ud800B');
+    expect(title).toBe('A\uFFFDB');
+    expect(title?.isWellFormed()).toBe(true);
+  });
+
+  it('decodes ordinary numeric entities', () => {
+    expect(nameOf('Tom&#39;s &#x26; Jerry&#x27;s')).toBe("Tom's & Jerry's");
+  });
+
+  it('keeps a character outside the BMP whole', () => {
+    expect(nameOf('Kettle \\ud83e\\uded6')).toBe('Kettle \u{1FAD6}');
+  });
+});
