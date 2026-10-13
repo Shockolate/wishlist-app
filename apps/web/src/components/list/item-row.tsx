@@ -120,7 +120,9 @@ export function ItemSummary({ item }: { item: Item }) {
         {item.title}
       </span>
       <span className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-muted-foreground">
-        {item.priceText ? <span className="text-foreground">{item.priceText}</span> : null}
+        {item.priceText ? (
+          <span className="text-foreground [overflow-wrap:anywhere]">{item.priceText}</span>
+        ) : null}
         {item.quantity > 1 ? (
           <span className="rounded-full border border-border px-2 text-[13px] text-foreground">
             {item.quantity} wanted

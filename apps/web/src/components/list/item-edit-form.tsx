@@ -86,7 +86,13 @@ export function ItemEditForm({
       <div className="flex flex-wrap items-center gap-2">
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button variant="link" size="compact" className="text-destructive">
+            {/* Not while a save is on its way: the DELETE would queue behind it, and "Saved" would be the last thing announced. */}
+            <Button
+              variant="link"
+              size="compact"
+              className="text-destructive"
+              disabled={update.isPending}
+            >
               <TrashIcon />
               Delete
             </Button>

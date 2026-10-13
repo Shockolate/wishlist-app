@@ -137,12 +137,13 @@ test('an item deleted on another device can’t be saved here (Review Focus 4)',
   expect(gone.status()).toBe(204);
   await page.getByLabel('Title').fill('Kettle, blue');
   await page.getByRole('button', { name: 'Save' }).click();
-  await expect(
-    page
-      .getByRole('alert')
-      .filter({ hasText: 'That item was already removed, so we’ve reloaded your list.' }),
-  ).toBeVisible();
+  const gone404 = page
+    .getByRole('alert')
+    .filter({ hasText: 'That item was already removed, so we’ve reloaded your list.' });
+  await expect(gone404).toBeVisible();
   await expect(rowsOf(page)).toHaveCount(0);
+  // The row that held focus is gone, so the error takes it (final review, I2).
+  await expect(gone404).toBeFocused();
 });
 
 test('deleting the only item moves focus to the add box', async ({ page, baseURL }) => {

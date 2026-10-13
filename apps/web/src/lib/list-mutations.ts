@@ -70,6 +70,8 @@ export function listMutations(client: QueryClient, api: ApiClient) {
   const create: MutationOptions<Item, unknown, CreateItemRequest> = {
     scope: LIST_SCOPE,
     mutationFn: (body) => api.post('/wishlist/items', body, ItemSchema),
+    // A refetch already in flight would answer from before this add, and land after it.
+    onMutate: holdRefetches,
     onSuccess: (item) => change((list) => appendItem(list, item)),
     onError,
     onSettled,
@@ -77,6 +79,8 @@ export function listMutations(client: QueryClient, api: ApiClient) {
   const update: MutationOptions<Item, unknown, ItemEdit> = {
     scope: LIST_SCOPE,
     mutationFn: ({ id, body }) => api.patch(`/wishlist/items/${id}`, body, ItemSchema),
+    // As for create: a refetch from before the save mustn't land after it and revert the edit.
+    onMutate: holdRefetches,
     onSuccess: (item) => change((list) => replaceItem(list, item)),
     onError,
     onSettled,

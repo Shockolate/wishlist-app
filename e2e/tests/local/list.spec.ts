@@ -80,12 +80,19 @@ test('a photo that won’t load shows the placeholder tile (Review Focus 3)', as
   await page.goto('/list');
   await expect(rowsOf(page).first()).toContainText('Kettle');
   await expect(rowsOf(page).first().locator('img')).toHaveCount(0);
+  // Not just "no img": the tile is what stands in for it.
+  await expect(rowsOf(page).first().locator('[data-photo="placeholder"]')).toBeVisible();
 });
 
 test('a long unbroken title wraps on a phone (Review Focus 5)', async ({ page, baseURL }) => {
   const base = baseURL ?? '';
   await verifiedOwner(page, base, 'long');
-  await addItemViaApi(page.request, base, { title: 'K'.repeat(200), note: 'N'.repeat(400) });
+  // The schema allows a price of 50 characters (D36), and nothing says it has a space in it.
+  await addItemViaApi(page.request, base, {
+    title: 'K'.repeat(200),
+    note: 'N'.repeat(400),
+    priceText: `$${'9'.repeat(49)}`,
+  });
   await expectFitsPhone(page, '/list');
 });
 

@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { DeleteMeRequestSchema, ErrorCode } from '@wishlist/contracts';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   AlertDialog,
@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Notice } from '@/components/ui/notice';
 import { NoContentSchema } from '@/lib/api-client';
 import { browserApi } from '@/lib/browser-api';
+import { focusIsLost } from '@/lib/focus-lost';
 import { formErrorMap } from '@/lib/form-errors';
 import { errorMessage, hasCode, WRONG_PASSWORD } from '@/lib/messages';
 import { LOGIN_AGAIN } from './name-form';
@@ -31,6 +32,7 @@ import { LOGIN_AGAIN } from './name-form';
 export function DeleteAccountForm() {
   const [open, setOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const errorNotice = useRef<HTMLDivElement>(null);
   const {
     register,
     handleSubmit,
@@ -42,6 +44,12 @@ export function DeleteAccountForm() {
     resolver: zodResolver(DeleteMeRequestSchema, { error: formErrorMap }),
     defaultValues: { password: '' },
   });
+
+  // The submit button disables itself while the request runs, so a failure that isn't about the
+  // password (which refocuses its field) would leave focus on the page behind the dialog.
+  useEffect(() => {
+    if (formError !== null && focusIsLost()) errorNotice.current?.focus();
+  }, [formError]);
 
   const onSubmit = handleSubmit(async (values) => {
     setFormError(null);
@@ -108,7 +116,11 @@ export function DeleteAccountForm() {
                 />
               )}
             </Field>
-            {formError ? <Notice tone="error">{formError}</Notice> : null}
+            {formError ? (
+              <Notice ref={errorNotice} tabIndex={-1} tone="error">
+                {formError}
+              </Notice>
+            ) : null}
             <AlertDialogFooter className="mt-1">
               <AlertDialogCancel disabled={isSubmitting}>Keep my account</AlertDialogCancel>
               {/* A plain submit, not AlertDialogAction, so a wrong password keeps the dialog open. */}

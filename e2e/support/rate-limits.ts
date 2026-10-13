@@ -6,8 +6,8 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
 /**
  * Empties the API's rate-limit table. Every test signs up from one IP, and the API caps that at 20
- * a month-of-mail-an-hour (spec §6.6, MAIL_PER_IP), which the suite's sign-ups would otherwise
- * exhaust as it grows. No E2E test asserts the real per-IP limits. This is the command
+ * sign-up emails an hour per IP (spec §6.6, MAIL_PER_IP), which the suite's sign-ups would
+ * otherwise exhaust as it grows. No E2E test asserts the real per-IP limits. This is the command
  * scripts/e2e.sh runs at the start of a run.
  */
 export function resetRateLimits(): void {
@@ -26,6 +26,6 @@ export function resetRateLimits(): void {
       '-c',
       'TRUNCATE rate_limits',
     ],
-    { cwd: REPO_ROOT, stdio: 'ignore' },
+    { cwd: REPO_ROOT, stdio: ['ignore', 'ignore', 'inherit'] },
   );
 }
