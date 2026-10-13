@@ -1,3 +1,4 @@
+import { PriceTextSchema } from '@wishlist/contracts';
 import { describe, expect, it } from 'vitest';
 import { extractMetadata, formatPrice } from './metadata.js';
 
@@ -172,6 +173,34 @@ describe('a prefill is always storable (final review I1)', () => {
   it('strips format characters from a title, so it passes the item contract (D35)', () => {
     const html = `<meta property="og:title" content="Ket\u200Btle\u202E">`;
     expect(extractMetadata(html, SHOP).title).toBe('Kettle');
+  });
+
+  it('strips format characters from a price and its currency, so it passes the item contract (D36)', () => {
+    const html = `<meta property="og:price:amount" content="4\u200B0"><meta property="og:price:currency" content="U\u202ESD">`;
+    expect(extractMetadata(html, SHOP).priceText).toBe('$40.00');
+    const { priceText } = extractMetadata(
+      productPage('"offers":{"price":"\\u202e40\\u200b"}'),
+      SHOP,
+    );
+    expect(priceText).toBe('40');
+  });
+
+  it('has no price when nothing visible is left', () => {
+    expect(formatPrice('\u200B', 'USD')).toBeUndefined();
+    expect(formatPrice('\u200D \u200D', undefined)).toBeUndefined();
+  });
+
+  it.each([
+    ...Intl.supportedValuesOf('currency').map((code) => [code, '1234.5', code]),
+    ['a code Intl lacks', '1234.5', 'ABC'],
+    ['words', 'about 20', 'USD'],
+    ['a right-to-left override', '\u202E40', 'USD'],
+    ['a soft hyphen', '4\u00AD0', 'XYZ'],
+    ['isolates and a zero-width space', '\u2066 40 \u2069', '\u200BEUR'],
+  ])('formats a price the contract stores unchanged: %s (D36)', (_label, amount, currency) => {
+    const price = formatPrice(amount, currency);
+    expect(price).toBeDefined();
+    expect(PriceTextSchema.parse(price)).toBe(price);
   });
 
   it('keeps the joiners an emoji or Persian needs', () => {
