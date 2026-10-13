@@ -6,7 +6,7 @@ import {
   type Item,
 } from '@wishlist/contracts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { ADA, logIn, signUpVerified, type Account } from './support/accounts.js';
+import { ADA, logIn, signUp, signUpVerified, type Account } from './support/accounts.js';
 import { createAuthTestApp, type AuthTestApp } from './support/auth-app.js';
 import { client, type ApiResponse } from './support/client.js';
 import { openTestDatabase } from './support/database.js';
@@ -303,5 +303,40 @@ describe('the item endpoints need a verified owner', () => {
   it('answer 401 without a session', async () => {
     const res = await client(t.app).post('/wishlist/items', { title: 'Kettle' });
     expect([res.status, codeOf(res)]).toEqual([401, ErrorCode.UNAUTHENTICATED]);
+  });
+});
+
+describe('every item route needs a signed-in, verified owner (spec §5)', () => {
+  const routes = [
+    ['POST', '/wishlist/items', { title: 'Kettle' }],
+    ['PATCH', `/wishlist/items/${UNKNOWN_ID}`, { title: 'Kettle' }],
+    ['DELETE', `/wishlist/items/${UNKNOWN_ID}`, {}],
+    ['PUT', '/wishlist/items/order', { itemIds: [] }],
+  ] as const;
+
+  const call = (
+    method: (typeof routes)[number][0],
+    path: string,
+    body: object,
+    cookie?: string,
+  ) => {
+    const api = client(t.app, cookie);
+    return {
+      POST: api.post,
+      PATCH: api.patch,
+      DELETE: api.delete,
+      PUT: api.put,
+    }[method](path, body);
+  };
+
+  it.each(routes)('%s %s answers 401 without a session', async (method, path, body) => {
+    const res = await call(method, path, body);
+    expect([res.status, codeOf(res)]).toEqual([401, ErrorCode.UNAUTHENTICATED]);
+  });
+
+  it.each(routes)('%s %s answers 403 to an unverified email', async (method, path, body) => {
+    await signUp(t);
+    const res = await call(method, path, body, await logIn(t));
+    expect([res.status, codeOf(res)]).toEqual([403, ErrorCode.EMAIL_NOT_VERIFIED]);
   });
 });
