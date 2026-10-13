@@ -82,15 +82,20 @@ test('a photo that won’t load shows the placeholder tile (Review Focus 3)', as
   await expect(rowsOf(page).first().locator('img')).toHaveCount(0);
 });
 
-// One test, so one owner: the suite signs up as many people as the API's per-IP mail limit allows
-// in an hour (20), and every sign-up counts against it.
-test('long unbroken text wraps on a phone: a title, and the link in a copy-failed notice (Review Focus 5)', async ({
+test('a long unbroken title wraps on a phone (Review Focus 5)', async ({ page, baseURL }) => {
+  const base = baseURL ?? '';
+  await verifiedOwner(page, base, 'long');
+  await addItemViaApi(page.request, base, { title: 'K'.repeat(200), note: 'N'.repeat(400) });
+  await expectFitsPhone(page, '/list');
+});
+
+test('the copy-failed notice, with a long unbroken link, fits a phone (Review Focus 5)', async ({
   page,
   baseURL,
 }) => {
   const base = baseURL ?? '';
-  await verifiedOwner(page, base, 'long');
-  await addItemViaApi(page.request, base, { title: 'K'.repeat(200), note: 'N'.repeat(400) });
+  await verifiedOwner(page, base, 'copyfail');
+  await addItemViaApi(page.request, base, { title: 'Kettle' });
 
   // A real share link breaks after its slashes, so make the page hold one that can't break anywhere.
   const longUrl = `https://hanker.example/${'k'.repeat(120)}`;
