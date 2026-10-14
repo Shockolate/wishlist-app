@@ -1,16 +1,15 @@
-import { lookup as dnsLookup } from 'node:dns/promises';
 import { isIP, type LookupFunction } from 'node:net';
 import { pipeline, type Readable } from 'node:stream';
 import { createBrotliDecompress, createGunzip, createInflate } from 'node:zlib';
 import type { UnfurlFailureReason } from '@wishlist/contracts';
 import { Agent, request } from 'undici';
 import { PUBLIC_WEB, type AddressPolicy } from './address-policy.js';
+import { createCaresResolve, type Resolve } from './dns.js';
 
-/** Resolves a hostname to every address it has. */
-export type Resolve = (hostname: string) => Promise<string[]>;
+export type { Resolve };
 
-export const resolveAll: Resolve = async (hostname) =>
-  (await dnsLookup(hostname, { all: true, verbatim: true })).map((entry) => entry.address);
+/** The default: c-ares, at most 4 lookups at once per process (spec §6.8, Plan 4a). */
+export const resolveAll: Resolve = createCaresResolve();
 
 /** How unfurl introduces itself (D34): honestly, with a page to read about it. */
 export const USER_AGENT = 'Mozilla/5.0 (compatible; Hanker/1.0; +https://hanker.dev)';
@@ -148,7 +147,7 @@ export class PageFetcher {
   private async lookUp(host: string, signal: AbortSignal): Promise<string[]> {
     let addresses: string[];
     try {
-      addresses = await untilAborted(this.resolve(host), signal);
+      addresses = await untilAborted(this.resolve(host, signal), signal);
     } catch (error) {
       if (signal.aborted) throw error;
       throw new FetchFailure('DNS_FAILED');

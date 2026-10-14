@@ -288,6 +288,19 @@ describe('PageFetcher (spec §6.8)', () => {
     expect(page).toMatchObject({ ok: false, reason: 'TIMEOUT' });
   });
 
+  it('hands the deadline to the resolver, so a slow lookup is cancelled, not abandoned (Plan 4a)', async () => {
+    let seen: AbortSignal | undefined;
+    const page = await new PageFetcher({
+      timeoutMs: 200,
+      resolve: (_hostname, signal) => {
+        seen = signal;
+        return new Promise<string[]>(() => undefined);
+      },
+    }).fetch('http://slow-dns.test/');
+    expect(page).toMatchObject({ ok: false, reason: 'TIMEOUT' });
+    expect(seen?.aborted).toBe(true);
+  });
+
   it('stops decompressing a compression bomb at 1 MB decoded (Plan 3a rule 8)', async () => {
     const page = await fetcher().fetch(at('/bomb'));
     expect(page).toMatchObject({ ok: true, truncated: true });
