@@ -171,6 +171,52 @@ test('a lost answer is found again by Try again, not claimed twice (D42, Review 
   expect(await claimsOn(gifter, token)).toHaveLength(1);
 });
 
+test('a retry that is rate-limited keeps the token, so the claim is still made once (D42, Review Focus 1)', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const base = baseURL ?? '';
+  const { token, gifter } = await setUp(page, browser, base, 'claim-limited', {
+    title: 'Enamel kettle',
+    quantity: 3,
+  });
+  let presses = 0;
+  await gifter.route('**/api/shared/*/items/*/claims', async (route) => {
+    presses += 1;
+    if (presses === 1) {
+      await route.fetch(); // the API makes the claim…
+      await route.abort('internetdisconnected'); // …and its answer never arrives
+    } else if (presses === 2) {
+      await route.fulfill({
+        status: 429,
+        contentType: 'application/problem+json',
+        body: JSON.stringify({
+          type: 'about:blank',
+          title: 'Too Many Requests',
+          status: 429,
+          code: 'RATE_LIMITED',
+          requestId: 'e2e',
+        }),
+      });
+    } else {
+      await route.continue();
+    }
+  });
+  await card(gifter, 'Enamel kettle').getByRole('button', { name: 'I’ll get this' }).click();
+  const sheet = gifter.getByRole('dialog');
+  await sheet.getByLabel('Your name').fill('Priya');
+  await sheet.getByRole('button', { name: 'Claim it' }).click();
+  await expect(sheet.getByRole('alert')).toContainText('reach Hanker');
+  await sheet.getByRole('button', { name: 'Try again' }).click();
+  await expect(sheet.getByRole('alert')).toHaveText(
+    'Too many attempts. Wait a few minutes and try again.',
+  );
+  await sheet.getByRole('button', { name: 'Try again' }).click();
+  await expect(gifter.getByRole('dialog', { name: 'You’re getting Enamel kettle' })).toBeVisible();
+  expect(await claimsOn(gifter, token)).toHaveLength(1);
+});
+
 test('a lost answer comes back on reload, with nothing to tap (D42)', async ({
   page,
   browser,

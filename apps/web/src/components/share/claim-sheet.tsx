@@ -51,6 +51,28 @@ import { useShareClaims } from './share-claims';
 
 const NameSchema = z.object({ claimerName: ClaimerNameSchema });
 
+/**
+ * Whether an error answers "this token made no claim here": a replay of a committed token gets
+ * 201 before the remaining check, a deleted item took its claims with it, a token in use belongs
+ * to another item, and the owner is refused before anything is written.
+ */
+function provesNoClaim(error: unknown): boolean {
+  return (
+    hasCode(error, ErrorCode.CLAIM_EXCEEDS_REMAINING) ||
+    hasCode(error, ErrorCode.NOT_FOUND) ||
+    hasCode(error, ErrorCode.MANAGE_TOKEN_IN_USE) ||
+    hasCode(error, ErrorCode.OWNER_CANNOT_CLAIM)
+  );
+}
+
+/** A failure that may have hidden a made claim and isn't about a field: offer "Try again". */
+function mayHideClaim(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return true;
+  return (
+    error.status >= 500 || error.status === 429 || hasCode(error, ErrorCode.UNEXPECTED_RESPONSE)
+  );
+}
+
 type Phase =
   | { kind: 'form' }
   | { kind: 'done'; claim: CreateClaimResponse }
@@ -117,9 +139,11 @@ export function ClaimSheet({
       setPhase({ kind: 'done', claim });
       router.refresh();
     } catch (error) {
-      // A refusal means no claim was made. A lost answer may hide one, so it keeps its token
-      // (Plan 4b rule 5).
-      if (error instanceof ApiError && error.status < 500) {
+      // Only an answer that proves this token made no claim on this item lets it go: any other
+      // failure may hide a claim that was made and whose answer was lost, such as a 429 on the
+      // retry. Those keep the token, so the next press replays it and finds the claim, or a later
+      // visit's lookup does (D42, Plan 4b rule 5 as amended).
+      if (provesNoClaim(error)) {
         forget(manageToken);
         token.current = null;
       }
@@ -160,7 +184,7 @@ export function ClaimSheet({
       setError('claimerName', { message: nameError }, { shouldFocus: true });
       return;
     }
-    setRetry(!(error instanceof ApiError) || error.status >= 500);
+    setRetry(mayHideClaim(error));
     setFormError(errorMessage(error));
   }
 
