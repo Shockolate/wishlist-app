@@ -101,6 +101,23 @@ export type ReorderItemsRequest = z.infer<typeof ReorderItemsRequestSchema>;
 export const UpdateWishlistRequestSchema = z.object({ title: WishlistTitleSchema });
 export type UpdateWishlistRequest = z.infer<typeof UpdateWishlistRequestSchema>;
 
+/** A claim as gifters, and an owner who opted in, see it (spec §5). Never its manage token. */
+export const ClaimSchema = z.object({
+  id: z.uuid(),
+  claimerName: z.string(),
+  quantity: z.number().int(),
+});
+export type Claim = z.infer<typeof ClaimSchema>;
+
+/**
+ * The claim fields an item carries when its viewer may see them (spec §5.1). They're optional
+ * because the projection leaves them out, rather than empty, for everyone else.
+ */
+export const ITEM_CLAIM_FIELDS = {
+  remaining: z.number().int().min(0).optional(),
+  claims: z.array(ClaimSchema).optional(),
+};
+
 /** An item as the owner sees it. Every field is present; empty ones are null (Plan 3a rule 1). */
 export const ItemSchema = z.object({
   id: z.uuid(),

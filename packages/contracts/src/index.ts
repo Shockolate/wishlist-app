@@ -1,4 +1,5 @@
 export * from './auth.js';
+export * from './claims.js';
 export * from './cron.js';
 export * from './error-codes.js';
 export * from './health.js';

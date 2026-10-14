@@ -33,6 +33,12 @@ export const ErrorCode = {
   LIST_FULL: 'LIST_FULL',
   /** 409: a reorder's item IDs aren't exactly the list's current items (spec §5). */
   ORDER_CONFLICT: 'ORDER_CONFLICT',
+  /** 409: a claim would take more than the item has left. Carries `remaining` (spec §5). */
+  CLAIM_EXCEEDS_REMAINING: 'CLAIM_EXCEEDS_REMAINING',
+  /** 403: the list's owner tried to claim from their own list (spec §2). */
+  OWNER_CANNOT_CLAIM: 'OWNER_CANNOT_CLAIM',
+  /** 404: a share link that's malformed, unknown, or was replaced by a rotation (spec §5). */
+  SHARE_LINK_NOT_FOUND: 'SHARE_LINK_NOT_FOUND',
   /** Synthesized by the web client when an error response isn't problem+json (e.g. a Vercel edge page). */
   UNEXPECTED_RESPONSE: 'UNEXPECTED_RESPONSE',
 } as const;
