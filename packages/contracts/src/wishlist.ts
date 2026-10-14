@@ -11,6 +11,12 @@ export const WishlistTitleSchema = z
   .min(1)
   .max(100)
   .refine(visibleOnly, VISIBLE_ONLY_MESSAGE);
+
+/** The title sign-up gives a new list (spec §2). Any valid display name makes a valid title. */
+export function defaultWishlistTitle(displayName: string): string {
+  return `${displayName}'s wishlist`;
+}
+
 export const ItemTitleSchema = z
   .string()
   .trim()

@@ -36,6 +36,7 @@ describe('ClaimerNameSchema (spec §2: the display-name rule)', () => {
   it.each([
     ['empty', ''],
     ['only spaces', '   '],
+    ['only Hangul fillers', '\u3164\u3164'],
     ['51 characters', 'a'.repeat(51)],
     ['a right-to-left override', 'Sue‮eus'],
     ['a newline inside', 'Aunt\nSue'],

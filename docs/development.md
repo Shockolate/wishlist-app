@@ -89,6 +89,26 @@ curl -s -b /tmp/jar -X POST "$API/wishlist/unfurl" -H "Origin: $ORIGIN" -H 'cont
 - Unfurl makes real requests from your machine. A private or loopback address answers `{"failureReason":"DISALLOWED_ADDRESS"}`, as it should.
 - Reordering sends every item ID: `PUT /wishlist/items/order` with `{"itemIds":[…]}`. Anything but the list's exact item set is `409 ORDER_CONFLICT`.
 
+## Trying the claims API
+
+Anyone holding a list's share link can read it and claim from it, with no session. The token is the 22 characters after `/s/` in `shareUrl` from `GET /wishlist`, and an item's `id` comes from its `items`.
+
+```bash
+SHARE=<share token>; ITEM=<item id>
+curl -s "$API/shared/$SHARE"
+curl -s -X POST "$API/shared/$SHARE/items/$ITEM/claims" -H "Origin: $ORIGIN" -H 'content-type: application/json' \
+  -d '{"claimerName":"Aunt Sue","quantity":1}'
+# The answer carries the manage token, this once.
+MANAGE=<manage token>
+curl -s "$API/claims/$MANAGE"
+curl -s -X PATCH "$API/claims/$MANAGE" -H "Origin: $ORIGIN" -H 'content-type: application/json' -d '{"quantity":2}'
+curl -i -X DELETE "$API/claims/$MANAGE" -H "Origin: $ORIGIN" -H 'content-type: application/json' -d '{}'
+```
+
+- With the owner's cookie (`-b /tmp/jar`), `GET /shared/…` answers as the owner: `viewerIsOwner` is true, and there's no `remaining` or `claims` until `PATCH /wishlist` with `{"showClaimsToOwner":true}` (spec §5.1).
+- The owner can't claim from their own list (`403 OWNER_CANNOT_CLAIM`).
+- Claims and claim edits count against 20 an hour per IP and 30 an hour per list (spec §6.6). The counters are rows in `rate_limits`.
+
 ## Trying the editor
 
 With `pnpm dev` running, sign up at http://localhost:3000/signup, confirm the email from Mailpit, log in, and open `/list`.
