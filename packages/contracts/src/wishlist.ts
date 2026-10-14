@@ -97,8 +97,12 @@ export const ReorderItemsRequestSchema = z.object({
 });
 export type ReorderItemsRequest = z.infer<typeof ReorderItemsRequestSchema>;
 
-/** `showClaimsToOwner` joins this in Plan 4, with the claims it controls (D33). */
-export const UpdateWishlistRequestSchema = z.object({ title: WishlistTitleSchema });
+/** A new title, the spoiler setting, or both (spec §5, D33). */
+export const UpdateWishlistRequestSchema = z
+  .object({ title: WishlistTitleSchema.optional(), showClaimsToOwner: z.boolean().optional() })
+  .refine((body) => body.title !== undefined || body.showClaimsToOwner !== undefined, {
+    message: 'Change the title or the spoiler setting',
+  });
 export type UpdateWishlistRequest = z.infer<typeof UpdateWishlistRequestSchema>;
 
 /** A claim as gifters, and an owner who opted in, see it (spec §5). Never its manage token. */
@@ -118,7 +122,10 @@ export const ITEM_CLAIM_FIELDS = {
   claims: z.array(ClaimSchema).optional(),
 };
 
-/** An item as the owner sees it. Every field is present; empty ones are null (Plan 3a rule 1). */
+/**
+ * An item as the owner sees it. Every field is present; empty ones are null (Plan 3a rule 1).
+ * `remaining` and `claims` appear only once the owner opts in (spec §5.1).
+ */
 export const ItemSchema = z.object({
   id: z.uuid(),
   title: z.string(),
@@ -128,18 +135,24 @@ export const ItemSchema = z.object({
   note: z.string().nullable(),
   quantity: z.number().int(),
   position: z.number().int(),
+  ...ITEM_CLAIM_FIELDS,
 });
 export type Item = z.infer<typeof ItemSchema>;
 
-/** `GET /wishlist` (spec §5). Claim data arrives in Plan 4, for owners who opt in (D33). */
+/** `GET /wishlist` (spec §5). Fields added after Plan 3a are optional, for expand/contract (spec §10). */
 export const WishlistResponseSchema = z.object({
   title: z.string(),
   shareUrl: z.url(),
+  showClaimsToOwner: z.boolean().optional(),
   items: z.array(ItemSchema),
 });
 export type WishlistResponse = z.infer<typeof WishlistResponseSchema>;
 
-export const WishlistSettingsResponseSchema = z.object({ title: z.string(), shareUrl: z.url() });
+export const WishlistSettingsResponseSchema = z.object({
+  title: z.string(),
+  shareUrl: z.url(),
+  showClaimsToOwner: z.boolean().optional(),
+});
 export type WishlistSettingsResponse = z.infer<typeof WishlistSettingsResponseSchema>;
 
 export const RotateShareTokenResponseSchema = z.object({ shareUrl: z.url() });
