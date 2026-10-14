@@ -164,6 +164,18 @@ describe('GET /shared/:shareToken (spec §5)', () => {
     await client(t.app, await logIn(t)).post('/wishlist/share-token/rotate');
     for (const res of [await shared(token), await shared('abcdefghijklmnopqrstuv')]) {
       expect([res.status, codeOf(res)]).toEqual([404, ErrorCode.SHARE_LINK_NOT_FOUND]);
+      expect(res.headers['cache-control']).toBe('no-store');
+    }
+  });
+
+  it('never echoes the token in a problem the router raises (a sub-path, an undecodable token)', async () => {
+    const { token } = await adasList();
+    const extra = await shared(`${token}/extra`);
+    expect([extra.status, codeOf(extra)]).toEqual([404, ErrorCode.NOT_FOUND]);
+    const undecodable = await shared(`${token}%E0%A4%A`);
+    expect([undecodable.status, codeOf(undecodable)]).toEqual([400, ErrorCode.BAD_REQUEST]);
+    for (const res of [extra, undecodable]) {
+      expect(JSON.stringify(res.body)).not.toContain(token);
     }
   });
 

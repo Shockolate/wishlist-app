@@ -19,6 +19,14 @@ const MIDDLEWARE_DETAIL_BY_STATUS: Readonly<Record<number, string>> = {
   415: 'Unsupported content type.',
 };
 
+// Nest's own exceptions (unknown route, undecodable path parameter) put the request path in their
+// message, and the path can hold a share or manage token. So their detail is fixed per status too.
+const HTTP_EXCEPTION_DETAIL_BY_STATUS: Readonly<Record<number, string>> = {
+  400: 'The request is not valid.',
+  404: 'There is nothing at this address.',
+  405: 'This method is not allowed here.',
+};
+
 /** Maps anything thrown while handling a request to the problem we send. Never leaks 5xx detail. */
 export function toProblem(exception: unknown, requestId: string): Problem {
   if (exception instanceof AppError) {
@@ -26,7 +34,7 @@ export function toProblem(exception: unknown, requestId: string): Problem {
   }
   if (exception instanceof HttpException) {
     const status = exception.getStatus();
-    return build(status, codeFor(status), requestId, status < 500 ? exception.message : undefined);
+    return build(status, codeFor(status), requestId, HTTP_EXCEPTION_DETAIL_BY_STATUS[status]);
   }
   // Errors raised by Express middleware (body-parser) carry a status and an `expose` flag. Their
   // messages are not used, though: a JSON parse error quotes part of the request body, which could
