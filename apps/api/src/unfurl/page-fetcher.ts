@@ -207,7 +207,7 @@ function mediaType(contentType: string): string | undefined {
 
 /**
  * The body, decompressed. We ask for no compression, but some servers send it anyway (Plan 3a rule
- * 8). pipeline() destroys both sides on an error, so an abort still ends the read.
+ * 8). pipeline() destroys every stage on an error, so an abort still ends the read.
  */
 function decoded(body: Readable, encoding: string | string[] | undefined, raw: RawCap): Readable {
   const ignore = () => undefined;

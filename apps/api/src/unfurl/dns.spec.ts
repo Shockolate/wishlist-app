@@ -30,6 +30,8 @@ class FakeResolver implements DnsResolver {
 const noRecords = () => Promise.reject(Object.assign(new Error('none'), { code: 'ENODATA' }));
 const never = () => new Promise<string[]>(() => undefined);
 const live = () => new AbortController().signal;
+const answers = (family: 4 | 6) =>
+  family === 4 ? Promise.resolve(['93.184.216.34']) : noRecords();
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 afterEach(() => {
@@ -131,24 +133,82 @@ describe('createCaresResolve (spec §6.8, Plan 4a)', () => {
     await expect(theirLookup).rejects.toThrow();
   });
 
-  it('frees its turn when a lookup is cancelled, so the next can start', async () => {
+  it('a lookup abandoned in the queue leaves no slot behind', async () => {
     let created = 0;
+    const resolve = createCaresResolve({
+      maxConcurrent: 1,
+      newResolver: () => {
+        created++;
+        return new FakeResolver(created === 1 ? never : answers);
+      },
+    });
+    const first = new AbortController();
+    const running = resolve('slow.example', first.signal);
+    const second = new AbortController();
+    const waiting = resolve('next.example', second.signal);
+    second.abort(new Error('deadline'));
+    await expect(waiting).rejects.toThrow('deadline');
+    await flush();
+    first.abort(new Error('deadline'));
+    await expect(running).rejects.toThrow();
+    await expect(resolve('third.example', live())).resolves.toEqual(['93.184.216.34']);
+    expect(created).toBe(2);
+  });
+
+  it('creates no resolver for a lookup whose deadline passed during the hand-off', async () => {
+    let created = 0;
+    let finish = () => undefined as void;
     const resolve = createCaresResolve({
       maxConcurrent: 1,
       newResolver: () => {
         created++;
         return new FakeResolver(
           created === 1
-            ? never
-            : (family) => (family === 4 ? Promise.resolve(['93.184.216.34']) : noRecords()),
+            ? (family) =>
+                family === 4
+                  ? new Promise((answer) => {
+                      finish = () => answer(['93.184.216.34']);
+                    })
+                  : noRecords()
+            : answers,
         );
+      },
+    });
+    const running = resolve('slow.example', live());
+    const second = new AbortController();
+    // The turn is handed over by start(), which removes this listener. Abort right then, as a
+    // deadline could between the hand-off and the lookup beginning.
+    const remove = second.signal.removeEventListener.bind(second.signal);
+    vi.spyOn(second.signal, 'removeEventListener').mockImplementation((type, listener, options) => {
+      remove(type, listener, options);
+      second.abort(new Error('deadline'));
+    });
+    const waiting = resolve('next.example', second.signal);
+    await flush();
+    finish();
+    await running;
+    await expect(waiting).rejects.toThrow('deadline');
+    expect(created).toBe(1);
+    await expect(resolve('third.example', live())).resolves.toEqual(['93.184.216.34']);
+  });
+
+  it('frees its turn when an in-flight lookup is cancelled', async () => {
+    const resolvers: FakeResolver[] = [];
+    const resolve = createCaresResolve({
+      maxConcurrent: 1,
+      newResolver: () => {
+        const resolver = new FakeResolver(resolvers.length === 0 ? never : answers);
+        resolvers.push(resolver);
+        return resolver;
       },
     });
     const first = new AbortController();
     const stuck = resolve('slow.example', first.signal);
     const next = resolve('shop.example', live());
+    await flush();
     first.abort(new Error('deadline'));
     await expect(stuck).rejects.toThrow();
+    expect(resolvers[0]?.cancelled).toBe(true);
     await expect(next).resolves.toEqual(['93.184.216.34']);
   });
 

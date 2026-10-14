@@ -20,7 +20,8 @@ export interface CaresResolveOptions {
   newResolver?: () => DnsResolver;
 }
 
-// c-ares gives up by itself after two tries of two seconds, in case nothing cancels it.
+// c-ares gives up by itself after about 6-7 s per unreachable nameserver (2 s, then a doubled
+// retry), in case nothing cancels it. The fetch's deadline normally cancels it first.
 const newCaresResolver = (): DnsResolver => new Resolver({ timeout: 2_000, tries: 2 });
 
 /**
@@ -70,6 +71,9 @@ export function createCaresResolve(options: CaresResolveOptions = {}): Resolve {
   return async (hostname, signal) => {
     await acquire(signal);
     try {
+      // The deadline may have passed while this lookup waited for its turn to be handed over.
+      // Checked before the resolver exists, so such a lookup never creates a c-ares channel.
+      signal.throwIfAborted();
       return await lookUp(newResolver(), hostname, signal);
     } finally {
       release();
@@ -82,8 +86,6 @@ async function lookUp(
   hostname: string,
   signal: AbortSignal,
 ): Promise<string[]> {
-  // The deadline may have passed while this lookup waited for its turn to be handed over.
-  signal.throwIfAborted();
   const cancel = () => resolver.cancel();
   signal.addEventListener('abort', cancel, { once: true });
   try {
