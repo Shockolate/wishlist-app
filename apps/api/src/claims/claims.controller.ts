@@ -41,6 +41,7 @@ export class ClaimsController {
   }
 
   @Delete(':manageToken')
+  @Header('Cache-Control', 'no-store')
   @HttpCode(204)
   async cancel(@Param('manageToken') manageToken: string): Promise<void> {
     await this.claims.cancel(manageToken);

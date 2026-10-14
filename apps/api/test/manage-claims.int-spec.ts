@@ -252,7 +252,9 @@ describe('DELETE /claims/:manageToken (spec §5)', () => {
   it('cancels the claim, and frees what it held', async () => {
     const { token, kettle } = await adasKettle(1);
     const sue = await claimed(token, kettle, 'Sue');
-    expect((await cancel(sue.manageToken)).status).toBe(204);
+    const res = await cancel(sue.manageToken);
+    expect(res.status).toBe(204);
+    expect(res.headers['cache-control']).toBe('no-store');
     expect((await details(sue.manageToken)).status).toBe(404);
     expect((await claimed(token, kettle, 'Sam')).claim.quantity).toBe(1);
   });
