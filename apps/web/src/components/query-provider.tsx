@@ -59,7 +59,12 @@ export function updateCachedList(change: (list: WishlistResponse) => WishlistRes
   );
 }
 
-/** Marks the cached list stale, so /list fetches it again when it next shows (Plan 4b rule 12). */
+/**
+ * Marks the cached list stale (Plan 4b rule 12). The editor refetches on its next mount or tab
+ * focus, but only while no list change is waiting to be sent. While changes are queued it doesn't,
+ * and the refetch after they drain runs only if one of them failed or cancelled a fetch, so the
+ * list can stay as it is until the next mount or focus after the queue is empty.
+ */
 export function invalidateCachedList(): void {
   void browser?.client.invalidateQueries({ queryKey: WISHLIST_KEY });
 }
