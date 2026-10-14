@@ -27,6 +27,10 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   [ErrorCode.ORDER_CONFLICT]: 'Your list changed on another device, so we’ve reloaded it.',
   [ErrorCode.LIST_FULL]: 'Your list is full: 200 items is the most it can hold.',
   [ErrorCode.EMAIL_NOT_VERIFIED]: 'Confirm your email first, then try again.',
+  [ErrorCode.OWNER_CANNOT_CLAIM]: 'You can’t claim from your own list.',
+  [ErrorCode.MANAGE_TOKEN_IN_USE]:
+    'Something went wrong with this claim. Close this and try again.',
+  [ErrorCode.SHARE_LINK_NOT_FOUND]: 'This list’s link doesn’t work any more.',
 };
 
 const FALLBACK = 'Something went wrong on our side. Try again in a moment.';
@@ -59,6 +63,17 @@ export function hasCode(error: unknown, code: string): boolean {
 
 /** A change to an item that another device already deleted (a 404 on an item route). */
 export const ITEM_GONE = 'That item was already removed, so we’ve reloaded your list.';
+
+/** The claim sheet, when someone else took the last one first (spec §7 step 4). */
+export const LAST_ONE_GONE = 'Someone else just claimed the last one.';
+
+/** The claim sheet, when the owner deleted the item while it was open. */
+export const ITEM_TAKEN_OFF = 'This item was just taken off the list.';
+
+/** The claim sheet's 409 when some are still left: the stepper was set to them (spec §7). */
+export function claimConflictMessage(left: number): string {
+  return `Someone else claimed some while you were choosing, so only ${left} ${left === 1 ? 'is' : 'are'} left. We’ve set how many to ${left}.`;
+}
 
 /** errorMessage for the list editor, where a 404 can only mean the item is gone (Plan 3b rule 4). */
 export function listErrorMessage(error: unknown): string {

@@ -1,20 +1,9 @@
 'use client';
 
-import { useSyncExternalStore } from 'react';
 import { Button } from '@/components/ui/button';
+import { useCanShare } from '@/lib/use-can-share';
 import { CopyIcon, ShareIcon } from './icons';
 import { useListStatus } from './list-status';
-
-const nothingToWatch = () => () => undefined;
-
-/** Whether this browser can open the system share sheet. False while rendering on the server. */
-function useCanShare(): boolean {
-  return useSyncExternalStore(
-    nothingToWatch,
-    () => typeof navigator.share === 'function',
-    () => false,
-  );
-}
 
 /** Copy share link, and Share where the Web Share API exists (Plan 3b rule 9). */
 export function ShareActions({ title, shareUrl }: { title: string; shareUrl: string }) {
