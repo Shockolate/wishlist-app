@@ -3,7 +3,7 @@
 import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorCode, type WishlistResponse } from '@wishlist/contracts';
 import type { ReactNode } from 'react';
-import { WISHLIST_KEY } from '@/lib/list-cache';
+import { stripClaims, WISHLIST_KEY } from '@/lib/list-cache';
 import { hasCode } from '@/lib/messages';
 
 /**
@@ -58,4 +58,16 @@ export function updateCachedList(change: (list: WishlistResponse) => WishlistRes
 /** Marks the cached list stale, so /list fetches it again when it next shows (Plan 4b rule 12). */
 export function invalidateCachedList(): void {
   void browser?.client.invalidateQueries({ queryKey: WISHLIST_KEY });
+}
+
+/**
+ * Drops every claim from the cached list, for good (spec §5.1). A list fetch still on its way was
+ * started before the owner opted out, and would write its claims back when it lands. So the fetch
+ * is cancelled first: that reverts the cache to what it held before the fetch began, claims and
+ * all, and settles asynchronously. Only then is the cache stripped, or the revert would undo it.
+ */
+export async function hideCachedClaims(): Promise<void> {
+  if (!browser) return;
+  await browser.client.cancelQueries({ queryKey: WISHLIST_KEY });
+  updateCachedList(stripClaims);
 }

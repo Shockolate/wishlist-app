@@ -139,3 +139,58 @@ test('turning claims off hides them at once, with no reload (Review Focus 5)', a
   await expect(page.getByText('Aunt Sue')).toHaveCount(0);
   await expect(page.getByText('You can see who’s getting what.')).toHaveCount(0);
 });
+
+test('a list fetch still in flight when claims are turned off can’t bring them back (spoiler guarantee)', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const base = baseURL ?? '';
+  await verifiedOwner(page, base, 'toggle-inflight');
+  const kettle = await addItemViaApi(page.request, base, { title: 'Enamel kettle' });
+  const token = await shareTokenOf(page.request);
+  await claimViaApi((await guest(browser, base)).request, base, token, kettle.id, {
+    claimerName: 'Aunt Sue',
+  });
+  await page.request.patch('/api/wishlist', {
+    headers: { origin: base },
+    data: { showClaimsToOwner: true },
+  });
+
+  // Hold the mount refetch: it reads the list for real, now, with the claims in it, and answers
+  // only when released. Every later list fetch is held forever, so only the cache can be shown.
+  let release: () => void = () => undefined;
+  const released = new Promise<void>((resolve) => (release = resolve));
+  let held: () => void = () => undefined;
+  const heldGet = new Promise<void>((resolve) => (held = resolve));
+  let answered: () => void = () => undefined;
+  const lateAnswer = new Promise<void>((resolve) => (answered = resolve));
+  let first = true;
+  await page.route('**/api/wishlist', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    if (!first) return new Promise<void>(() => undefined);
+    first = false;
+    const real = await route.fetch();
+    held();
+    await released;
+    await route.fulfill({ response: real });
+    answered();
+  });
+
+  await page.goto('/list');
+  await heldGet;
+  await mainNav(page).getByRole('link', { name: 'Settings' }).click();
+  await toggle(page).click();
+  await expect(toggle(page)).toHaveAttribute('aria-checked', 'false');
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Claims are hidden from you again.' }),
+  ).toBeVisible();
+
+  // The old answer arrives late, claims and all.
+  release();
+  await lateAnswer;
+  await mainNav(page).getByRole('link', { name: 'Your list' }).click();
+  await expect(row(page, 'Enamel kettle')).toBeVisible();
+  await expect(page.getByText('Aunt Sue')).toHaveCount(0);
+  await expect(page.getByText('You can see who’s getting what.')).toHaveCount(0);
+});

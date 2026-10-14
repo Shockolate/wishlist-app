@@ -3,7 +3,11 @@
 import { ErrorCode, WishlistSettingsResponseSchema } from '@wishlist/contracts';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
-import { invalidateCachedList, updateCachedList } from '@/components/query-provider';
+import {
+  hideCachedClaims,
+  invalidateCachedList,
+  updateCachedList,
+} from '@/components/query-provider';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,7 +20,6 @@ import {
 import { Card } from '@/components/ui/card';
 import { Notice } from '@/components/ui/notice';
 import { browserApi } from '@/lib/browser-api';
-import { stripClaims } from '@/lib/list-cache';
 import { errorMessage, hasCode } from '@/lib/messages';
 import { LOGIN_AGAIN } from './name-form';
 
@@ -37,7 +40,7 @@ export function ClaimsCard({ showClaimsToOwner }: { showClaimsToOwner: boolean }
     setBusy(true);
     setFormError(null);
     setOn(next);
-    if (!next) updateCachedList(stripClaims);
+    if (!next) await hideCachedClaims();
     try {
       const settings = await browserApi.patch(
         '/wishlist',
@@ -48,8 +51,9 @@ export function ClaimsCard({ showClaimsToOwner }: { showClaimsToOwner: boolean }
       setOn(savedOn);
       if (savedOn) {
         updateCachedList((list) => ({ ...list, showClaimsToOwner: true }));
-        invalidateCachedList();
       }
+      // On: fetch the claims. Off: fetch the list again, so it is the server's, not the strip's.
+      invalidateCachedList();
       setMessage((last) => ({
         text: savedOn ? 'You’ll see who’s getting what.' : 'Claims are hidden from you again.',
         id: (last?.id ?? 0) + 1,
