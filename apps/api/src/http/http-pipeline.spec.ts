@@ -37,6 +37,13 @@ describe('HTTP pipeline', () => {
 
   afterAll(() => app.close());
 
+  it('marks every problem no-store, so no cache keeps an error (Plan 4b)', async () => {
+    for (const path of ['/api/definitely-not-a-route', '/api/probe/conflict', '/api/probe/crash']) {
+      const res = await http(app).get(path);
+      expect(res.headers['cache-control'], path).toBe('no-store');
+    }
+  });
+
   it('answers unknown routes with problem+json 404 carrying the request id', async () => {
     const res = await http(app).get('/api/definitely-not-a-route');
     expect(res.status).toBe(404);

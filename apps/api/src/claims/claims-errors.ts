@@ -14,6 +14,10 @@ export const shareLinkNotFound = (): AppError =>
 export const ownerCannotClaim = (): AppError =>
   new AppError(403, ErrorCode.OWNER_CANNOT_CLAIM, 'You cannot claim items on your own list.');
 
+/** A manage token that belongs to a claim on another item (D42). Says nothing more. */
+export const manageTokenInUse = (): AppError =>
+  new AppError(409, ErrorCode.MANAGE_TOKEN_IN_USE, 'This claim link is already in use.');
+
 /** Carries what's left, so the claim sheet can reset its stepper (spec §7). */
 export const claimExceedsRemaining = (remaining: number): AppError =>
   new AppError(409, ErrorCode.CLAIM_EXCEEDS_REMAINING, 'There are not that many left to claim.', {

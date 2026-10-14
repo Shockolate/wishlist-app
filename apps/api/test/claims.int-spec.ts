@@ -1,4 +1,5 @@
 import {
+  CAPABILITY_TOKEN_PATTERN,
   ClaimConflictProblemSchema,
   CreateClaimResponseSchema,
   ErrorCode,
@@ -7,7 +8,7 @@ import {
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { claimsListKey } from '../src/claims/rate-limits.js';
 import { newId } from '../src/core/ids.js';
-import { hashToken } from '../src/security/tokens.js';
+import { hashToken, newToken } from '../src/security/tokens.js';
 import { http } from '../src/testing/app.js';
 import { ADA, logIn, signUp, signUpVerified, type Account } from './support/accounts.js';
 import { createAuthTestApp, type AuthTestApp } from './support/auth-app.js';
@@ -60,7 +61,7 @@ async function adasKettle(quantity = 1) {
 }
 
 describe('POST /shared/:shareToken/items/:itemId/claims (spec §5)', () => {
-  it('claims for a guest, and returns the manage link this once', async () => {
+  it('claims for a guest, and returns the manage link', async () => {
     const { token, kettle } = await adasKettle(3);
     const res = await claim(token, kettle, { claimerName: ' Aunt Sue\n', quantity: 2 });
     expect(res.status).toBe(201);
@@ -270,5 +271,135 @@ describe('POST /shared/:shareToken/items/:itemId/claims (spec §5)', () => {
     ]);
     expect([change?.status, reorder?.status]).toEqual([200, 204]);
     for (const res of claims) expect([201, 409]).toContain(res.status);
+  });
+
+  it('refuses the owner with 403 even when the list’s claims are used up (D43)', async () => {
+    const { token, kettle } = await adasKettle(3);
+    const cookie = await logIn(t);
+    await fillBucket(db, claimsListKey(await wishlistIdOf(db, ADA.email)), 30);
+    const res = await claim(token, kettle, { claimerName: 'Ada' }, cookie);
+    expect([res.status, codeOf(res)]).toEqual([403, ErrorCode.OWNER_CANNOT_CLAIM]);
+  });
+
+  it('marks a refused claim no-store, like every problem (Plan 4b)', async () => {
+    const { token, kettle } = await adasKettle();
+    const res = await http(t.app)
+      .post(`/api/shared/${token}/items/${kettle}/claims`)
+      .send({ claimerName: 'Sue' });
+    expect(res.status).toBe(403);
+    expect(res.headers['cache-control']).toBe('no-store');
+  });
+});
+
+describe('replaying a claim with the sheet’s own manage token (D42)', () => {
+  it('claims with the token the sheet sent, and keeps only its hash', async () => {
+    const { token, kettle } = await adasKettle(3);
+    const manageToken = newToken(16);
+    const res = await claim(token, kettle, { claimerName: 'Sue', manageToken });
+    expect(res.status).toBe(201);
+    const body = CreateClaimResponseSchema.parse(res.body);
+    expect(body.manageToken).toBe(manageToken);
+    expect(body.manageUrl).toBe(`http://localhost:3000/c/${manageToken}`);
+    const { rows } = await db.pool.query('select manage_token_hash from claims');
+    expect(rows).toEqual([{ manage_token_hash: hashToken(manageToken) }]);
+  });
+
+  it('returns the same claim when the token comes back, and writes no second row', async () => {
+    const { token, kettle } = await adasKettle(3);
+    const manageToken = newToken(16);
+    const first = CreateClaimResponseSchema.parse(
+      (await claim(token, kettle, { claimerName: 'Sue', quantity: 2, manageToken })).body,
+    );
+    const again = await claim(token, kettle, { claimerName: 'Sue', quantity: 2, manageToken });
+    expect(again.status).toBe(201);
+    expect(CreateClaimResponseSchema.parse(again.body)).toEqual(first);
+    expect(await count('claims')).toBe(1);
+    expect(await claimedSum()).toBe(2);
+  });
+
+  it('replays the last unit with 201, never a 409 against itself', async () => {
+    const { token, kettle } = await adasKettle(1);
+    const manageToken = newToken(16);
+    expect((await claim(token, kettle, { claimerName: 'Sue', manageToken })).status).toBe(201);
+    const again = await claim(token, kettle, { claimerName: 'Sue', manageToken });
+    expect(again.status).toBe(201);
+    expect(await claimedSum()).toBe(1);
+  });
+
+  it('answers a replay with the claim as it is now, whatever the replay asked for', async () => {
+    const { token, kettle } = await adasKettle(3);
+    const manageToken = newToken(16);
+    await claim(token, kettle, { claimerName: 'Sue', manageToken });
+    await client(t.app).patch(`/claims/${manageToken}`, { claimerName: 'Aunt Sue', quantity: 2 });
+    const again = CreateClaimResponseSchema.parse(
+      (await claim(token, kettle, { claimerName: 'Sue', quantity: 1, manageToken })).body,
+    );
+    expect(again.claim).toMatchObject({ claimerName: 'Aunt Sue', quantity: 2 });
+  });
+
+  it('lets a double tap through once: both answers are the one claim', async () => {
+    const { token, kettle } = await adasKettle(1);
+    const manageToken = newToken(16);
+    const [a, b] = await Promise.all([
+      claim(token, kettle, { claimerName: 'Sue', manageToken }),
+      claim(token, kettle, { claimerName: 'Sue', manageToken }),
+    ]);
+    expect([a?.status, b?.status]).toEqual([201, 201]);
+    expect(CreateClaimResponseSchema.parse(a?.body).claim.id).toBe(
+      CreateClaimResponseSchema.parse(b?.body).claim.id,
+    );
+    expect(await count('claims')).toBe(1);
+  });
+
+  it('refuses a token that belongs to a claim on another item', async () => {
+    const { token, kettle } = await adasKettle(3);
+    const socks = await seedItem(db, ADA.email, 'Socks', 3);
+    const manageToken = newToken(16);
+    await claim(token, kettle, { claimerName: 'Sue', manageToken });
+    const res = await claim(token, socks, { claimerName: 'Sue', manageToken });
+    expect([res.status, codeOf(res)]).toEqual([409, ErrorCode.MANAGE_TOKEN_IN_USE]);
+    expect(JSON.stringify(res.body)).not.toContain(manageToken);
+    expect(await count('claims')).toBe(1);
+  });
+
+  // Two items claimed at once with one token take different row locks, so the lookup can't see
+  // the other's uncommitted row. The unique index catches it, and the answer is the same 409.
+  it('refuses the same token racing onto another item, through the unique index', async () => {
+    const { token, kettle } = await adasKettle(3);
+    const socks = await seedItem(db, ADA.email, 'Socks', 3);
+    const manageToken = newToken(16);
+    const holder = await db.pool.connect();
+    try {
+      await holder.query('begin');
+      await holder.query(
+        `insert into claims (id, item_id, claimer_name, quantity, manage_token_hash)
+         values ($1, $2, 'Holder', 1, $3)`,
+        [newId(), socks, hashToken(manageToken)],
+      );
+      const pending = claim(token, kettle, { claimerName: 'Sue', manageToken });
+      // Long enough for the claim to reach the unique index and wait on the holder's row.
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await holder.query('commit');
+      const res = await pending;
+      expect([res.status, codeOf(res)]).toEqual([409, ErrorCode.MANAGE_TOKEN_IN_USE]);
+    } finally {
+      await holder.query('rollback').catch(() => undefined);
+      holder.release();
+    }
+    expect(await count('claims')).toBe(1);
+  });
+
+  it('refuses a malformed token in the body with 400 VALIDATION_FAILED', async () => {
+    const { token, kettle } = await adasKettle();
+    const res = await claim(token, kettle, { claimerName: 'Sue', manageToken: 'short' });
+    expect([res.status, codeOf(res)]).toEqual([400, ErrorCode.VALIDATION_FAILED]);
+  });
+
+  it('mints a token that fits the pattern when the sheet sends none', async () => {
+    const { token, kettle } = await adasKettle();
+    const body = CreateClaimResponseSchema.parse(
+      (await claim(token, kettle, { claimerName: 'Sue' })).body,
+    );
+    expect(body.manageToken).toMatch(CAPABILITY_TOKEN_PATTERN);
   });
 });
