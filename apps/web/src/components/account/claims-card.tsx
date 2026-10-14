@@ -1,0 +1,132 @@
+'use client';
+
+import { ErrorCode, WishlistSettingsResponseSchema } from '@wishlist/contracts';
+import { useRouter } from 'next/navigation';
+import { useRef, useState } from 'react';
+import { invalidateCachedList, updateCachedList } from '@/components/query-provider';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Card } from '@/components/ui/card';
+import { Notice } from '@/components/ui/notice';
+import { browserApi } from '@/lib/browser-api';
+import { stripClaims } from '@/lib/list-cache';
+import { errorMessage, hasCode } from '@/lib/messages';
+import { LOGIN_AGAIN } from './name-form';
+
+/**
+ * The spoiler setting (spec §2 Spoilers, D33). Turning it on asks first; turning it off doesn't,
+ * and drops the claims this browser holds before the request returns (Plan 4b rule 12).
+ */
+export function ClaimsCard({ showClaimsToOwner }: { showClaimsToOwner: boolean }) {
+  const router = useRouter();
+  const [on, setOn] = useState(showClaimsToOwner);
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ text: string; id: number } | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
+
+  async function save(next: boolean) {
+    setBusy(true);
+    setFormError(null);
+    setOn(next);
+    if (!next) updateCachedList(stripClaims);
+    try {
+      const settings = await browserApi.patch(
+        '/wishlist',
+        { showClaimsToOwner: next },
+        WishlistSettingsResponseSchema,
+      );
+      const savedOn = settings.showClaimsToOwner === true;
+      setOn(savedOn);
+      if (savedOn) {
+        updateCachedList((list) => ({ ...list, showClaimsToOwner: true }));
+        invalidateCachedList();
+      }
+      setMessage((last) => ({
+        text: savedOn ? 'You’ll see who’s getting what.' : 'Claims are hidden from you again.',
+        id: (last?.id ?? 0) + 1,
+      }));
+      router.refresh();
+    } catch (error) {
+      if (hasCode(error, ErrorCode.UNAUTHENTICATED)) {
+        window.location.replace(LOGIN_AGAIN);
+        return;
+      }
+      // The server still has the old setting: the refetch brings the list back in line with it.
+      setOn(!next);
+      invalidateCachedList();
+      setFormError(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card aria-labelledby="claims-heading">
+      <h2 id="claims-heading" className="font-display text-3xl">
+        Claims
+      </h2>
+      <p className="mt-1.5 text-[15px] text-muted-foreground">
+        {on
+          ? 'You can see who claimed each item, on your list and on your share page. Gifters are told you can see.'
+          : 'Gifters claim items so nobody buys the same thing twice. You can’t see their claims, so your gifts stay a surprise.'}
+      </p>
+      <div className="mt-4 flex min-h-11 items-center gap-3">
+        <span id="claims-switch-label" className="flex-1 text-[15px] font-semibold">
+          Show me who’s getting what
+        </span>
+        <button
+          ref={toggle}
+          type="button"
+          role="switch"
+          aria-checked={on}
+          aria-labelledby="claims-switch-label"
+          disabled={busy}
+          onClick={() => (on ? void save(false) : setConfirming(true))}
+          className="group inline-flex h-8 w-[52px] shrink-0 items-center rounded-full border-[1.5px] border-input bg-card p-[3px] disabled:opacity-60 aria-checked:border-foreground aria-checked:bg-foreground"
+        >
+          <span className="size-6 rounded-full bg-input transition-transform group-aria-checked:translate-x-5 group-aria-checked:bg-background motion-reduce:transition-none" />
+        </button>
+      </div>
+      <AlertDialog open={confirming} onOpenChange={setConfirming}>
+        <AlertDialogContent
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            toggle.current?.focus();
+          }}
+        >
+          <AlertDialogTitle>See who’s getting what?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Your list and your share page will show who claimed each item, and how many are left.
+            Gifters will see a note that you can see their claims. You can turn this off again, but
+            you can’t unsee what you’ve seen.
+          </AlertDialogDescription>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep it a surprise</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void save(true)}>Show me</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <div role="status">
+        {message ? (
+          <Notice key={message.id} tone="success" announce={false} className="mt-4">
+            {message.text}
+          </Notice>
+        ) : null}
+      </div>
+      {formError ? (
+        <Notice tone="error" className="mt-4">
+          {formError}
+        </Notice>
+      ) : null}
+    </Card>
+  );
+}

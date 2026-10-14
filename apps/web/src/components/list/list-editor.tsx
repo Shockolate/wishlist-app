@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { WishlistResponseSchema, type WishlistResponse } from '@wishlist/contracts';
+import Link from 'next/link';
 import { browserApi } from '@/lib/browser-api';
 import { WISHLIST_KEY } from '@/lib/list-cache';
 import { AddItem } from './add-item';
@@ -47,6 +48,15 @@ function Editor({ initial }: { initial: WishlistResponse }) {
           ? 'Gifters see your list in this order, so put what you’d love most at the top.'
           : 'Add the things you’d love. When you’re ready, send one link to family and friends.'}
       </p>
+      {list.showClaimsToOwner ? (
+        <p className="mt-2 text-[15px] text-muted-foreground">
+          You can see who’s getting what.{' '}
+          <Link href="/settings" className="font-medium text-foreground underline">
+            Turn this off in Settings
+          </Link>
+          .
+        </p>
+      ) : null}
       {hasItems ? <ShareActions title={list.title} shareUrl={list.shareUrl} /> : null}
       <AddItem />
       <ListStatusLine />

@@ -54,3 +54,8 @@ export function updateCachedList(change: (list: WishlistResponse) => WishlistRes
     list ? change(list) : list,
   );
 }
+
+/** Marks the cached list stale, so /list fetches it again when it next shows (Plan 4b rule 12). */
+export function invalidateCachedList(): void {
+  void browser?.client.invalidateQueries({ queryKey: WISHLIST_KEY });
+}
