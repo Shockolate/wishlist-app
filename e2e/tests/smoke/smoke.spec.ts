@@ -19,6 +19,13 @@ test('auth is live: /api/me without a session answers 401 UNAUTHENTICATED', asyn
   expect(ProblemSchema.parse(await res.json()).code).toBe(ErrorCode.UNAUTHENTICATED);
 });
 
+test('an unknown share link answers 404 SHARE_LINK_NOT_FOUND (spec §8)', async ({ request }) => {
+  // 22 characters, so it's well-formed; the chance a real list has it is 2^-128.
+  const res = await request.get('/api/shared/AAAAAAAAAAAAAAAAAAAAAA');
+  expect(res.status()).toBe(404);
+  expect(ProblemSchema.parse(await res.json()).code).toBe(ErrorCode.SHARE_LINK_NOT_FOUND);
+});
+
 test('landing page renders', async ({ page }) => {
   await page.goto('/');
   await expect(

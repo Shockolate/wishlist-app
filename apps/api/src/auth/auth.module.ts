@@ -11,7 +11,7 @@ import { MeController } from './me.controller.js';
 import { PasswordResetController } from './password-reset.controller.js';
 import { PasswordResetService } from './password-reset.service.js';
 import { SessionController } from './session.controller.js';
-import { SessionGuard } from './session.guard.js';
+import { OptionalSessionGuard, SessionGuard } from './session.guard.js';
 import { SessionsService } from './sessions.service.js';
 import { SignupController } from './signup.controller.js';
 import { SignupService } from './signup.service.js';
@@ -24,6 +24,7 @@ import { VerifiedGuard } from './verified.guard.js';
   providers: [
     SessionsService,
     SessionGuard,
+    OptionalSessionGuard,
     VerifiedGuard,
     EmailTokensService,
     EmailGate,
@@ -33,6 +34,6 @@ import { VerifiedGuard } from './verified.guard.js';
     PasswordResetService,
     AccountService,
   ],
-  exports: [SessionsService, SessionGuard, VerifiedGuard],
+  exports: [SessionsService, SessionGuard, OptionalSessionGuard, VerifiedGuard],
 })
 export class AuthModule {}
