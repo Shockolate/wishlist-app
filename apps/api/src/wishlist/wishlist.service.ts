@@ -1,10 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type {
   RotateShareTokenResponse,
+  UpdateWishlistRequest,
   WishlistResponse,
   WishlistSettingsResponse,
 } from '@wishlist/contracts';
 import { asc, eq } from 'drizzle-orm';
+import { projectWishlist, seesClaims, type Viewer } from '../claims/projection.js';
+import { readClaims, SNAPSHOT } from '../claims/queries.js';
 import { CLOCK, type Clock } from '../core/clock.js';
 import { ENV, type Env } from '../core/env.js';
 import { DB, type Database } from '../db/database.module.js';
@@ -14,7 +17,7 @@ import { newToken } from '../security/tokens.js';
 import { ITEM_COLUMNS } from './item-columns.js';
 import { shareUrl as shareUrlFor } from './links.js';
 
-/** The list itself: reading it, renaming it and rotating its share link (spec §5). */
+/** The list itself: reading it, its settings, and rotating its share link (spec §5). */
 @Injectable()
 export class WishlistService {
   constructor(
@@ -23,29 +26,65 @@ export class WishlistService {
     @Inject(ENV) private readonly env: Env,
   ) {}
 
-  /** The owner's list with its items in order. Claim data joins it in Plan 4 (D33). */
+  /**
+   * The owner's list, its items in order, and claim data only after opting in (spec §5.1). One
+   * snapshot, so `remaining` agrees with the items beside it.
+   */
   async get(ownerId: string): Promise<WishlistResponse> {
-    const [list] = await this.db
-      .select({ id: wishlists.id, title: wishlists.title, shareToken: wishlists.shareToken })
-      .from(wishlists)
-      .where(eq(wishlists.ownerId, ownerId));
-    if (!list) throw unauthenticated();
-    const rows = await this.db
-      .select(ITEM_COLUMNS)
-      .from(items)
-      .where(eq(items.wishlistId, list.id))
-      .orderBy(asc(items.position), asc(items.id));
-    return { title: list.title, shareUrl: this.shareUrl(list.shareToken), items: rows };
+    return this.db.transaction(async (tx) => {
+      const [list] = await tx
+        .select({
+          id: wishlists.id,
+          title: wishlists.title,
+          shareToken: wishlists.shareToken,
+          showClaims: wishlists.showClaimsToOwner,
+        })
+        .from(wishlists)
+        .where(eq(wishlists.ownerId, ownerId));
+      if (!list) throw unauthenticated();
+      const rows = await tx
+        .select(ITEM_COLUMNS)
+        .from(items)
+        .where(eq(items.wishlistId, list.id))
+        .orderBy(asc(items.position), asc(items.id));
+      const viewer: Viewer = { kind: 'owner', showClaims: list.showClaims };
+      // An owner who hasn't opted in never gets claim data: it isn't even read (spec §5).
+      const claimRows = seesClaims(viewer) ? await readClaims(tx, list.id) : [];
+      return {
+        title: list.title,
+        shareUrl: this.shareUrl(list.shareToken),
+        showClaimsToOwner: list.showClaims,
+        items: projectWishlist(rows, claimRows, viewer),
+      };
+    }, SNAPSHOT);
   }
 
-  async rename(ownerId: string, title: string): Promise<WishlistSettingsResponse> {
+  /** A new title, the spoiler setting, or both (spec §5, D33). One UPDATE takes the row lock. */
+  async updateSettings(
+    ownerId: string,
+    changes: UpdateWishlistRequest,
+  ): Promise<WishlistSettingsResponse> {
     const [list] = await this.db
       .update(wishlists)
-      .set({ title, updatedAt: this.clock.now() })
+      .set({
+        ...(changes.title !== undefined && { title: changes.title }),
+        ...(changes.showClaimsToOwner !== undefined && {
+          showClaimsToOwner: changes.showClaimsToOwner,
+        }),
+        updatedAt: this.clock.now(),
+      })
       .where(eq(wishlists.ownerId, ownerId))
-      .returning({ title: wishlists.title, shareToken: wishlists.shareToken });
+      .returning({
+        title: wishlists.title,
+        shareToken: wishlists.shareToken,
+        showClaimsToOwner: wishlists.showClaimsToOwner,
+      });
     if (!list) throw unauthenticated();
-    return { title: list.title, shareUrl: this.shareUrl(list.shareToken) };
+    return {
+      title: list.title,
+      shareUrl: this.shareUrl(list.shareToken),
+      showClaimsToOwner: list.showClaimsToOwner,
+    };
   }
 
   /** A fresh token: the old link stops working at once, and claims are unaffected (spec §2). */

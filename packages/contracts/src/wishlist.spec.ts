@@ -114,13 +114,24 @@ describe('ReorderItemsRequestSchema', () => {
   });
 });
 
-describe('UpdateWishlistRequestSchema', () => {
-  it('trims the title and allows up to 100 characters', () => {
-    expect(UpdateWishlistRequestSchema.parse({ title: '  Birthday  ' })).toEqual({
+describe('UpdateWishlistRequestSchema (spec §5, D33)', () => {
+  it('takes a title, the spoiler setting, or both', () => {
+    expect(UpdateWishlistRequestSchema.parse({ title: ' Birthday ' })).toEqual({
       title: 'Birthday',
     });
-    expect(UpdateWishlistRequestSchema.safeParse({ title: 'a'.repeat(101) }).success).toBe(false);
-    expect(UpdateWishlistRequestSchema.safeParse({ title: '  ' }).success).toBe(false);
+    expect(UpdateWishlistRequestSchema.parse({ showClaimsToOwner: true })).toEqual({
+      showClaimsToOwner: true,
+    });
+  });
+
+  it.each([
+    {},
+    { showClaimsToOwner: 'yes' },
+    { title: '' },
+    { title: '  ' },
+    { title: 'a'.repeat(101) },
+  ])('refuses %j', (body) => {
+    expect(UpdateWishlistRequestSchema.safeParse(body).success).toBe(false);
   });
 });
 

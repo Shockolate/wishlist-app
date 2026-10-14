@@ -1,15 +1,19 @@
 import {
+  ClaimDetailsResponseSchema,
+  CreateClaimResponseSchema,
   ErrorCode,
   ProblemSchema,
   RotateShareTokenResponseSchema,
+  SharedWishlistResponseSchema,
   WishlistResponseSchema,
   WishlistSettingsResponseSchema,
 } from '@wishlist/contracts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { logIn, signUp, signUpVerified } from './support/accounts.js';
+import { ADA, logIn, signUp, signUpVerified } from './support/accounts.js';
 import { createAuthTestApp, type AuthTestApp } from './support/auth-app.js';
 import { client, type ApiResponse } from './support/client.js';
 import { openTestDatabase } from './support/database.js';
+import { seedClaim, seedItem, shareTokenOf } from './support/lists.js';
 
 const db = openTestDatabase();
 let t: AuthTestApp;
@@ -64,13 +68,27 @@ describe('GET /wishlist (spec §5)', () => {
     expect(WishlistResponseSchema.parse(res.body)).toEqual({
       title: "Ada's wishlist",
       shareUrl: expect.stringMatching(/^http:\/\/localhost:3000\/s\/[A-Za-z0-9_-]{22}$/) as string,
+      showClaimsToOwner: false,
       items: [],
     });
   });
 
-  it('carries no claim data and no spoiler setting before Plan 4 (D33)', async () => {
-    const res = await client(t.app, await owner()).get('/wishlist');
-    expect(Object.keys(res.body as object).sort()).toEqual(['items', 'shareUrl', 'title']);
+  it('says whether the owner sees claims, and carries none until the owner opts in (spec §5.1, §8)', async () => {
+    const cookie = await owner();
+    const kettle = await seedItem(db, ADA.email, 'Kettle', 2);
+    await seedClaim(db, kettle, 'Sue', 1);
+    const res = await client(t.app, cookie).get('/wishlist');
+    expect(Object.keys(res.body as object).sort()).toEqual([
+      'items',
+      'shareUrl',
+      'showClaimsToOwner',
+      'title',
+    ]);
+    const body = res.body as { showClaimsToOwner: boolean; items: object[] };
+    expect(body.showClaimsToOwner).toBe(false);
+    expect(body.items[0]).not.toHaveProperty('remaining');
+    expect(body.items[0]).not.toHaveProperty('claims');
+    expect(JSON.stringify(res.body)).not.toContain('Sue');
   });
 });
 
@@ -97,16 +115,62 @@ describe('PATCH /wishlist (spec §5)', () => {
     expect(list.title).toBe("Ada's wishlist");
   });
 
-  it('ignores showClaimsToOwner until Plan 4 (D33)', async () => {
-    const res = await client(t.app, await owner()).patch('/wishlist', {
+  it('turns the spoiler setting on and off, leaving the title alone (D33)', async () => {
+    const cookie = await owner();
+    const kettle = await seedItem(db, ADA.email, 'Kettle', 2);
+    const sue = await seedClaim(db, kettle, 'Sue', 1);
+
+    const on = await client(t.app, cookie).patch('/wishlist', { showClaimsToOwner: true });
+    expect(on.status).toBe(200);
+    expect(WishlistSettingsResponseSchema.parse(on.body)).toMatchObject({
+      title: "Ada's wishlist",
+      showClaimsToOwner: true,
+    });
+    const shown = WishlistResponseSchema.parse((await client(t.app, cookie).get('/wishlist')).body);
+    expect(shown.items[0]).toMatchObject({
+      remaining: 1,
+      claims: [{ id: sue.id, claimerName: 'Sue', quantity: 1 }],
+    });
+
+    await client(t.app, cookie).patch('/wishlist', { showClaimsToOwner: false });
+    const hidden = (await client(t.app, cookie).get('/wishlist')).body as { items: object[] };
+    expect(hidden.items[0]).not.toHaveProperty('claims');
+  });
+
+  it('renames without touching the spoiler setting', async () => {
+    const cookie = await owner();
+    await client(t.app, cookie).patch('/wishlist', { showClaimsToOwner: true });
+    const res = await client(t.app, cookie).patch('/wishlist', { title: 'Birthday' });
+    expect(WishlistSettingsResponseSchema.parse(res.body)).toMatchObject({
       title: 'Birthday',
       showClaimsToOwner: true,
     });
-    expect(res.status).toBe(200);
-    const { rows } = await db.pool.query<{ show: boolean }>(
-      'select show_claims_to_owner as show from wishlists',
+  });
+
+  it.each([{}, { showClaimsToOwner: 'yes' }])('refuses %j with 400', async (body) => {
+    const res = await client(t.app, await owner()).patch('/wishlist', body);
+    expect([res.status, codeOf(res)]).toEqual([400, ErrorCode.VALIDATION_FAILED]);
+  });
+
+  it('tells gifters which way the setting is, on the share page and the manage page (D40)', async () => {
+    const cookie = await owner();
+    const kettle = await seedItem(db, ADA.email, 'Kettle', 2);
+    const token = await shareTokenOf(db, ADA.email);
+    const made = CreateClaimResponseSchema.parse(
+      (
+        await client(t.app).post(`/shared/${token}/items/${kettle}/claims`, {
+          claimerName: 'Sue',
+        })
+      ).body,
     );
-    expect(rows[0]?.show).toBe(false);
+    await client(t.app, cookie).patch('/wishlist', { showClaimsToOwner: true });
+    const page = SharedWishlistResponseSchema.parse(
+      (await client(t.app).get(`/shared/${token}`)).body,
+    );
+    const manage = ClaimDetailsResponseSchema.parse(
+      (await client(t.app).get(`/claims/${made.manageToken}`)).body,
+    );
+    expect([page.ownerSeesClaims, manage.ownerSeesClaims]).toEqual([true, true]);
   });
 });
 

@@ -42,11 +42,11 @@ export class WishlistController {
 
   @Patch()
   @Header('Cache-Control', 'no-store')
-  rename(
+  update(
     @CurrentAuth() auth: AuthContext,
     @Body(new ZodValidationPipe(UpdateWishlistRequestSchema)) body: UpdateWishlistRequest,
   ): Promise<WishlistSettingsResponse> {
-    return this.wishlist.rename(auth.user.id, body.title);
+    return this.wishlist.updateSettings(auth.user.id, body);
   }
 
   @Post('share-token/rotate')
