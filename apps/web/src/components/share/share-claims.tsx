@@ -33,6 +33,12 @@ interface ShareClaims {
   open(item: SharedItem, trigger: HTMLElement): void;
   remember(record: ClaimRecord): void;
   forget(manageToken: string): void;
+  /**
+   * Tokens of claims whose answer hasn't come, by item ID, in memory only. Storage can throw, and
+   * then a sheet that is closed and opened again would otherwise mint a second token for a claim
+   * the first may have made (D42). Kept and cleared by the same rule as the stored record.
+   */
+  pendingTokens: Map<string, string>;
 }
 
 const ShareClaimsContext = createContext<ShareClaims | null>(null);
@@ -58,6 +64,7 @@ export function ShareClaimsProvider({
   const records = useSyncExternalStore(subscribeRecords, currentRecords, noRecords);
   const [openItem, setOpenItem] = useState<SharedItem | null>(null);
   const trigger = useRef<HTMLElement | null>(null);
+  const [pendingTokens] = useState(() => new Map<string, string>());
 
   const remember = useCallback((record: ClaimRecord) => {
     updateRecords((all) => saveRecord(all, record));
@@ -94,27 +101,29 @@ export function ShareClaimsProvider({
   }, [items, remember, forget]);
 
   // The button that opened the sheet, or the item's title once a claim has replaced the button.
+  // If the item has gone too, the page's heading.
   const returnFocus = useCallback(() => {
     const from = trigger.current;
     const target = from?.isConnected
       ? from
-      : openItem
-        ? document.getElementById(`item-${openItem.id}`)
-        : null;
+      : ((openItem ? document.getElementById(`item-${openItem.id}`) : null) ??
+        document.querySelector('h1'));
     target?.focus();
   }, [openItem]);
 
   const value = useMemo(
-    () => ({ records, open, remember, forget }),
-    [records, open, remember, forget],
+    () => ({ records, open, remember, forget, pendingTokens }),
+    [records, open, remember, forget, pendingTokens],
   );
+  // The sheet shows the item as the page has it now, so a refresh after a conflict updates it.
+  const shown = openItem ? (items.find((i) => i.id === openItem.id) ?? openItem) : null;
   return (
     <ShareClaimsContext value={value}>
       {children}
-      {openItem ? (
+      {shown ? (
         <ClaimSheet
-          key={openItem.id}
-          item={openItem}
+          key={shown.id}
+          item={shown}
           shareToken={shareToken}
           ownerName={ownerName}
           ownerSeesClaims={ownerSeesClaims}
