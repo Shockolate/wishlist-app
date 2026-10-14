@@ -107,7 +107,7 @@ curl -i -X DELETE "$API/claims/$MANAGE" -H "Origin: $ORIGIN" -H 'content-type: a
 
 - With the owner's cookie (`-b /tmp/jar`), `GET /shared/…` answers as the owner: `viewerIsOwner` is true, and there's no `remaining` or `claims` until `PATCH /wishlist` with `{"showClaimsToOwner":true}` (spec §5.1).
 - The owner can't claim from their own list (`403 OWNER_CANNOT_CLAIM`).
-- Claims and claim changes count against 20 an hour per IP and 30 an hour per list (spec §6.6). The counters are rows in `rate_limits`.
+- Claims and claim edits count against 20 an hour per IP and 30 an hour per list (spec §6.6). The counters are rows in `rate_limits`.
 
 ## Trying the editor
 
