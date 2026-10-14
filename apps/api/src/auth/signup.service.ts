@@ -1,5 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { ResendVerificationRequest, SignupRequest } from '@wishlist/contracts';
+import {
+  defaultWishlistTitle,
+  type ResendVerificationRequest,
+  type SignupRequest,
+} from '@wishlist/contracts';
 import { and, eq, isNull } from 'drizzle-orm';
 import { CLOCK, type Clock } from '../core/clock.js';
 import { newId } from '../core/ids.js';
@@ -59,7 +63,7 @@ export class SignupService {
       await tx.insert(wishlists).values({
         id: newId(),
         ownerId: userId,
-        title: `${input.displayName}'s wishlist`,
+        title: defaultWishlistTitle(input.displayName),
         shareToken: newToken(16),
         createdAt: now,
         updatedAt: now,

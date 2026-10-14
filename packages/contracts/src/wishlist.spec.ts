@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DisplayNameSchema } from './auth.js';
 import {
   CreateItemRequestSchema,
   ImageUrlSchema,
@@ -13,6 +14,7 @@ import {
   UpdateItemRequestSchema,
   UpdateWishlistRequestSchema,
   WishlistTitleSchema,
+  defaultWishlistTitle,
 } from './wishlist.js';
 
 const ID = '0199a3b2-0000-7000-8000-000000000001';
@@ -243,5 +245,29 @@ describe('PriceTextSchema: visible characters only (D36)', () => {
 
   it('still stores a blank price as null', () => {
     expect(PriceTextSchema.parse('  ')).toBeNull();
+  });
+});
+
+describe('blank-looking text elsewhere (D41)', () => {
+  it.each([
+    ['WishlistTitleSchema', WishlistTitleSchema],
+    ['ItemTitleSchema', ItemTitleSchema],
+    ['PriceTextSchema', PriceTextSchema],
+  ] as const)('%s refuses a value that draws nothing', (_name, schema) => {
+    expect(schema.safeParse('\u3164\u2800').success).toBe(false);
+  });
+});
+
+describe('defaultWishlistTitle (spec §2, Plan 4a rule 11)', () => {
+  it.each(['Ada', 'a'.repeat(50), '\u{1F469}‍\u{1F373} Ada', 'می‌خواهم', "O'Brien", 'Ada\u3164'])(
+    'builds a valid title from the display name %j',
+    (name) => {
+      const title = defaultWishlistTitle(DisplayNameSchema.parse(name));
+      expect(WishlistTitleSchema.parse(title)).toBe(title);
+    },
+  );
+
+  it('is the title sign-up gives', () => {
+    expect(defaultWishlistTitle('Ada')).toBe("Ada's wishlist");
   });
 });

@@ -128,6 +128,23 @@ describe('DisplayNameSchema (Plan 2b rule 14)', () => {
     expect(result.error?.issues[0]?.message).toBe('Use visible characters only');
   });
 
+  it.each([
+    ['a Hangul filler', '\u3164'],
+    ['Hangul fillers', '\u3164\u3164'],
+    ['the leading and vowel fillers', '\u115F\u1160'],
+    ['a halfwidth filler', '\uFFA0'],
+    ['a Braille blank in spaces', ' \u2800 '],
+    ['a combining grapheme joiner', '\u034F'],
+    ['Khmer inherent vowels', '\u17B4\u17B5'],
+    ['a joiner and a filler', '\u200D\u3164'],
+  ])('refuses a name that draws nothing: %s (D41)', (_label, name) => {
+    expect(DisplayNameSchema.safeParse(name).success).toBe(false);
+  });
+
+  it.each(['Ada\u3164', '\u2800Ada'])('keeps %j as typed: something in it shows (D41)', (name) => {
+    expect(DisplayNameSchema.parse(name)).toBe(name);
+  });
+
   it('reports an empty name once, as too short', () => {
     const result = DisplayNameSchema.safeParse('  ');
     expect(result.error?.issues.map((issue) => issue.code)).toEqual(['too_small']);
