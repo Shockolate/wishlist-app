@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm';
+import { asc, eq, sql } from 'drizzle-orm';
 import type { Transaction } from '../db/database.module.js';
 import { claims, items } from '../db/schema.js';
 import type { ClaimRow } from './projection.js';
@@ -43,4 +43,13 @@ export function readClaims(tx: Transaction, wishlistId: string): Promise<ClaimRo
     .innerJoin(items, eq(items.id, claims.itemId))
     .where(eq(items.wishlistId, wishlistId))
     .orderBy(asc(claims.createdAt), asc(claims.id));
+}
+
+/** How many of an item are claimed, every claim counted. */
+export async function claimedTotal(tx: Transaction, itemId: string): Promise<number> {
+  const [row] = await tx
+    .select({ total: sql<number>`coalesce(sum(${claims.quantity}), 0)::int` })
+    .from(claims)
+    .where(eq(claims.itemId, itemId));
+  return row?.total ?? 0;
 }

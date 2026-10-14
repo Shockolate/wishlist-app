@@ -12,6 +12,7 @@ import { items, wishlists } from '../db/schema.js';
 import { unauthenticated } from '../http/errors.js';
 import { newToken } from '../security/tokens.js';
 import { ITEM_COLUMNS } from './item-columns.js';
+import { shareUrl as shareUrlFor } from './links.js';
 
 /** The list itself: reading it, renaming it and rotating its share link (spec §5). */
 @Injectable()
@@ -59,6 +60,6 @@ export class WishlistService {
   }
 
   private shareUrl(shareToken: string): string {
-    return `${this.env.APP_ORIGIN}/s/${shareToken}`;
+    return shareUrlFor(this.env.APP_ORIGIN, shareToken);
   }
 }
