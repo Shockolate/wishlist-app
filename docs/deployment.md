@@ -130,7 +130,13 @@ read -rs TURNSTILE_SECRET && printf %s "$TURNSTILE_SECRET" \
 unset TURNSTILE_SECRET
 ```
 
-Then redeploy (or merge to `main`). Sign up with a real address on https://hanker.dev, and check that the verification email arrives from `no-reply@mail.hanker.dev`.
+A runtime variable applies to the next deployment, so deploy `main` again and wait for every job to pass:
+
+```bash
+gh workflow run deploy.yml --ref main
+```
+
+Then check, without making an account: a sign-up with a made-up Turnstile token is now refused with `400 CAPTCHA_FAILED`, not `503 CAPTCHA_UNAVAILABLE`. Finally, sign up with a real address on https://hanker.dev, and check that the verification email arrives from `no-reply@mail.hanker.dev`.
 
 ## GitHub configuration
 
