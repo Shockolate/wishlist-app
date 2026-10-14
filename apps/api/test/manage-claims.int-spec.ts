@@ -227,6 +227,34 @@ describe('PATCH /claims/:manageToken (spec §5)', () => {
     expect(await claimedSum()).toBe(3);
   });
 
+  it('re-reads the claim under the lock, so a quantity changed meanwhile is the one judged', async () => {
+    const { token, kettle } = await adasKettle(3);
+    const sue = await claimed(token, kettle, 'Sue', 2);
+    await claimed(token, kettle, 'Sam', 1);
+    const holder = await db.pool.connect();
+    let patch: Promise<ApiResponse> | undefined;
+    try {
+      await holder.query('begin');
+      await holder.query('select id from items where id = $1 for update', [kettle]);
+      await holder.query('update claims set quantity = 1 where manage_token_hash = $1', [
+        hashToken(sue.manageToken),
+      ]);
+      await holder.query(
+        `insert into claims (id, item_id, claimer_name, quantity, manage_token_hash)
+         values (gen_random_uuid(), $1, 'Kim', 1, $2)`,
+        [kettle, hashToken('kim')],
+      );
+      patch = change(sue.manageToken, { quantity: 2 }).then((res) => res);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await holder.query('commit');
+    } finally {
+      await holder.query('rollback').catch(() => undefined);
+      holder.release();
+    }
+    expect((await patch)?.status).toBe(409);
+    expect(await claimedSum()).toBe(3);
+  });
+
   it('shares the claim limits: the list’s and the IP’s (spec §6.6)', async () => {
     const { token, kettle } = await adasKettle(5);
     const sue = await claimed(token, kettle, 'Sue');
