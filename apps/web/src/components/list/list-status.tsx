@@ -73,10 +73,17 @@ export function ListStatusLine() {
   const errorNotice = useRef<HTMLDivElement>(null);
   const errorId = message?.tone === 'error' ? message.id : null;
   // A failure refetches the list, and the re-render that brings its answer is what can drop focus,
-  // so look again when the refetch starts and when it ends.
+  // so look again when the refetch starts and when it ends. Only that refetch: once its answer has
+  // rendered, a later refetch (back on the tab, say) must not pull focus, and the page with it,
+  // back to an old error.
   const fetching = useIsFetching({ queryKey: WISHLIST_KEY });
+  const refetchSeen = useRef<number | null>(null);
+  const settled = useRef<number | null>(null);
   useEffect(() => {
-    if (errorId !== null && focusIsLost()) errorNotice.current?.focus();
+    if (errorId === null || settled.current === errorId) return;
+    if (focusIsLost()) errorNotice.current?.focus();
+    if (fetching > 0) refetchSeen.current = errorId;
+    else if (refetchSeen.current === errorId) settled.current = errorId;
   }, [errorId, fetching]);
   return (
     <>

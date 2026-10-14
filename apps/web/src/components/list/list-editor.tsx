@@ -23,9 +23,11 @@ function Editor({ initial }: { initial: WishlistResponse }) {
   const { data: list } = useQuery({
     queryKey: WISHLIST_KEY,
     queryFn: () => browserApi.get('/wishlist', WishlistResponseSchema),
-    // Only the first mount's render seeds the cache: a later mount reuses the live client's data.
+    // Only the first mount's render seeds the cache: a later mount reuses the live client's data,
+    // however long the owner was away, because the list is never garbage-collected.
     initialData: initial,
     staleTime: Infinity,
+    gcTime: Infinity,
     // Nothing else makes this stale, so it refetches when the person comes back to the tab and when
     // the page mounts, but only while nothing is waiting to be sent (Plan 3b rule 1, as amended by
     // the final review). The mount refetch is for Back: Next restores the page's server render from

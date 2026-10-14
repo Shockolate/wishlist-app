@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { updateCachedList } from '@/components/query-provider';
 import { Notice } from '@/components/ui/notice';
 import { browserApi } from '@/lib/browser-api';
 import { formErrorMap } from '@/lib/form-errors';
@@ -42,6 +43,7 @@ export function ListNameForm({ title }: { title: string }) {
       const settings = await browserApi.patch('/wishlist', values, WishlistSettingsResponseSchema);
       // Show what the server stored, and make the form clean again.
       reset({ title: settings.title });
+      updateCachedList((list) => ({ ...list, title: settings.title }));
       setSaved(true);
       router.refresh();
     } catch (error) {
