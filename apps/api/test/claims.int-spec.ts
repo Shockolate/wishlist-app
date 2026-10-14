@@ -1,0 +1,240 @@
+import {
+  ClaimConflictProblemSchema,
+  CreateClaimResponseSchema,
+  ErrorCode,
+  ProblemSchema,
+} from '@wishlist/contracts';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { claimsListKey } from '../src/claims/rate-limits.js';
+import { hashToken } from '../src/security/tokens.js';
+import { http } from '../src/testing/app.js';
+import { ADA, logIn, signUp, signUpVerified, type Account } from './support/accounts.js';
+import { createAuthTestApp, type AuthTestApp } from './support/auth-app.js';
+import { client, type ApiResponse } from './support/client.js';
+import { openTestDatabase } from './support/database.js';
+import { seedItem, shareTokenOf, wishlistIdOf } from './support/lists.js';
+import { fillBucket } from './support/rate-limits.js';
+
+const db = openTestDatabase();
+let t: AuthTestApp;
+
+beforeAll(async () => {
+  t = await createAuthTestApp(db.url);
+});
+
+afterAll(async () => {
+  await t.app.close();
+  await db.close();
+});
+
+beforeEach(async () => {
+  await db.truncateAll();
+  t.reset();
+});
+
+const BOB: Account = {
+  email: 'bob@example.com',
+  password: 'another fine passphrase 2',
+  displayName: 'Bob',
+};
+const UNKNOWN_ID = '0199a3b2-0000-7000-8000-0000000000ff';
+const UNKNOWN_TOKEN = 'abcdefghijklmnopqrstuv';
+
+const codeOf = (res: ApiResponse) => ProblemSchema.parse(res.body).code;
+const claim = (token: string, itemId: string, body: object, cookie?: string) =>
+  client(t.app, cookie).post(`/shared/${token}/items/${itemId}/claims`, body);
+const count = async (table: string) =>
+  Number((await db.pool.query<{ n: string }>(`select count(*) as n from ${table}`)).rows[0]?.n);
+const claimedSum = async () =>
+  Number(
+    (await db.pool.query<{ n: string }>('select coalesce(sum(quantity), 0) as n from claims'))
+      .rows[0]?.n,
+  );
+
+/** Ada's list with one kettle, of which Ada wants `quantity`. */
+async function adasKettle(quantity = 1) {
+  await signUpVerified(t);
+  const kettle = await seedItem(db, ADA.email, 'Kettle', quantity);
+  return { token: await shareTokenOf(db, ADA.email), kettle };
+}
+
+describe('POST /shared/:shareToken/items/:itemId/claims (spec §5)', () => {
+  it('claims for a guest, and returns the manage link this once', async () => {
+    const { token, kettle } = await adasKettle(3);
+    const res = await claim(token, kettle, { claimerName: ' Aunt Sue\n', quantity: 2 });
+    expect(res.status).toBe(201);
+    expect(res.headers['cache-control']).toBe('no-store');
+    const body = CreateClaimResponseSchema.parse(res.body);
+    expect(body.claim).toEqual({
+      id: expect.any(String) as string,
+      claimerName: 'Aunt Sue',
+      quantity: 2,
+    });
+    expect(body.manageUrl).toBe(`http://localhost:3000/c/${body.manageToken}`);
+  });
+
+  it('keeps only the manage token’s hash (spec §4)', async () => {
+    const { token, kettle } = await adasKettle();
+    const { manageToken } = CreateClaimResponseSchema.parse(
+      (await claim(token, kettle, { claimerName: 'Sue' })).body,
+    );
+    const { rows } = await db.pool.query('select * from claims');
+    expect(rows[0]).toMatchObject({ quantity: 1, manage_token_hash: hashToken(manageToken) });
+    expect(JSON.stringify(rows)).not.toContain(manageToken);
+  });
+
+  it.each([
+    { claimerName: '' },
+    { claimerName: '   ' },
+    { claimerName: 'a'.repeat(51) },
+    { claimerName: 'Sue‮eus' },
+    { claimerName: 'Sue', quantity: 0 },
+    { claimerName: 'Sue', quantity: 100 },
+    { quantity: 1 },
+  ])('refuses %j with 400 VALIDATION_FAILED (Review Focus 4)', async (body) => {
+    const { token, kettle } = await adasKettle();
+    const res = await claim(token, kettle, body);
+    expect([res.status, codeOf(res)]).toEqual([400, ErrorCode.VALIDATION_FAILED]);
+    expect(await count('claims')).toBe(0);
+  });
+
+  it('answers 409 with what is left when a claim asks for more (spec §6.3)', async () => {
+    const { token, kettle } = await adasKettle(3);
+    expect((await claim(token, kettle, { claimerName: 'Sue', quantity: 2 })).status).toBe(201);
+    const over = await claim(token, kettle, { claimerName: 'Sam', quantity: 2 });
+    expect(over.status).toBe(409);
+    expect(ClaimConflictProblemSchema.parse(over.body)).toMatchObject({
+      code: ErrorCode.CLAIM_EXCEEDS_REMAINING,
+      remaining: 1,
+    });
+    expect((await claim(token, kettle, { claimerName: 'Sam', quantity: 1 })).status).toBe(201);
+    const none = await claim(token, kettle, { claimerName: 'Kim', quantity: 1 });
+    expect(ClaimConflictProblemSchema.parse(none.body).remaining).toBe(0);
+    expect(await claimedSum()).toBe(3);
+  });
+
+  it('refuses the owner with 403, never a 409 that would say what is left (spec §2, §5)', async () => {
+    const { token, kettle } = await adasKettle(1);
+    const cookie = await logIn(t);
+    const first = await claim(token, kettle, { claimerName: 'Ada' }, cookie);
+    expect([first.status, codeOf(first)]).toEqual([403, ErrorCode.OWNER_CANNOT_CLAIM]);
+    expect((await claim(token, kettle, { claimerName: 'Sue' })).status).toBe(201);
+    const full = await claim(token, kettle, { claimerName: 'Ada' }, cookie);
+    expect([full.status, codeOf(full)]).toEqual([403, ErrorCode.OWNER_CANNOT_CLAIM]);
+    expect(full.body).not.toHaveProperty('remaining');
+    expect(await count('claims')).toBe(1);
+  });
+
+  it('refuses an owner whose email is unconfirmed (Plan 4a rule 5)', async () => {
+    await signUp(t);
+    const kettle = await seedItem(db, ADA.email, 'Kettle', 1);
+    const res = await claim(
+      await shareTokenOf(db, ADA.email),
+      kettle,
+      { claimerName: 'Ada' },
+      await logIn(t),
+    );
+    expect([res.status, codeOf(res)]).toEqual([403, ErrorCode.OWNER_CANNOT_CLAIM]);
+  });
+
+  it('lets someone else who is signed in claim', async () => {
+    const { token, kettle } = await adasKettle();
+    await signUpVerified(t, BOB);
+    expect((await claim(token, kettle, { claimerName: 'Bob' }, await logIn(t, BOB))).status).toBe(
+      201,
+    );
+  });
+
+  it('answers 404 SHARE_LINK_NOT_FOUND for a replaced link, and NOT_FOUND for an item not on it', async () => {
+    const { token, kettle } = await adasKettle();
+    await signUpVerified(t, BOB);
+    const bobsItem = await seedItem(db, BOB.email, 'Bike', 1);
+    for (const itemId of [UNKNOWN_ID, 'kettle', bobsItem]) {
+      const res = await claim(token, itemId, { claimerName: 'Sue' });
+      expect([res.status, codeOf(res)]).toEqual([404, ErrorCode.NOT_FOUND]);
+    }
+    await client(t.app, await logIn(t)).post('/wishlist/share-token/rotate');
+    const replaced = await claim(token, kettle, { claimerName: 'Sue' });
+    expect([replaced.status, codeOf(replaced)]).toEqual([404, ErrorCode.SHARE_LINK_NOT_FOUND]);
+    expect(await count('claims')).toBe(0);
+  });
+
+  it('refuses a claim that does not come from the app (spec §6.2)', async () => {
+    const { token, kettle } = await adasKettle();
+    const res = await http(t.app)
+      .post(`/api/shared/${token}/items/${kettle}/claims`)
+      .send({ claimerName: 'Sue' });
+    expect([res.status, codeOf(res)]).toEqual([403, ErrorCode.FORBIDDEN_ORIGIN]);
+  });
+
+  it('lets exactly one of 20 racing claims take the last kettle (spec §8)', async () => {
+    const { token, kettle } = await adasKettle(1);
+    const results = await Promise.all(
+      Array.from({ length: 20 }, (_, i) => claim(token, kettle, { claimerName: `Gifter ${i}` })),
+    );
+    expect(results.filter((res) => res.status === 201)).toHaveLength(1);
+    const conflicts = results.filter((res) => res.status === 409);
+    expect(conflicts).toHaveLength(19);
+    for (const res of conflicts)
+      expect(ClaimConflictProblemSchema.parse(res.body).remaining).toBe(0);
+    expect(await claimedSum()).toBe(1);
+    // All 20 counted against the IP, the 409s too (spec §6.6), so a 21st is turned away.
+    const next = await claim(token, kettle, { claimerName: 'Gifter 20' });
+    expect([next.status, codeOf(next)]).toEqual([429, ErrorCode.RATE_LIMITED]);
+  });
+
+  it('counts 20 attempts an hour per IP before looking the link up, then answers 429 (spec §6.6)', async () => {
+    const { token, kettle } = await adasKettle(99);
+    for (let i = 0; i < 20; i++) {
+      expect((await claim(UNKNOWN_TOKEN, kettle, { claimerName: 'Sue' })).status).toBe(404);
+    }
+    const res = await claim(token, kettle, { claimerName: 'Sue' });
+    expect([res.status, codeOf(res)]).toEqual([429, ErrorCode.RATE_LIMITED]);
+    expect(Number(res.headers['retry-after'])).toBeGreaterThan(0);
+    expect(await count('claims')).toBe(0);
+  });
+
+  it('allows 30 claims an hour on one list, whoever makes them (spec §6.6)', async () => {
+    const { token, kettle } = await adasKettle(99);
+    await fillBucket(db, claimsListKey(await wishlistIdOf(db, ADA.email)), 30);
+    const res = await claim(token, kettle, { claimerName: 'Sue' });
+    expect([res.status, codeOf(res)]).toEqual([429, ErrorCode.RATE_LIMITED]);
+  });
+
+  it('a claim racing the owner deleting the account leaves no claim behind (Review Focus 3)', async () => {
+    const { token, kettle } = await adasKettle(5);
+    const cookie = await logIn(t);
+    const [deletion, ...claims] = await Promise.all([
+      client(t.app, cookie).delete('/me', { password: ADA.password }),
+      ...Array.from({ length: 5 }, (_, i) => claim(token, kettle, { claimerName: `Gifter ${i}` })),
+    ]);
+    expect(deletion?.status).toBe(204);
+    for (const res of claims) expect([201, 404]).toContain(res.status);
+    expect(await count('claims')).toBe(0);
+  });
+
+  it('claims racing the owner deleting the item leave no claim behind (Review Focus 3)', async () => {
+    const { token, kettle } = await adasKettle(5);
+    const cookie = await logIn(t);
+    const [deletion, ...claims] = await Promise.all([
+      client(t.app, cookie).delete(`/wishlist/items/${kettle}`),
+      ...Array.from({ length: 5 }, (_, i) => claim(token, kettle, { claimerName: `Gifter ${i}` })),
+    ]);
+    expect(deletion?.status).toBe(204);
+    for (const res of claims) expect([201, 404]).toContain(res.status);
+    expect(await count('claims')).toBe(0);
+  });
+
+  it('claims racing the owner’s quantity change and reorder never fail with a 500 (Review Focus 3)', async () => {
+    const { token, kettle } = await adasKettle(5);
+    const socks = await seedItem(db, ADA.email, 'Socks', 1);
+    const cookie = await logIn(t);
+    const [change, reorder, ...claims] = await Promise.all([
+      client(t.app, cookie).patch(`/wishlist/items/${kettle}`, { quantity: 1 }),
+      client(t.app, cookie).put('/wishlist/items/order', { itemIds: [socks, kettle] }),
+      ...Array.from({ length: 5 }, (_, i) => claim(token, kettle, { claimerName: `Gifter ${i}` })),
+    ]);
+    expect([change?.status, reorder?.status]).toEqual([200, 204]);
+    for (const res of claims) expect([201, 409]).toContain(res.status);
+  });
+});
