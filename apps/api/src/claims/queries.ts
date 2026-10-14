@@ -45,7 +45,11 @@ export function readClaims(tx: Transaction, wishlistId: string): Promise<ClaimRo
     .orderBy(asc(claims.createdAt), asc(claims.id));
 }
 
-/** How many of an item are claimed, every claim counted. */
+/**
+ * How many of an item are claimed, every claim counted. Trust the result only inside a transaction
+ * that holds the item's row lock, at READ COMMITTED (the default): under `SNAPSHOT` it would sum
+ * from before the lock wait.
+ */
 export async function claimedTotal(tx: Transaction, itemId: string): Promise<number> {
   const [row] = await tx
     .select({ total: sql<number>`coalesce(sum(${claims.quantity}), 0)::int` })

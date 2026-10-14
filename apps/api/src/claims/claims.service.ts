@@ -1,8 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   CAPABILITY_TOKEN_PATTERN,
+  type Claim,
+  type ClaimDetailsResponse,
   type CreateClaimRequest,
   type CreateClaimResponse,
+  type UpdateClaimRequest,
 } from '@wishlist/contracts';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -10,15 +13,20 @@ import { CLOCK, type Clock } from '../core/clock.js';
 import { ENV, type Env } from '../core/env.js';
 import { newId } from '../core/ids.js';
 import { DB, type Database } from '../db/database.module.js';
-import { claims, items, wishlists } from '../db/schema.js';
+import { claims, items, users, wishlists } from '../db/schema.js';
 import { RateLimiter } from '../rate-limit/rate-limiter.js';
 import { hashToken, newToken } from '../security/tokens.js';
-import { manageUrl } from '../wishlist/links.js';
+import { manageUrl, shareUrl } from '../wishlist/links.js';
 import { itemNotFound } from '../wishlist/wishlist-errors.js';
-import { claimExceedsRemaining, ownerCannotClaim, shareLinkNotFound } from './claims-errors.js';
-import { CLAIM_COLUMNS, claimedTotal } from './queries.js';
+import {
+  claimExceedsRemaining,
+  claimNotFound,
+  ownerCannotClaim,
+  shareLinkNotFound,
+} from './claims-errors.js';
+import { CLAIM_COLUMNS, SHARED_ITEM_COLUMNS, SNAPSHOT, claimedTotal } from './queries.js';
 import { CLAIMS_PER_IP, CLAIMS_PER_LIST, claimsIpKey, claimsListKey } from './rate-limits.js';
-import { fitsNewClaim, remainingOf } from './remaining.js';
+import { fitsChangedClaim, fitsNewClaim, remainingOf } from './remaining.js';
 
 const ItemIdSchema = z.uuid();
 
@@ -88,5 +96,99 @@ export class ClaimsService {
       return row;
     });
     return { claim, manageToken, manageUrl: manageUrl(this.env.APP_ORIGIN, manageToken) };
+  }
+
+  /** The claimer's own view (spec §5.1): the manage token is the capability. */
+  async details(manageToken: string): Promise<ClaimDetailsResponse> {
+    if (!CAPABILITY_TOKEN_PATTERN.test(manageToken)) throw claimNotFound();
+    return this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({
+          claim: CLAIM_COLUMNS,
+          item: SHARED_ITEM_COLUMNS,
+          wishlistTitle: wishlists.title,
+          shareToken: wishlists.shareToken,
+          ownerSeesClaims: wishlists.showClaimsToOwner,
+          ownerDisplayName: users.displayName,
+        })
+        .from(claims)
+        .innerJoin(items, eq(items.id, claims.itemId))
+        .innerJoin(wishlists, eq(wishlists.id, items.wishlistId))
+        .innerJoin(users, eq(users.id, wishlists.ownerId))
+        .where(eq(claims.manageTokenHash, hashToken(manageToken)));
+      if (!row) throw claimNotFound();
+      const claimed = await claimedTotal(tx, row.item.id);
+      return {
+        claim: row.claim,
+        item: row.item,
+        wishlistTitle: row.wishlistTitle,
+        ownerDisplayName: row.ownerDisplayName,
+        remaining: remainingOf(row.item.quantity, claimed),
+        // The list's current link, so it's right after a rotation (spec §5).
+        shareUrl: shareUrl(this.env.APP_ORIGIN, row.shareToken),
+        ownerSeesClaims: row.ownerSeesClaims,
+      };
+    }, SNAPSHOT);
+  }
+
+  /**
+   * A new name, a new quantity, or both (spec §5). The new quantity may be at most what's left
+   * plus what the claim holds (spec §2), so keeping or lowering it never fails (D19).
+   */
+  async update(manageToken: string, input: UpdateClaimRequest, ip: string): Promise<Claim> {
+    if (!CAPABILITY_TOKEN_PATTERN.test(manageToken)) throw claimNotFound();
+    await this.limiter.enforce(claimsIpKey(ip), CLAIMS_PER_IP);
+    const tokenHash = hashToken(manageToken);
+    const [found] = await this.db
+      .select({ itemId: claims.itemId, wishlistId: items.wishlistId })
+      .from(claims)
+      .innerJoin(items, eq(items.id, claims.itemId))
+      .where(eq(claims.manageTokenHash, tokenHash));
+    if (!found) throw claimNotFound();
+    await this.limiter.enforce(claimsListKey(found.wishlistId), CLAIMS_PER_LIST);
+
+    return this.db.transaction(async (tx) => {
+      // The same lock as a new claim's (spec §6.3): the item's row, and nothing else.
+      const [item] = await tx
+        .select({ quantity: items.quantity })
+        .from(items)
+        .where(eq(items.id, found.itemId))
+        .for('update');
+      // The claim may have gone while we waited: cancelled, or deleted with its item.
+      const [current] = item
+        ? await tx
+            .select({ id: claims.id, quantity: claims.quantity })
+            .from(claims)
+            .where(eq(claims.manageTokenHash, tokenHash))
+        : [];
+      if (!item || !current) throw claimNotFound();
+      if (input.quantity !== undefined) {
+        const claimed = await claimedTotal(tx, found.itemId);
+        if (!fitsChangedClaim(input.quantity, current.quantity, item.quantity, claimed)) {
+          throw claimExceedsRemaining(remainingOf(item.quantity, claimed));
+        }
+      }
+      const [row] = await tx
+        .update(claims)
+        .set({
+          ...(input.claimerName !== undefined && { claimerName: input.claimerName }),
+          ...(input.quantity !== undefined && { quantity: input.quantity }),
+          updatedAt: this.clock.now(),
+        })
+        .where(eq(claims.id, current.id))
+        .returning(CLAIM_COLUMNS);
+      if (!row) throw claimNotFound();
+      return row;
+    });
+  }
+
+  /** Cancels the claim (spec §5). No lock: removing a claim can't over-commit an item (§6.3). */
+  async cancel(manageToken: string): Promise<void> {
+    if (!CAPABILITY_TOKEN_PATTERN.test(manageToken)) throw claimNotFound();
+    const deleted = await this.db
+      .delete(claims)
+      .where(eq(claims.manageTokenHash, hashToken(manageToken)))
+      .returning({ id: claims.id });
+    if (deleted.length === 0) throw claimNotFound();
   }
 }
