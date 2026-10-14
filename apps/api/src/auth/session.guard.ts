@@ -47,3 +47,27 @@ export const CurrentAuth = createParamDecorator(
     return auth;
   },
 );
+
+/**
+ * Resolves the session if there is one, and never refuses. The public routes use it to tell the
+ * list's owner from a guest (spec §5). Unlike SessionGuard it leaves a dead cookie alone: the
+ * share page calls the API server to server, where a Set-Cookie never reaches the browser (D27).
+ */
+@Injectable()
+export class OptionalSessionGuard implements CanActivate {
+  constructor(@Inject(SessionsService) private readonly sessions: SessionsService) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const req = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const token = readSessionToken(req.headers.cookie);
+    const session = token ? await this.sessions.resolve(token) : null;
+    if (session) req.auth = { sessionId: session.sessionId, user: session.user };
+    return true;
+  }
+}
+
+/** The session OptionalSessionGuard found, or null for a guest. Use it only behind that guard. */
+export const OptionalAuth = createParamDecorator(
+  (_data: unknown, ctx: ExecutionContext): AuthContext | null =>
+    ctx.switchToHttp().getRequest<AuthenticatedRequest>().auth ?? null,
+);

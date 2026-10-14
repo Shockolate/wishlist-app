@@ -1,4 +1,4 @@
-import { HttpException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, HttpException, NotFoundException } from '@nestjs/common';
 import { describe, expect, it } from 'vitest';
 import { AppError } from './app-error.js';
 import { toProblem } from './problem.js';
@@ -32,8 +32,27 @@ describe('toProblem', () => {
     expect(toProblem(new NotFoundException('Cannot GET /api/nope'), 'req-1')).toMatchObject({
       status: 404,
       code: 'NOT_FOUND',
-      detail: 'Cannot GET /api/nope',
+      detail: 'There is nothing at this address.',
     });
+  });
+
+  it('never echoes the message of a Nest HTTP exception: it can hold a token from the path', () => {
+    const secret = 'abcdefghijklmnopqrstuv';
+    for (const exception of [
+      new NotFoundException(`Cannot GET /api/shared/${secret}/extra`),
+      new BadRequestException(`Failed to decode param '${secret}%E0%A4%A'`),
+      new HttpException(`Cannot POST /api/c/${secret}`, 405),
+      new HttpException(`teapot ${secret}`, 418),
+    ]) {
+      expect(JSON.stringify(toProblem(exception, 'req-1'))).not.toContain(secret);
+    }
+    expect(toProblem(new BadRequestException('x'), 'r')).toMatchObject({
+      detail: 'The request is not valid.',
+    });
+    expect(toProblem(new HttpException('x', 405), 'r')).toMatchObject({
+      detail: 'This method is not allowed here.',
+    });
+    expect(toProblem(new HttpException('x', 418), 'r')).not.toHaveProperty('detail');
   });
 
   it('hides the message of server-side HTTP exceptions', () => {
