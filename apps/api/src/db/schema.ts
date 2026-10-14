@@ -129,3 +129,26 @@ export const items = pgTable(
     check('items_quantity_check', sql`${t.quantity} between 1 and 99`),
   ],
 );
+
+/**
+ * Claims (spec §2, §4): who is getting how many of an item. Remaining is computed, never stored.
+ * A claim reaches its list through its item, so deleting the item, the list or the account takes
+ * the claim with it. The manage token is shown once; only its SHA-256 is kept.
+ */
+export const claims = pgTable(
+  'claims',
+  {
+    id: uuid('id').primaryKey(),
+    itemId: uuid('item_id')
+      .notNull()
+      .references(() => items.id, { onDelete: 'cascade' }),
+    claimerName: text('claimer_name').notNull(),
+    quantity: integer('quantity').notNull(),
+    manageTokenHash: text('manage_token_hash').notNull().unique(),
+    ...timestamps(),
+  },
+  (t) => [
+    index('claims_item_id_idx').on(t.itemId),
+    check('claims_quantity_check', sql`${t.quantity} >= 1`),
+  ],
+);
