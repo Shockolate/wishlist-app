@@ -1,5 +1,5 @@
 import { isIP, type LookupFunction } from 'node:net';
-import { pipeline, type Readable } from 'node:stream';
+import { pipeline, Transform, type Readable, type TransformCallback } from 'node:stream';
 import { createBrotliDecompress, createGunzip, createInflate } from 'node:zlib';
 import type { UnfurlFailureReason } from '@wishlist/contracts';
 import { Agent, request } from 'undici';
@@ -22,6 +22,7 @@ export interface PageFetcherOptions {
   resolve?: Resolve;
   timeoutMs?: number;
   maxBytes?: number;
+  maxRawBytes?: number;
   maxRedirects?: number;
 }
 
@@ -54,13 +55,16 @@ class FetchFailure extends Error {
  *   set to the same value, so it can live up to `timeoutMs` past the deadline. That is bounded; it
  *   only delays releasing the socket, not the answer.
  * - Reading stops at `maxBytes`, counted after decompression. A longer page comes back as its
- *   start, marked `truncated`: a product page's metadata is in its <head>.
+ *   start, marked `truncated`: a product page's metadata is in its <head>. A compressed body also
+ *   stops at `maxRawBytes` before decompression, so a stream that decodes to almost nothing can't
+ *   keep us reading until the deadline (Plan 4a).
  */
 export class PageFetcher {
   private readonly policy: AddressPolicy;
   private readonly resolve: Resolve;
   private readonly timeoutMs: number;
   private readonly maxBytes: number;
+  private readonly maxRawBytes: number;
   private readonly maxRedirects: number;
 
   constructor(options: PageFetcherOptions = {}) {
@@ -68,6 +72,7 @@ export class PageFetcher {
     this.resolve = options.resolve ?? resolveAll;
     this.timeoutMs = options.timeoutMs ?? 5_000;
     this.maxBytes = options.maxBytes ?? 1_048_576;
+    this.maxRawBytes = options.maxRawBytes ?? 1_048_576;
     this.maxRedirects = options.maxRedirects ?? 3;
   }
 
@@ -118,8 +123,9 @@ export class PageFetcher {
           signal.throwIfAborted();
           throw new FetchFailure('NOT_HTML');
         }
-        const body = decoded(res.body, res.headers['content-encoding']);
-        const { bytes, truncated } = await readCapped(body, this.maxBytes);
+        const raw = new RawCap(this.maxRawBytes);
+        const body = decoded(res.body, res.headers['content-encoding'], raw);
+        const { bytes, truncated } = await readCapped(body, this.maxBytes, raw);
         return { ok: true, url, html: decodeHtml(bytes, type), truncated };
       }
     } catch (error) {
@@ -203,7 +209,7 @@ function mediaType(contentType: string): string | undefined {
  * The body, decompressed. We ask for no compression, but some servers send it anyway (Plan 3a rule
  * 8). pipeline() destroys both sides on an error, so an abort still ends the read.
  */
-function decoded(body: Readable, encoding: string | string[] | undefined): Readable {
+function decoded(body: Readable, encoding: string | string[] | undefined, raw: RawCap): Readable {
   const ignore = () => undefined;
   // A repeated header arrives as an array. It's unknown, like any encoding we can't decode.
   const name = Array.isArray(encoding) ? undefined : (encoding ?? '').trim().toLowerCase();
@@ -213,11 +219,11 @@ function decoded(body: Readable, encoding: string | string[] | undefined): Reada
       return body;
     case 'gzip':
     case 'x-gzip':
-      return pipeline(body, createGunzip(), ignore);
+      return pipeline(body, raw, createGunzip(), ignore);
     case 'deflate':
-      return pipeline(body, createInflate(), ignore);
+      return pipeline(body, raw, createInflate(), ignore);
     case 'br':
-      return pipeline(body, createBrotliDecompress(), ignore);
+      return pipeline(body, raw, createBrotliDecompress(), ignore);
     default:
       // Destroying an unread undici body emits an 'error' (an abort). When the response has
       // already completed nobody else listens, and an unhandled 'error' exits the process.
@@ -227,25 +233,57 @@ function decoded(body: Readable, encoding: string | string[] | undefined): Reada
   }
 }
 
-/** The body's first `max` bytes, counted after decompression, and whether there was more. */
+/**
+ * Counts a compressed body's raw bytes, and stops the stream once more than `max` have passed
+ * (spec §6.8, Plan 4a). `reached` tells readCapped the stop was the cap, not a failure.
+ */
+class RawCap extends Transform {
+  reached = false;
+  private total = 0;
+
+  constructor(private readonly max: number) {
+    super();
+  }
+
+  override _transform(chunk: Buffer, _encoding: BufferEncoding, callback: TransformCallback): void {
+    this.total += chunk.length;
+    if (this.total > this.max) {
+      this.reached = true;
+      callback(new Error('raw byte cap reached'));
+      return;
+    }
+    callback(null, chunk);
+  }
+}
+
+/**
+ * The body's first `max` bytes, counted after decompression, and whether there was more. A body
+ * stopped by its raw cap ends here too, with what was decoded so far.
+ */
 async function readCapped(
   stream: Readable,
   max: number,
+  raw: RawCap,
 ): Promise<{ bytes: Buffer; truncated: boolean }> {
   const chunks: Buffer[] = [];
   let total = 0;
-  for await (const chunk of stream) {
-    const buffer = chunk as Buffer;
-    if (total + buffer.length > max) {
-      chunks.push(buffer.subarray(0, max - total));
-      // Leaving the loop destroys the stream, so the rest is never downloaded or decompressed.
-      // An undici body destroyed before its end emits an abort 'error'. Node's async iterator
-      // happens to leave a listener for it; this one means we don't depend on that.
-      stream.on('error', () => undefined);
-      return { bytes: Buffer.concat(chunks), truncated: true };
+  try {
+    for await (const chunk of stream) {
+      const buffer = chunk as Buffer;
+      if (total + buffer.length > max) {
+        chunks.push(buffer.subarray(0, max - total));
+        // Leaving the loop destroys the stream, so the rest is never downloaded or decompressed.
+        // An undici body destroyed before its end emits an abort 'error'. Node's async iterator
+        // happens to leave a listener for it; this one means we don't depend on that.
+        stream.on('error', () => undefined);
+        return { bytes: Buffer.concat(chunks), truncated: true };
+      }
+      total += buffer.length;
+      chunks.push(buffer);
     }
-    total += buffer.length;
-    chunks.push(buffer);
+  } catch (error) {
+    if (raw.reached) return { bytes: Buffer.concat(chunks), truncated: true };
+    throw error;
   }
   return { bytes: Buffer.concat(chunks), truncated: false };
 }

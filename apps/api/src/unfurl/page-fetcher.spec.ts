@@ -31,6 +31,22 @@ function html(res: ServerResponse, body: string | Buffer, headers: Record<string
   res.end(body);
 }
 
+/**
+ * A gzip stream that decodes to PAGE, then 1.5 MB of empty deflate blocks that decode to nothing,
+ * and never ends (Plan 4a, M2). Each empty stored block is 5 bytes: a header byte, then a length
+ * of 0 and its complement.
+ */
+function paddedGzip(): Buffer[] {
+  const page = Buffer.from(PAGE);
+  const length = Buffer.alloc(4);
+  length.writeUInt16LE(page.length, 0);
+  length.writeUInt16LE(~page.length & 0xffff, 2);
+  const header = Buffer.from([0x1f, 0x8b, 0x08, 0, 0, 0, 0, 0, 0, 0xff]);
+  const padding = Buffer.alloc(1_500_000);
+  for (let i = 0; i < padding.length; i += 5) padding.fill(0xff, i + 3, i + 5);
+  return [Buffer.concat([header, Buffer.from([0x00]), length, page]), padding];
+}
+
 beforeAll(async () => {
   server = createServer((req, res) => {
     seen.push({ url: req.url ?? '', headers: req.headers });
@@ -100,6 +116,10 @@ beforeAll(async () => {
       case '/meta-charset':
         res.writeHead(200, { 'content-type': 'text/html' });
         return res.end(Buffer.concat([Buffer.from('<meta charset="windows-1252">'), CAFE_1252]));
+      case '/gzip-padding':
+        res.writeHead(200, { 'content-type': 'text/html', 'content-encoding': 'gzip' });
+        for (const chunk of paddedGzip()) res.write(chunk);
+        return; // Never ends.
       case '/slow':
         return; // Never answers.
       default:
@@ -270,6 +290,13 @@ describe('PageFetcher (spec §6.8)', () => {
     const page = await fetcher({ timeoutMs: 1_000 }).fetch(at('/huge-unfinished'));
     expect(page).toMatchObject({ ok: true, truncated: true });
     expect(page.ok && page.html.length).toBe(1_048_576);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  });
+
+  it('stops reading a compressed body at 1 MB raw, and returns what it decoded (Plan 4a, M2)', async () => {
+    const page = await fetcher({ timeoutMs: 2_000 }).fetch(at('/gzip-padding'));
+    expect(page).toMatchObject({ ok: true, truncated: true });
+    expect(page.ok && page.html).toBe(PAGE);
     await new Promise((resolve) => setTimeout(resolve, 50));
   });
 
