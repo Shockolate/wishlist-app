@@ -6,6 +6,7 @@ import {
 } from '@wishlist/contracts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { claimsListKey } from '../src/claims/rate-limits.js';
+import { newId } from '../src/core/ids.js';
 import { hashToken } from '../src/security/tokens.js';
 import { http } from '../src/testing/app.js';
 import { ADA, logIn, signUp, signUpVerified, type Account } from './support/accounts.js';
@@ -181,6 +182,39 @@ describe('POST /shared/:shareToken/items/:itemId/claims (spec §5)', () => {
     // All 20 counted against the IP, the 409s too (spec §6.6), so a 21st is turned away.
     const next = await claim(token, kettle, { claimerName: 'Gifter 20' });
     expect([next.status, codeOf(next)]).toEqual([429, ErrorCode.RATE_LIMITED]);
+  });
+
+  // The 20-way race above is not proof of the lock: the rate-limit upserts on the shared IP and
+  // list counter rows stagger the requests, so their transactions rarely overlap, and it passes
+  // without FOR UPDATE. Here another transaction holds the item's row lock with a claim not yet
+  // committed. Only an implementation that locks the row waits for it, and then sees its claim.
+  it('makes a claim wait for the item’s lock, then judges it against what committed (spec §6.3)', async () => {
+    const { token, kettle } = await adasKettle(1);
+    const holder = await db.pool.connect();
+    try {
+      await holder.query('begin');
+      await holder.query('select id from items where id = $1 for update', [kettle]);
+      await holder.query(
+        `insert into claims (id, item_id, claimer_name, quantity, manage_token_hash)
+         values ($1, $2, 'Holder', 1, $3)`,
+        [newId(), kettle, hashToken('holder')],
+      );
+      const pending = Promise.all(
+        Array.from({ length: 5 }, (_, i) => claim(token, kettle, { claimerName: `Gifter ${i}` })),
+      );
+      // Long enough for the claims to reach the row lock, or to finish if nothing locks.
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await holder.query('commit');
+      const results = await pending;
+      for (const res of results) {
+        expect(res.status).toBe(409);
+        expect(ClaimConflictProblemSchema.parse(res.body).remaining).toBe(0);
+      }
+    } finally {
+      await holder.query('rollback').catch(() => undefined);
+      holder.release();
+    }
+    expect(await claimedSum()).toBe(1);
   });
 
   it('counts 20 attempts an hour per IP before looking the link up, then answers 429 (spec §6.6)', async () => {
