@@ -81,3 +81,19 @@ export const PlusIcon = () => (
     <path d="M10 5v10M5 10h10" />
   </Icon>
 );
+
+export const CheckIcon = () => (
+  <Icon>
+    <path d="M5 10.5 8.5 14 15 6.5" />
+  </Icon>
+);
+export const ExternalIcon = () => (
+  <Icon>
+    <path d="M7 13 15 5M8 5h7v7" />
+  </Icon>
+);
+export const EyeOffIcon = () => (
+  <Icon>
+    <path d="M3 3l14 14M8.2 5.3A8 8 0 0 1 10 5c4.5 0 7.5 5 7.5 5a14 14 0 0 1-2 2.6M5.6 7A13 13 0 0 0 2.5 10s3 5 7.5 5a7.6 7.6 0 0 0 3.3-.8M8.6 8.6a2 2 0 0 0 2.8 2.8" />
+  </Icon>
+);
