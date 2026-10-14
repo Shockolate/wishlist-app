@@ -38,6 +38,11 @@ export function EmailLinkForm({
   const [formError, setFormError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   const inFlight = useRef(false);
+  // A token means the check is done, so a reminder to finish it is out of date (D38).
+  const onToken = (next: string | null) => {
+    setToken(next);
+    if (next) setFormError((current) => (current === FINISH_CHECK ? null : current));
+  };
   const {
     register,
     handleSubmit,
@@ -89,7 +94,7 @@ export function EmailLinkForm({
           <Input {...control} {...register('email')} type="email" autoComplete="email" />
         )}
       </Field>
-      <Turnstile nonce={nonce} onToken={setToken} resetKey={challenge} />
+      <Turnstile nonce={nonce} onToken={onToken} resetKey={challenge} />
       {formError ? <Notice tone="error">{formError}</Notice> : null}
       <Button type="submit" disabled={isSubmitting}>
         {submitLabel}
