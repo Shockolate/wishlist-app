@@ -72,6 +72,45 @@ test('a gifter claims in three taps and keeps the manage link (spec §1 criterio
   ]);
 });
 
+test('the page keeps its title through the refreshes a claim makes', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const { gifter } = await setUp(page, browser, baseURL ?? '', 'claim-title');
+  // A claim ends in router.refresh(). With streamed metadata the old <title> went for ~300 ms
+  // before the new one arrived, and a screen reader announced an untitled page. Next puts its
+  // router on window.next, so the refreshes can be made without spending claims.
+  const sampled = await gifter.evaluate(async () => {
+    // e2e has no DOM lib, so the page's globals are typed by hand.
+    const w = globalThis as unknown as {
+      document: { title: string };
+      next?: { router?: { refresh(): void } };
+      setInterval(run: () => void, ms: number): number;
+      clearInterval(id: number): void;
+    };
+    const router = w.next?.router;
+    if (!router) return null;
+    let samples = 0;
+    let empty = 0;
+    const timer = w.setInterval(() => {
+      samples += 1;
+      if (w.document.title === '') empty += 1;
+    }, 5);
+    for (let i = 0; i < 80; i += 1) {
+      router.refresh();
+      await new Promise((resolve) => setTimeout(resolve, i % 2 ? 0 : 100));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    w.clearInterval(timer);
+    return { samples, empty };
+  });
+  expect(sampled, 'Next exposes window.next.router').not.toBeNull();
+  expect(sampled?.samples).toBeGreaterThan(100);
+  expect(sampled?.empty, 'samples taken with no title').toBe(0);
+  await expect(gifter).toHaveTitle("Ada's wishlist | Hanker");
+});
+
 test('the stepper stops at what is left, and the name is remembered', async ({
   page,
   browser,
