@@ -5,11 +5,13 @@ import {
   countLine,
   isTaken,
   joinNames,
+  manageHint,
   mineOf,
   ownerSeesLine,
   ownStripText,
   stepperHint,
   takenLine,
+  yourClaimLine,
   type ItemClaims,
 } from './share-copy';
 
@@ -109,5 +111,18 @@ describe('claim sheet copy', () => {
     expect(claimedLine(1, 3, 'Ada', 'Priya')).toBe('1 of the 3 Ada wants, as Priya.');
     expect(claimedLine(1, 1, 'Ada', 'Priya')).toBe('As Priya.');
     expect(ownStripText(2)).toBe('You’re getting 2');
+  });
+});
+
+describe('manage page copy', () => {
+  it('says how much of the item is yours', () => {
+    expect(yourClaimLine(1, 3, 'Ada')).toBe('You’re getting 1 of the 3 Ada wants');
+    expect(yourClaimLine(1, 1, 'Ada')).toBe('You’re getting this');
+  });
+
+  it('says how high the claim can go, and how many more are free (spec §2)', () => {
+    expect(manageHint(1, 1)).toBe('Up to 2: 1 more is free');
+    expect(manageHint(2, 1)).toBe('Up to 3: 2 more are free');
+    expect(manageHint(0, 2)).toBe('Up to 2');
   });
 });

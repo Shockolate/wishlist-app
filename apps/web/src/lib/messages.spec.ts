@@ -2,6 +2,7 @@ import { ErrorCode, UNFURL_FAILURE_REASONS, type Problem } from '@wishlist/contr
 import { describe, expect, it } from 'vitest';
 import { ApiError, ContractMismatchError } from './api-client';
 import {
+  claimChangeConflictMessage,
   claimConflictMessage,
   ERROR_MESSAGES,
   errorMessage,
@@ -126,6 +127,14 @@ describe('claimConflictMessage', () => {
     );
     expect(claimConflictMessage(2)).toBe(
       'Someone else claimed some while you were choosing, so only 2 are left. We’ve set how many to 2.',
+    );
+  });
+});
+
+describe('claimChangeConflictMessage', () => {
+  it('says the new most, and that the stepper was set to it', () => {
+    expect(claimChangeConflictMessage(2)).toBe(
+      'Someone else claimed some, so you can have up to 2 now. We’ve set how many to 2.',
     );
   });
 });
