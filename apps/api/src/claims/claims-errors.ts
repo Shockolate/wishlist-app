@@ -19,3 +19,11 @@ export const claimExceedsRemaining = (remaining: number): AppError =>
   new AppError(409, ErrorCode.CLAIM_EXCEEDS_REMAINING, 'There are not that many left to claim.', {
     remaining,
   });
+
+/** Malformed, unknown and deleted claims all look the same (spec §2). */
+export const claimNotFound = (): AppError =>
+  new AppError(
+    404,
+    ErrorCode.NOT_FOUND,
+    'This claim no longer exists. The owner may have removed the item.',
+  );
