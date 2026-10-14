@@ -52,6 +52,9 @@ export function createApiClient({
     body?: unknown,
   ): Promise<z.output<S>> {
     const endpoint = `${method} ${path}`;
+    // Every write carries JSON, `{}` when it has nothing to send, so the CSRF guard's content-type
+    // check holds for a bodiless write such as DELETE /claims/:manageToken (spec §6.2, §7).
+    const sent = body === undefined && method !== 'GET' ? {} : body;
     const res = await fetchFn(`${baseUrl}/api${path}`, {
       method,
       cache: 'no-store',
@@ -61,9 +64,9 @@ export function createApiClient({
       headers: {
         ...headers,
         accept: 'application/json, application/problem+json',
-        ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+        ...(sent === undefined ? {} : { 'content-type': 'application/json' }),
       },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      ...(sent === undefined ? {} : { body: JSON.stringify(sent) }),
     });
 
     if (isRedirect(res)) {

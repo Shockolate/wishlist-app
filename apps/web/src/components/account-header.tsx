@@ -7,13 +7,15 @@ import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
 import { NoContentSchema } from '@/lib/api-client';
 import { browserApi } from '@/lib/browser-api';
-import { errorMessage, hasCode } from '@/lib/messages';
+import { errorMessage, hasCode, LIST_CHANGE_NOT_SAVED } from '@/lib/messages';
+import { useUnseenListFailure } from '@/lib/off-page-failure';
 import { cn } from '@/lib/utils';
 
 /** The signed-in header: the wordmark, the two account pages, and Log out. */
 export function AccountHeader({ current }: { current: 'list' | 'settings' }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const listFailed = useUnseenListFailure();
 
   async function logOut() {
     setBusy(true);
@@ -59,6 +61,15 @@ export function AccountHeader({ current }: { current: 'list' | 'settings' }) {
         {error ? (
           <Notice tone="error" className="basis-full">
             {error}
+          </Notice>
+        ) : null}
+        {current === 'settings' && listFailed ? (
+          <Notice tone="error" className="basis-full">
+            {LIST_CHANGE_NOT_SAVED}{' '}
+            <Link href="/list" className="underline">
+              Check your list
+            </Link>
+            .
           </Notice>
         ) : null}
       </div>

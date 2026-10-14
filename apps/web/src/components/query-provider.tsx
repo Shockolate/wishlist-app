@@ -1,10 +1,11 @@
 'use client';
 
-import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorCode, type WishlistResponse } from '@wishlist/contracts';
 import type { ReactNode } from 'react';
 import { stripClaims, WISHLIST_KEY } from '@/lib/list-cache';
 import { hasCode } from '@/lib/messages';
+import { reportListFailure } from '@/lib/off-page-failure';
 
 /**
  * Queries retry once; writes never retry (spec §9). A refetch that finds the session gone sends
@@ -20,6 +21,9 @@ function makeClient(): QueryClient {
         window.location.replace(`/login?next=${encodeURIComponent(here)}`);
       },
     }),
+    // Every mutation here is a list change. One that fails after the editor has gone would
+    // otherwise fail silently (Plan 3b carry).
+    mutationCache: new MutationCache({ onError: () => reportListFailure() }),
     defaultOptions: { queries: { retry: 1 }, mutations: { retry: false } },
   });
 }

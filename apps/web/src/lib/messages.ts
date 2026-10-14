@@ -133,3 +133,6 @@ export function prefillMessage(
   if (failureReason) return UNFURL_MESSAGES[failureReason];
   return `Filled in from ${shopName(url) ?? 'the page'}. Check it, then add it.`;
 }
+
+/** On /settings, when a list change made on /list failed after the owner left it. */
+export const LIST_CHANGE_NOT_SAVED = 'A change to your list didn’t save.';
