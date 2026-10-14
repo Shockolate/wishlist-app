@@ -77,7 +77,7 @@ These are explicit so they don't creep in:
 
 ### Claims
 
-- A claim has a `claimerName` (1–50 characters), a `quantity` of at least 1, and a private **manage link**.
+- A claim has a `claimerName` (1–50 visible characters, the display-name rule: D35, D41), a `quantity` of at least 1, and a private **manage link**.
 - **Remaining** = `greatest(0, item.quantity − Σ claim.quantity)`.
   - Remaining is always computed, never stored.
   - A new claim, or an increase to an existing claim, may not exceed remaining at the moment it's written. This is enforced transactionally (§6.3).
@@ -95,12 +95,20 @@ These are explicit so they don't creep in:
 - By default, the owner never receives claim data from any endpoint, including when they view their own share link while signed in.
 - If `showClaimsToOwner = true`, the owner sees remaining counts and claimer names in both the editor and the share view.
 - The UI asks for confirmation before turning the setting on.
+- Gifters are told which way it's set (D40). The share page, the claim sheet and the manage page say whether the owner can see who's getting what, so nobody claims a surprise the owner is watching.
+- The guarantee is about the owner's own session. An owner who opens their link signed out, or in a private window, is a guest like anyone else; that's a deliberate act, and the server can't tell it apart from a gifter.
 
 ### Share link
 
 - The link is `/s/<shareToken>`. The token is 128-bit random, encoded as base64url (22 characters).
 - Rotating the token makes the old link return 404 immediately.
 - Existing claims, and their manage links, are unaffected by a rotation.
+
+### Visible text
+
+- Display names, list and item titles, prices and claimer names use visible characters only (D35, D36). Control and format characters are refused, except the two joiners that emoji and Persian need.
+- Letters and marks that draw nothing count as blank (D41): the Hangul fillers (U+115F, U+1160, U+3164, U+FFA0), the Braille blank (U+2800), U+034F, U+17B4 and U+17B5. A value made only of them, spaces and joiners is refused; one with something visible beside them is kept as typed.
+- Lengths count UTF-16 code units everywhere, as JavaScript and the forms do. An emoji costs two or more, so a name made only of emoji fits about 25 (D41).
 
 ## 3. Architecture
 
@@ -302,22 +310,34 @@ These require a session and a verified email. The list is always derived from th
 
 An item ID that belongs to another user's list returns `404`, the same as one that doesn't exist.
 
-- **`showClaimsToOwner` arrives with claims, in Plan 4 (D33).** Until then `PATCH /wishlist` takes `{title}` only.
+- **`showClaimsToOwner` arrives with claims, in Plan 4a (D33, D39).** `PATCH /wishlist` takes at least one of `title` and `showClaimsToOwner`, and answers `{title, shareUrl, showClaimsToOwner}`. `GET /wishlist` returns `showClaimsToOwner`, and each item carries `remaining` and `claims[]` only when it's on (§5.1). These are fields added to existing responses, so the contracts declare them optional (§10, expand/contract).
 - **List changes are serialized per list (Plan 3a).** Every change to a list or its items first locks the owner's `wishlists` row `FOR UPDATE`. Inside that lock a create takes the next position and enforces the 200-item cap, and a reorder compares the submitted IDs with the current set before rewriting positions `0…n−1`. The lock order is users → wishlists → items, the order an account deletion's cascade takes.
 
 ### Public endpoints (capability tokens)
 
 | Method & path | Body | Result |
 |---|---|---|
-| `GET /shared/:shareToken` | none | `{title, ownerDisplayName, items[], viewerIsOwner}`. `404` if the token is unknown |
-| `POST /shared/:shareToken/items/:itemId/claims` | `{claimerName, quantity}` | `201 {claim, manageToken}`, `409 CLAIM_EXCEEDS_REMAINING {remaining}`, or `403 OWNER_CANNOT_CLAIM` |
-| `GET /claims/:manageToken` | none | `{claim, item, wishlistTitle, ownerDisplayName, remaining, shareUrl}`, or `404` |
-| `PATCH /claims/:manageToken` | `{claimerName?, quantity?}` | Updated claim, or `409 CLAIM_EXCEEDS_REMAINING` |
-| `DELETE /claims/:manageToken` | none | `204` |
+| `GET /shared/:shareToken` | none | `{title, ownerDisplayName, viewerIsOwner, ownerSeesClaims, items[]}`, or `404 SHARE_LINK_NOT_FOUND` |
+| `POST /shared/:shareToken/items/:itemId/claims` | `{claimerName, quantity}` (quantity 1–99, default 1) | `201 {claim, manageToken, manageUrl}`, `409 CLAIM_EXCEEDS_REMAINING {remaining}`, `403 OWNER_CANNOT_CLAIM`, `404 SHARE_LINK_NOT_FOUND` (the link), or `404 NOT_FOUND` (the item) |
+| `GET /claims/:manageToken` | none | `{claim, item, wishlistTitle, ownerDisplayName, remaining, shareUrl, ownerSeesClaims}`, or `404 NOT_FOUND` |
+| `PATCH /claims/:manageToken` | `{claimerName?, quantity?}`, at least one | Updated claim, `409 CLAIM_EXCEEDS_REMAINING {remaining}`, or `404 NOT_FOUND` |
+| `DELETE /claims/:manageToken` | none | `204`, or `404 NOT_FOUND` |
 
 - `shareUrl` in the claim response is the wishlist's **current** share URL, so it stays correct after a rotation. The manage token itself is the authorization.
-- Each item in the `GET /shared` response has: `id, title, url, imageUrl, priceText, note, quantity`, and `remaining` and `claims[] {id, claimerName, quantity}` when the viewer may see them (§5.1).
+- Each item in the `GET /shared` response has: `id, title, url, imageUrl, priceText, note, quantity`, and `remaining` and `claims[] {id, claimerName, quantity}` when the viewer may see them (§5.1). The `item` in `GET /claims` has the same fields, without `claims[]`.
 - Claims are only ever changed by **manage token**. A claim ID grants nothing.
+- `ownerSeesClaims` is the list's `showClaimsToOwner`, sent to every viewer so the pages can say which way it's set (D40). It's a setting, not claim data.
+- `manageUrl` is `APP_ORIGIN/c/<manageToken>`, built by the API next to `shareUrl` so both links come from one place. The token is returned once and stored only as its SHA-256 (§4).
+- `CLAIM_EXCEEDS_REMAINING` carries `remaining` as a problem extension member, so the claim sheet can reset its stepper (§7).
+
+**How the public endpoints work (Plan 4a):**
+
+- **Who's looking.** `GET /shared` and `POST …/claims` resolve the session cookie if there is one, through a guard that never refuses. The viewer is the owner when the session's user owns the list, verified or not; the client never sends a flag. A dead cookie isn't cleared here, because the share page calls the API server to server, where a `Set-Cookie` never reaches the browser (D27).
+- **Malformed is unknown.** A share or manage token that isn't 22 base64url characters gets the same `404` as an unknown one, and a malformed item ID gets `404 NOT_FOUND`, as on the owner endpoints.
+- **Two 404s for a claim.** The link and the item get different codes because the claim sheet says different things: a rotated link means asking the owner for the new one, and a deleted item means the list is reloaded. Telling them apart reveals only that a link is dead, to someone who already holds it.
+- **The order of a claim's checks.** A malformed token or item ID is refused first, without touching the database. Then the per-IP limit, then the list by its token, then the list's limit, then the owner check, then the transaction (§6.3). The owner is refused **before** anything is summed, because a `409` carries `remaining`. A change to a claim runs the same way: the per-IP limit, then the claim by its token's hash, then its list's limit, then the transaction.
+- **Reads are one snapshot.** `GET /shared`, `GET /claims` and an opted-in `GET /wishlist` read the list, its items and its claims in one `REPEATABLE READ, READ ONLY` transaction, so `remaining` always agrees with the items beside it. For an owner who hasn't opted in, the claims aren't queried at all; the projection removes the fields anyway.
+- Every public response is `Cache-Control: no-store`. The gifters' writes pass the CSRF guard like any other (§6.2), and need no session.
 
 ### 5.1 Spoiler projection
 
@@ -337,6 +357,7 @@ projectWishlist(wishlist, items, claims, viewer): WishlistView
 - `GET /wishlist` always uses an owner viewer.
 - `GET /shared/:token` uses an owner viewer when the session's user owns the list, and a guest viewer otherwise.
 - The function is unit-tested exhaustively, and the integration tests assert the fields are **absent** from the JSON, not just empty.
+- `GET /claims/:manageToken` is the claimer's own view: the manage token is the capability, so it always includes `remaining`, and never other people's claims.
 
 ## 6. Auth and security
 
@@ -375,7 +396,14 @@ There are no CSRF tokens.
 3. If `requested > item.quantity − sum`, return `409 CLAIM_EXCEEDS_REMAINING` with the current remaining.
 4. Otherwise, insert the claim.
 
-**Updating a claim** uses the same transaction shape, excluding the claim's own quantity from the sum.
+**Updating a claim** uses the same transaction shape: lock the claim's item `FOR UPDATE`, then re-read the claim under that lock, since it may have been deleted meanwhile (`404`). The new quantity may be at most `remaining + current`, §2's rule (amended in Plan 4a).
+
+- The original wording, "excluding the claim's own quantity from the sum", caps it at `item.quantity − others` instead. The two disagree once the owner has lowered the quantity below what's claimed (D19): with a quantity of 1 and two claims of 1, a claimer who only renames would get a `409`.
+- So a `PATCH` that doesn't raise the quantity never answers `409`, and a claimer is never forced to give up what they already hold.
+
+**Deleting a claim** is a plain `DELETE` by token hash with no item lock: removing a claim can't over-commit an item.
+
+**Lock order.** Claim writes lock only the item row, never the `wishlists` row, so they keep the users → wishlists → items order that the owner's changes and an account deletion's cascade take (§5).
 
 ### 6.4 Passwords
 
@@ -400,10 +428,12 @@ These are the initial values. They're configurable, and every limited endpoint r
 |---|---|
 | `POST /auth/login` | 10 per 15 minutes per email, and 50 per 15 minutes per IP |
 | signup, resend-verification, reset-request | 3 per hour per email, and 20 per hour per IP |
-| `POST …/claims`, `PATCH /claims/*` | 30 per hour per share token, and 20 per hour per IP |
+| `POST …/claims`, `PATCH /claims/*` | 30 per hour per list, and 20 per hour per IP (amended in Plan 4a: the list, not the share token) |
 | `POST /wishlist/unfurl` | 60 per hour per user |
 
 **Buckets and order (Plan 2a).** Signup, resend-verification and reset-request share one per-address and one per-IP bucket: together they cap the mail one inbox or one IP can trigger. Those endpoints check the per-IP limit, then Turnstile, then the per-address limit, so failed challenges can't use up a victim's budget. Password confirmations on `/me` count against login's per-address bucket. Keys store a SHA-256 of the email or IP, never the raw value.
+
+**Claim limits (Plan 4a).** The two claim endpoints share one per-list and one per-IP bucket. The list's bucket is keyed by the wishlist ID rather than the share token: `PATCH /claims/:manageToken` has no share token in its path, and rotating the link shouldn't reset the count. The per-IP limit is checked first, before the list is looked up. Every attempt counts, including those answered `409`. Accepted: anyone holding the link can use up a list's 30 claims for the hour; rotating the link stops them.
 
 **Plan 2b additions.** Per-IP limits key an IPv6 address by its /64, because one host usually holds a whole /64; an IPv4-mapped address is keyed as the IPv4 address it carries. In signup, the breached-password check runs before the address is charged against the mail budget, so a rejected password doesn't use up the address's emails.
 
@@ -426,12 +456,14 @@ These are the initial values. They're configurable, and every limited endpoint r
   - loopback, private, link-local, CGNAT, unique-local, multicast or unspecified, or
   - an IPv4-mapped or IPv4-translated IPv6 form of any of those.
 
+  The resolver is c-ares, Node's `dns.promises.Resolver`, asking for A and AAAA records in parallel (Plan 4a). Never `dns.lookup`: its `getaddrinfo` runs on one of libuv's four threadpool threads and holds it until the OS gives up, long after our deadline, so a few slow lookups starved argon2 (9 ms became 317 ms in Plan 3a's probe). The two answers are joined; if one family fails and the other answers, that answer is used, and only when both fail is it `DNS_FAILED`. Each lookup has its own `Resolver`, cancelled at the deadline: `cancel()` stops every query on its resolver, so a shared one would cancel other people's lookups too. At most 4 lookups run at once per instance, and one that can't start before the deadline is `TIMEOUT`. c-ares doesn't read `/etc/hosts`, which no retailer needs.
+
   Classification uses `ipaddr.js` and is an **allowlist** (Plan 3a): after an IPv4-mapped address is converted to the IPv4 address it carries, an address passes only if `ipaddr.js` classes it as `unicast`. Every special-purpose range is refused by default, including NAT64, 6to4, Teredo and reserved space, so a range nobody thought to list can't slip through. An IPv6 address must also lie in `2000::/3`, the space allocated for global unicast: ipaddr.js calls some IPv6 space `unicast` that no public host uses, such as the deprecated IPv4-compatible `::a.b.c.d`, which a host with a `sit` tunnel treats as local (Plan 3a security review).
 - **DNS rebinding:** the connection goes to the **vetted IP**, through a custom `lookup` on the undici agent, so the address can't change between the check and the connection. The original Host header and SNI are kept.
   - The fetcher uses the `undici` package's own `request()`, never Node's global `fetch`: Node's bundled undici can drift from the npm copy, and a global dispatcher would route the API's other outbound calls through this policy too (Plan 3a).
   - The `lookup` answers both the single-address call and the `all: true` list call that Node's default `autoSelectFamily` makes.
 - **Redirects:** followed manually, at most 3 hops, with every hop checked the same way.
-- **Limits:** 5-second total timeout. Reading stops at 1 MB, counted after decompression, and a longer page is parsed from what arrived: a product page's metadata is in its `<head>` (Plan 3a follow-up). Only a `200` with `text/html` is accepted.
+- **Limits:** 5-second total timeout. Reading stops at 1 MB, counted after decompression, and a longer page is parsed from what arrived: a product page's metadata is in its `<head>` (Plan 3a follow-up). The raw bytes are capped at 1 MB too, counted before decompression, so a compressed stream that decodes to almost nothing can't keep us reading until the deadline; whichever cap trips first ends the read (Plan 4a). Real pages reach the decoded cap first: HTML compresses roughly five- to tenfold, so a gzipped page reaches 1 MB decoded at 100–200 KB raw. Only a `200` with `text/html` is accepted.
 - **Parsing:** done with a real HTML parser. Sources are tried in this order: Open Graph tags, then JSON-LD `Product` (name, image, offers price and currency), then `<title>`. A title that is only the site's name (`og:site_name`, or the host without `www.`) is skipped, as on a bot check's page (Plan 3a follow-up).
 - **Output (Plan 3a):** a JSON-LD price and currency become a display string with `Intl.NumberFormat('en-US')`, e.g. `"$24.99"`. Titles are trimmed to 200 characters. Titles and prices keep only visible characters, so a prefill always passes the item contract (D35, D36).
 - **Images:** the extracted image URL is resolved against the final page URL and must be https, and the server never fetches it.
@@ -464,7 +496,7 @@ These are the initial values. They're configurable, and every limited endpoint r
 | `/` | Server | Landing page. Redirects to `/list` when signed in |
 | `/signup`, `/login`, `/verify-email`, `/reset-password`, `/reset-password/confirm` | Client forms | Call `/api/auth/*` directly, so the `Set-Cookie` lands from the API response |
 | `/list` | Server-rendered first load + client editor (TanStack Query) | Reorder and delete show at once; a failed change refetches the list (D37) |
-| `/settings` | Client | Display name; list name; share link (copy, and rotate after a confirmation); change password; delete account (confirmation dialog). The spoiler toggle, with its confirmation, arrives in Plan 4 (D33) |
+| `/settings` | Client | Display name; list name; share link (copy, and rotate after a confirmation); change password; delete account (confirmation dialog). The spoiler toggle, with its confirmation, arrives in Plan 4b (D33, D39) |
 | `/s/[shareToken]` | Server Component | Readable before JavaScript loads. Claim controls hydrate afterwards |
 | `/c/[manageToken]` | Server Component + client form | Manage one claim |
 
@@ -490,6 +522,8 @@ These are the initial values. They're configurable, and every limited endpoint r
 4. On a `409`, the stepper resets to the new remaining count and the sheet explains why.
 
 `localStorage` is only a convenience. The manage link is the source of truth.
+
+The share page, the claim sheet and the manage page say whether the owner can see who's getting what, from `ownerSeesClaims` (D40).
 
 ### Owner editor (Plan 3b)
 
@@ -715,3 +749,6 @@ As of 2026-10-07 on the development machine:
 | D36 | Prices follow the title rule (D35): visible characters only. A price sits beside its title in front of gifters, and no currency Intl formats uses a control or format character (Ted, 2026-10-13) | Refusing only NUL; silently stripping the characters instead of refusing them |
 | D37 | The owner editor is compact rows, edited in place; quantity is a form field saved with Save, so only reorder and delete update before the API answers; the share actions sit on `/list` once it has an item (Ted, 2026-10-13) | Image cards edited in a bottom sheet, with a quantity stepper on each card; rows edited in a sheet |
 | D38 | Plan 2b's "before sign-up opens" fixes split by page: the four on Plan 3b's pages (the delete-account dialog, `/list`'s confirm-email copy, `requireMe`'s router cache, the screen-reader check) land in 3b; the two Turnstile fixes join Plan 4's go-live work, where sign-up opens (Ted, 2026-10-13) | All six in 3b; all six in Plan 4 |
+| D39 | Plan 4 split into 4a, the claims API with unfurl's go-live hardening (shipped dark), and 4b, the share page, claim sheet, manage page and spoiler toggle, ending with sign-up opening (Ted, 2026-10-14) | One Plan 4 of about 14 PRs, past Neon's 8 previews; a split by feature, with neither half shippable dark |
+| D40 | Gifters are told whether the owner can see claims: `GET /shared` and `GET /claims` carry `ownerSeesClaims`, and the pages say which way it's set (Ted, 2026-10-14) | Neutral copy that promises nothing, leaving a gifter no way to know their surprise is being watched |
+| D41 | Letters and marks that draw nothing (the Hangul fillers, the Braille blank, U+034F, U+17B4, U+17B5) count as blank in `visibleOnly`, so a name made only of them is refused; lengths keep counting UTF-16 units, the same in every field (Plan 4a, 2026-10-14) | Refusing those characters anywhere in a name; counting names alone in code points or graphemes |
