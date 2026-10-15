@@ -107,7 +107,7 @@ These are explicit so they don't creep in:
 ### Visible text
 
 - Display names, list and item titles, prices and claimer names use visible characters only (D35, D36). Control and format characters are refused, except the two joiners that emoji and Persian need.
-- Letters and marks that draw nothing count as blank (D41): the Hangul fillers (U+115F, U+1160, U+3164, U+FFA0), the Braille blank (U+2800), U+034F, U+17B4 and U+17B5. A value made only of them, spaces and joiners is refused; one with something visible beside them is kept as typed.
+- Letters and marks that draw nothing count as blank (D41, widened by D44): every default-ignorable code point (`\p{Default_Ignorable_Code_Point}`: the Hangul fillers, U+034F, U+17B4, U+17B5, the variation selectors and the joiners among them) and the Braille blank (U+2800). A value made only of them and spaces is refused; one with something visible beside them is kept as typed.
 - Lengths count UTF-16 code units everywhere, as JavaScript and the forms do. An emoji costs two or more, so a name made only of emoji fits about 25 (D41).
 
 ## 3. Architecture
@@ -262,7 +262,7 @@ rate_limits (
   |---|---|---|---|
   | Session | 256-bit | SHA-256 hash | A database leak gives an attacker nothing usable. SHA-256 is enough for high-entropy random tokens; argon2 is only needed for passwords people choose |
   | Email (verify and reset) | 256-bit | SHA-256 hash | Same as above |
-  | Claim manage | 128-bit | SHA-256 hash | Same as above. Kept to 128 bits so links that get texted stay short |
+  | Claim manage | 128-bit | SHA-256 hash | Same as above. Kept to 128 bits so links that get texted stay short. Minted by the server, or by the claim sheet when it sends one (D42) |
   | Share | 128-bit | **Plaintext** | The owner must be able to copy their link at any time. It's a public, low-privilege capability, and rotation is the fix if it leaks |
 
 - **Reorder uses a plain integer `position`, rewritten in full by the reorder endpoint (§5).** Rejected: fractional indexing, which solves write amplification this app doesn't have (at most 200 items) and adds key growth and rebalancing.
@@ -318,7 +318,7 @@ An item ID that belongs to another user's list returns `404`, the same as one th
 | Method & path | Body | Result |
 |---|---|---|
 | `GET /shared/:shareToken` | none | `{title, ownerDisplayName, viewerIsOwner, ownerSeesClaims, items[]}`, or `404 SHARE_LINK_NOT_FOUND` |
-| `POST /shared/:shareToken/items/:itemId/claims` | `{claimerName, quantity}` (quantity 1–99, default 1) | `201 {claim, manageToken, manageUrl}`, `409 CLAIM_EXCEEDS_REMAINING {remaining}`, `403 OWNER_CANNOT_CLAIM`, `404 SHARE_LINK_NOT_FOUND` (the link), or `404 NOT_FOUND` (the item) |
+| `POST /shared/:shareToken/items/:itemId/claims` | `{claimerName, quantity, manageToken?}` (quantity 1–99, default 1) | `201 {claim, manageToken, manageUrl}`, `409 CLAIM_EXCEEDS_REMAINING {remaining}`, `409 MANAGE_TOKEN_IN_USE`, `403 OWNER_CANNOT_CLAIM`, `404 SHARE_LINK_NOT_FOUND` (the link), or `404 NOT_FOUND` (the item) |
 | `GET /claims/:manageToken` | none | `{claim, item, wishlistTitle, ownerDisplayName, remaining, shareUrl, ownerSeesClaims}`, or `404 NOT_FOUND` |
 | `PATCH /claims/:manageToken` | `{claimerName?, quantity?}`, at least one | Updated claim, `409 CLAIM_EXCEEDS_REMAINING {remaining}`, or `404 NOT_FOUND` |
 | `DELETE /claims/:manageToken` | none | `204`, or `404 NOT_FOUND` |
@@ -327,7 +327,8 @@ An item ID that belongs to another user's list returns `404`, the same as one th
 - Each item in the `GET /shared` response has: `id, title, url, imageUrl, priceText, note, quantity`, and `remaining` and `claims[] {id, claimerName, quantity}` when the viewer may see them (§5.1). The `item` in `GET /claims` has the same fields, without `claims[]`.
 - Claims are only ever changed by **manage token**. A claim ID grants nothing.
 - `ownerSeesClaims` is the list's `showClaimsToOwner`, sent to every viewer so the pages can say which way it's set (D40). It's a setting, not claim data.
-- `manageUrl` is `APP_ORIGIN/c/<manageToken>`, built by the API next to `shareUrl` so both links come from one place. The token is returned once and stored only as its SHA-256 (§4).
+- `manageUrl` is `APP_ORIGIN/c/<manageToken>`, built by the API next to `shareUrl` so both links come from one place. The token is stored only as its SHA-256 (§4).
+- **A claim that survives a lost response (D42, Plan 4b).** The claim sheet mints the manage token itself (16 random bytes, base64url) and saves it before it sends the claim, so a `201` lost on a bad connection costs nothing: the sheet replays the same token, and a reload finds the claim through `GET /claims`. A request without `manageToken` gets one minted by the API, as before. After the item's row is locked, the API looks the token's hash up: on **the same item** it returns that claim as it is now, with `201`, the same token and no remaining check (so retrying the last unit can't `409` against itself); on **another item** it answers `409 MANAGE_TOKEN_IN_USE`, which tells a caller only that a token they already hold exists; otherwise it claims as usual. A double tap is serialized by the row lock, and READ COMMITTED gives the second request a snapshot that sees the first one's row; the same token sent for two items at once is caught by the unique index and gets the same `409`. A replay counts against the rate limits like any claim. Accepted: the server no longer vouches for the randomness of a token a client chose, which weakens only that client's own claim.
 - `CLAIM_EXCEEDS_REMAINING` carries `remaining` as a problem extension member, so the claim sheet can reset its stepper (§7).
 
 **How the public endpoints work (Plan 4a):**
@@ -335,7 +336,7 @@ An item ID that belongs to another user's list returns `404`, the same as one th
 - **Who's looking.** `GET /shared` and `POST …/claims` resolve the session cookie if there is one, through a guard that never refuses. The viewer is the owner when the session's user owns the list, verified or not; the client never sends a flag. A dead cookie isn't cleared here, because the share page calls the API server to server, where a `Set-Cookie` never reaches the browser (D27).
 - **Malformed is unknown.** A share or manage token that isn't 22 base64url characters gets the same `404` as an unknown one, and a malformed item ID gets `404 NOT_FOUND`, as on the owner endpoints.
 - **Two 404s for a claim.** The link and the item get different codes because the claim sheet says different things: a rotated link means asking the owner for the new one, and a deleted item means the list is reloaded. Telling them apart reveals only that a link is dead, to someone who already holds it.
-- **The order of a claim's checks.** A malformed token or item ID is refused before any rate limit or lookup (the session guard and body validation run earlier, as on every route). Then the per-IP limit, then the list by its token, then the list's limit, then the owner check, then the transaction (§6.3). The owner is refused **before** anything is summed, because a `409` carries `remaining`. A change to a claim runs the same way: the per-IP limit, then the claim by its token's hash, then its list's limit, then the transaction.
+- **The order of a claim's checks.** A malformed token or item ID is refused before any rate limit or lookup (the session guard and body validation run earlier, as on every route). Then the per-IP limit, then the list by its token, then the owner check, then the list's limit, then the transaction (§6.3). The owner is refused **before** anything is summed, because a `409` carries `remaining`, and before the list's limit, because a `429` would tell them gifters have been claiming (D43). A change to a claim runs the same way: the per-IP limit, then the claim by its token's hash, then its list's limit, then the transaction.
 - **Reads are one snapshot.** `GET /shared`, `GET /claims` and an opted-in `GET /wishlist` read the list, its items and its claims in one `REPEATABLE READ, READ ONLY` transaction, so `remaining` always agrees with the items beside it. For an owner who hasn't opted in, the claims aren't queried at all; the projection removes the fields anyway.
 - Every public response is `Cache-Control: no-store`. The gifters' writes pass the CSRF guard like any other (§6.2), and need no session.
 
@@ -443,7 +444,7 @@ These are the initial values. They're configurable, and every limited endpoint r
 
 - **Referrer policy:** `/s/*` and `/c/*` respond with `Referrer-Policy: no-referrer`. Outbound product links also carry `rel="noopener noreferrer"`. Without this, clicking through to a retailer would send the share or manage URL in the `Referer` header.
 - **Indexing:** the same pages respond with `X-Robots-Tag: noindex`, and they're disallowed in `robots.txt`.
-- **Sentry:** `beforeSend` scrubs token path segments.
+- **Sentry:** `beforeSend` scrubs token path segments. It arrives with Sentry, in Plan 5; until then nothing reports errors off the platform.
 - **Accepted:** Vercel's request logs contain the tokens. They're retained for 1 hour and only the account owner can read them.
 - **Token query strings:** the verify and reset pages read the token from the query string and remove it from the address bar with `history.replaceState` as soon as they load. They POST it only when the person presses the page's button, so a mail scanner or link preview can't use it up. Both pages send `Referrer-Policy: no-referrer` and `X-Robots-Tag: noindex`.
 
@@ -511,6 +512,7 @@ These are the initial values. They're configurable, and every limited endpoint r
 - `apiFetch` validates **every** response against its `contracts` schema.
 - Web and api deploy independently, so for a short time during a deploy they can be out of step. Validation turns that version skew into a clear error instead of `undefined` reaching the UI.
 - Error codes from problem+json map to user-facing messages in one table.
+- Every request other than a `GET` carries a JSON body, `{}` when it has nothing to send, so the CSRF guard's content-type check (§6.2) holds for bodiless writes like `DELETE /claims/:manageToken` (Plan 4b).
 
 ### Claim flow (mobile-first)
 
@@ -518,12 +520,23 @@ These are the initial values. They're configurable, and every limited endpoint r
    - a name field, prefilled from `localStorage`;
    - a quantity stepper, between 1 and remaining.
 2. On `201`, the sheet shows the manage link with **Copy** and **Share** buttons. Share uses the Web Share API. The copy reads: "Save this link to change or cancel your claim."
-3. `localStorage` stores `claims:<shareToken>` as `[{claimId, manageToken}]`. A returning gifter on the same browser sees "You're getting 1 · Change".
+3. `localStorage` keeps every claim this browser knows under one key, `hanker:claims`, as `[{itemId, manageToken, claimId?}]` (D45). Item IDs are unique on their own, so a rotated share link keeps them. The record is written **before** the claim is sent (D42) and gets its `claimId` from the `201`. A returning gifter on the same browser sees "You're getting 1 · Change": the share page matches records to `item.claims[].id`, drops records whose claim is gone, and resolves a record without a `claimId` (a lost response) through `GET /claims/:manageToken`. Opening a manage link saves its record too, so another device learns the claim.
 4. On a `409`, the stepper resets to the new remaining count and the sheet explains why.
+5. If no response arrives at all, the sheet says so and **Try again** resends the same token.
 
 `localStorage` is only a convenience. The manage link is the source of truth.
 
 The share page, the claim sheet and the manage page say whether the owner can see who's getting what, from `ownerSeesClaims` (D40).
+
+### Share, claim and manage pages (Plan 4b)
+
+These follow the Plan 4b mockups, on the same canvas as the editor's.
+
+- **Server render, client islands.** `/s` and `/c` are Server Components. The claim sheet (a Radix Dialog shaped as a bottom sheet), the manage form and the `localStorage` strips are client components, and every write goes through the `/api` rewrite. After a write the page calls `router.refresh()`, so the server stays the only source of the list; TanStack Query isn't used on these pages.
+- **The owner on their own link** (`viewerIsOwner`) sees the cards without claim controls, a note that says whether claims are hidden from them, and a link back to the editor.
+- **A dead share link** gets its own page: the link may be mistyped or replaced, and a saved claim link still works. A dead manage link says *"This claim no longer exists."* (§2). Cancelling a claim shows its confirmation in the browser, since the link stops working.
+- **The spoiler toggle** is a switch on `/settings`. Turning it on asks first; turning it off doesn't, and removes the claim fields from the editor's cache before the request returns, so the browser never keeps claim data the owner has turned off (§1, criterion 4).
+- **The editor's claim lines,** when the owner has opted in: "No claims yet", "Aunt Sue is getting this", or "Sam ×1, Priya ×1 · 1 left". Item writes don't return claims, so the cache keeps an item's claims across an edit and recomputes `remaining` with the shared `remainingOf` from `contracts`.
 
 ### Owner editor (Plan 3b)
 
@@ -567,6 +580,7 @@ The editor is layout A from the Plan 3b mockups: compact rows, edited in place (
 **Tests the plan must include:**
 
 - **Claim race.** 20 concurrent claims against an item with quantity 1. Exactly one `201` and nineteen `409`s, and the claims sum to 1.
+- **Claim replay (D42).** The same `manageToken` sent again returns the same claim and writes no second row, including for the last unit; sent for another item, it's refused.
 - **SSRF refusal through the real fetcher.** Unfurl against `127.0.0.1`, `[::1]`, `169.254.169.254` and `[::ffff:127.0.0.1]`, plus a redirect chain from a public fixture to a private address. All refused.
 - **Spoilers.** Claim fields are absent from the JSON for an owner who hasn't opted in, on both `GET /wishlist` and `GET /shared/:token`.
 - **Reorder conflict.** Sending a stale item set returns `409`.
@@ -751,4 +765,8 @@ As of 2026-10-07 on the development machine:
 | D38 | Plan 2b's "before sign-up opens" fixes split by page: the four on Plan 3b's pages (the delete-account dialog, `/list`'s confirm-email copy, `requireMe`'s router cache, the screen-reader check) land in 3b; the two Turnstile fixes join Plan 4's go-live work, where sign-up opens (Ted, 2026-10-13) | All six in 3b; all six in Plan 4 |
 | D39 | Plan 4 split into 4a, the claims API with unfurl's go-live hardening (shipped dark), and 4b, the share page, claim sheet, manage page and spoiler toggle, ending with sign-up opening (Ted, 2026-10-14) | One Plan 4 of about 14 PRs, past Neon's 8 previews; a split by feature, with neither half shippable dark |
 | D40 | Gifters are told whether the owner can see claims: `GET /shared` and `GET /claims` carry `ownerSeesClaims`, and the pages say which way it's set (Ted, 2026-10-14) | Neutral copy that promises nothing, leaving a gifter no way to know their surprise is being watched |
-| D41 | Letters and marks that draw nothing (the Hangul fillers, the Braille blank, U+034F, U+17B4, U+17B5) count as blank in `visibleOnly`, so a name made only of them is refused; lengths keep counting UTF-16 units, the same in every field (Plan 4a, 2026-10-14) | Refusing those characters anywhere in a name; counting names alone in code points or graphemes |
+| D41 | Letters and marks that draw nothing (the Hangul fillers, the Braille blank, U+034F, U+17B4, U+17B5) count as blank in `visibleOnly`, so a name made only of them is refused; lengths keep counting UTF-16 units, the same in every field (Plan 4a, 2026-10-14; **widened by D44**) | Refusing those characters anywhere in a name; counting names alone in code points or graphemes |
+| D42 | The claim sheet mints the manage token and saves it before sending; the API returns the existing claim when the same token comes back for the same item, so a lost `201` costs nothing (Ted, 2026-10-14) | An `Idempotency-Key` column that rotates the manage token on replay; no key, with a lost response leaving a claim nobody can manage |
+| D43 | A claim checks the owner before the list's rate limit, so a `429` can't tell an owner that gifters have been claiming (Plan 4b, 2026-10-14) | The Plan 4a order, list limit first |
+| D44 | Blank in `visibleOnly` means every default-ignorable code point plus U+2800, not a hand-kept list; amends D41 (Plan 4b, 2026-10-14) | D41's seven code points, which let variation selectors through |
+| D45 | The browser keeps its claims under one `localStorage` key, by item ID, so a rotated share link keeps them (Plan 4b, 2026-10-14) | `claims:<shareToken>`, which loses every claim's strip when the owner rotates the link |
