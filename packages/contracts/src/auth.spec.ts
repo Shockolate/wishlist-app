@@ -137,13 +137,20 @@ describe('DisplayNameSchema (Plan 2b rule 14)', () => {
     ['a combining grapheme joiner', '\u034F'],
     ['Khmer inherent vowels', '\u17B4\u17B5'],
     ['a joiner and a filler', '\u200D\u3164'],
+    ['variation selectors', '\uFE0F\uFE0E'],
+    ['a Mongolian free variation selector', '\u180B'],
+    ['a Hangul filler with a variation selector', '\u3164\uFE0F'],
+    ['a variation selector in spaces', ' \uFE0F '],
   ])('refuses a name that draws nothing: %s (D41)', (_label, name) => {
     expect(DisplayNameSchema.safeParse(name).success).toBe(false);
   });
 
-  it.each(['Ada\u3164', '\u2800Ada'])('keeps %j as typed: something in it shows (D41)', (name) => {
-    expect(DisplayNameSchema.parse(name)).toBe(name);
-  });
+  it.each(['Ada\u3164', '\u2800Ada', '\u2764\uFE0F', '\u2764\uFE0F Ada', 'Ada\uFE0F'])(
+    'keeps %j as typed: something in it shows (D41)',
+    (name) => {
+      expect(DisplayNameSchema.parse(name)).toBe(name);
+    },
+  );
 
   it('reports an empty name once, as too short', () => {
     const result = DisplayNameSchema.safeParse('  ');

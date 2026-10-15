@@ -7,12 +7,12 @@ const HIDDEN_CHARACTERS = /[\p{Cc}\p{Cf}]/u;
 const JOINERS = /[\u200C\u200D]/gu;
 
 /**
- * Letters and marks that draw nothing (D41): the Hangul fillers, the Braille blank, the combining
- * grapheme joiner and two Khmer inherent vowels. They aren't control or format characters, so
- * HIDDEN_CHARACTERS lets them through; a name made only of them would still show as blank. The
- * marks come first so that no-misleading-character-class doesn't read one as joined to its neighbor.
+ * Characters that draw nothing (D41, widened by D44): every default-ignorable code point (the
+ * Hangul fillers, U+034F, the Khmer inherent vowels, the variation selectors, the joiners) and the
+ * Braille blank, which isn't default-ignorable but shows as a space. HIDDEN_CHARACTERS lets the
+ * letters and marks among them through, so a name made only of them would still show as blank.
  */
-const BLANK_LETTERS = /[\u034F\u17B4\u17B5\u115F\u1160\u3164\uFFA0\u2800]/gu;
+const BLANK_LETTERS = /[\p{Default_Ignorable_Code_Point}\u2800]/gu;
 
 /** The message for a value that fails `visibleOnly`. */
 export const VISIBLE_ONLY_MESSAGE = 'Use visible characters only';

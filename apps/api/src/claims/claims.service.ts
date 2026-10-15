@@ -13,6 +13,7 @@ import { CLOCK, type Clock } from '../core/clock.js';
 import { ENV, type Env } from '../core/env.js';
 import { newId } from '../core/ids.js';
 import { DB, type Database } from '../db/database.module.js';
+import { isUniqueViolation } from '../db/pg-errors.js';
 import { claims, items, users, wishlists } from '../db/schema.js';
 import { RateLimiter } from '../rate-limit/rate-limiter.js';
 import { hashToken, newToken } from '../security/tokens.js';
@@ -21,6 +22,7 @@ import { itemNotFound } from '../wishlist/wishlist-errors.js';
 import {
   claimExceedsRemaining,
   claimNotFound,
+  manageTokenInUse,
   ownerCannotClaim,
   shareLinkNotFound,
 } from './claims-errors.js';
@@ -42,8 +44,11 @@ export class ClaimsService {
 
   /**
    * Claims some of an item on the list behind `shareToken` (spec §5). The checks run in the
-   * spec's order: malformed IDs, the IP's limit, the list, its limit, the owner, and only then the
-   * transaction, so the owner never sees a 409's `remaining`.
+   * spec's order: malformed IDs, the IP's limit, the list, the owner (D43), the list's limit, and
+   * only then the transaction, so the owner never sees a 409's `remaining` or a 429's hint.
+   *
+   * A request that sends the manage token of a claim already on this item gets that claim back
+   * (D42): the claim sheet replays its token when an answer was lost.
    */
   async create(
     shareToken: string,
@@ -62,39 +67,62 @@ export class ClaimsService {
       .from(wishlists)
       .where(eq(wishlists.shareToken, shareToken));
     if (!list) throw shareLinkNotFound();
-    await this.limiter.enforce(claimsListKey(list.id), CLAIMS_PER_LIST);
+    // Before the list's limit (D43): a 429 there would tell the owner gifters have been claiming.
     if (viewerId === list.ownerId) throw ownerCannotClaim();
+    await this.limiter.enforce(claimsListKey(list.id), CLAIMS_PER_LIST);
 
-    const manageToken = newToken(16);
-    const claim = await this.db.transaction(async (tx) => {
-      // Spec §6.3: the item's row lock serializes every claim write on it. Only the item is
-      // locked, never the list, so the users → wishlists → items order holds.
-      const [item] = await tx
-        .select({ quantity: items.quantity })
-        .from(items)
-        .where(and(eq(items.id, itemId), eq(items.wishlistId, list.id)))
-        .for('update');
-      if (!item) throw itemNotFound();
-      const claimed = await claimedTotal(tx, itemId);
-      if (!fitsNewClaim(input.quantity, item.quantity, claimed)) {
-        throw claimExceedsRemaining(remainingOf(item.quantity, claimed));
-      }
-      const now = this.clock.now();
-      const [row] = await tx
-        .insert(claims)
-        .values({
-          id: newId(),
-          itemId,
-          claimerName: input.claimerName,
-          quantity: input.quantity,
-          manageTokenHash: hashToken(manageToken),
-          createdAt: now,
-          updatedAt: now,
-        })
-        .returning(CLAIM_COLUMNS);
-      if (!row) throw new Error('claim insert returned no row');
-      return row;
-    });
+    const manageToken = input.manageToken ?? newToken(16);
+    const tokenHash = hashToken(manageToken);
+    let claim: Claim;
+    try {
+      claim = await this.db.transaction(async (tx) => {
+        // Spec §6.3: the item's row lock serializes every claim write on it. Only the item is
+        // locked, never the list, so the users → wishlists → items order holds.
+        const [item] = await tx
+          .select({ quantity: items.quantity })
+          .from(items)
+          .where(and(eq(items.id, itemId), eq(items.wishlistId, list.id)))
+          .for('update');
+        if (!item) throw itemNotFound();
+        // After the lock, so a double tap's second request sees the first one's claim: each
+        // statement at READ COMMITTED reads what had committed when it began (D42).
+        const [existing] = await tx
+          .select({ ...CLAIM_COLUMNS, itemId: claims.itemId })
+          .from(claims)
+          .where(eq(claims.manageTokenHash, tokenHash));
+        if (existing) {
+          if (existing.itemId !== itemId) throw manageTokenInUse();
+          return {
+            id: existing.id,
+            claimerName: existing.claimerName,
+            quantity: existing.quantity,
+          };
+        }
+        const claimed = await claimedTotal(tx, itemId);
+        if (!fitsNewClaim(input.quantity, item.quantity, claimed)) {
+          throw claimExceedsRemaining(remainingOf(item.quantity, claimed));
+        }
+        const now = this.clock.now();
+        const [row] = await tx
+          .insert(claims)
+          .values({
+            id: newId(),
+            itemId,
+            claimerName: input.claimerName,
+            quantity: input.quantity,
+            manageTokenHash: tokenHash,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .returning(CLAIM_COLUMNS);
+        if (!row) throw new Error('claim insert returned no row');
+        return row;
+      });
+    } catch (error) {
+      // The same token claimed on another item at the same moment (Plan 4b rule 3).
+      if (isUniqueViolation(error, 'claims_manage_token_hash_unique')) throw manageTokenInUse();
+      throw error;
+    }
     return { claim, manageToken, manageUrl: manageUrl(this.env.APP_ORIGIN, manageToken) };
   }
 

@@ -50,7 +50,9 @@ export function toProblem(exception: unknown, requestId: string): Problem {
   return build(500, ErrorCode.INTERNAL_ERROR, requestId);
 }
 
+/** Every problem is `no-store`: an error, guard refusals and unknown routes included (Plan 4b). */
 export function sendProblem(res: Response, problem: Problem): void {
+  res.setHeader('Cache-Control', 'no-store');
   res.status(problem.status).type('application/problem+json').json(problem);
 }
 

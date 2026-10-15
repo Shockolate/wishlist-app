@@ -8,6 +8,7 @@ import {
   CreateClaimResponseSchema,
   SharedWishlistResponseSchema,
   UpdateClaimRequestSchema,
+  remainingOf,
 } from './claims.js';
 import { ErrorCode } from './error-codes.js';
 
@@ -52,6 +53,26 @@ describe('CreateClaimRequestSchema (spec §5)', () => {
       quantity: 1,
     });
   });
+
+  it('takes the manage token the claim sheet minted (D42)', () => {
+    expect(CreateClaimRequestSchema.parse({ claimerName: 'Sue', manageToken: TOKEN })).toEqual({
+      claimerName: 'Sue',
+      quantity: 1,
+      manageToken: TOKEN,
+    });
+    expect(CreateClaimRequestSchema.parse({ claimerName: 'Sue' })).not.toHaveProperty(
+      'manageToken',
+    );
+  });
+
+  it.each(['', 'short', `${TOKEN}x`, 'abcdefghijklmnopqrst+/'])(
+    'refuses a manage token that is not 22 base64url characters: %j',
+    (manageToken) => {
+      expect(CreateClaimRequestSchema.safeParse({ claimerName: 'Sue', manageToken }).success).toBe(
+        false,
+      );
+    },
+  );
 
   it.each([0, 100, 1.5, '2'])('refuses a quantity of %j', (quantity) => {
     expect(CreateClaimRequestSchema.safeParse({ claimerName: 'Sue', quantity }).success).toBe(
@@ -148,5 +169,13 @@ describe('CAPABILITY_TOKEN_PATTERN (spec §4)', () => {
     '',
   ])('refuses %j', (token) => {
     expect(CAPABILITY_TOKEN_PATTERN.test(token)).toBe(false);
+  });
+});
+
+describe('remainingOf (spec §2)', () => {
+  it('is what the owner wants less what is claimed, never below 0', () => {
+    expect(remainingOf(3, 1)).toBe(2);
+    expect(remainingOf(2, 2)).toBe(0);
+    expect(remainingOf(1, 3)).toBe(0);
   });
 });

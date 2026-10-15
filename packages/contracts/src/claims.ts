@@ -15,6 +15,11 @@ export const ClaimerNameSchema = DisplayNameSchema;
 export const CreateClaimRequestSchema = z.object({
   claimerName: ClaimerNameSchema,
   quantity: QuantitySchema.default(1),
+  /**
+   * The claim sheet's own manage token (D42). Sent again, it finds the claim it already made, so a
+   * response lost on a bad connection costs nothing. Without it, the API mints one.
+   */
+  manageToken: z.string().regex(CAPABILITY_TOKEN_PATTERN).optional(),
 });
 export type CreateClaimRequest = z.infer<typeof CreateClaimRequestSchema>;
 
@@ -43,7 +48,7 @@ export const SharedWishlistResponseSchema = z.object({
 });
 export type SharedWishlistResponse = z.infer<typeof SharedWishlistResponseSchema>;
 
-/** `201` from `POST …/claims`. The manage token is shown this once; the API keeps only its hash. */
+/** `201` from `POST …/claims`: the claim's manage token, the sheet's own or one the API minted (D42). */
 export const CreateClaimResponseSchema = z.object({
   claim: ClaimSchema,
   manageToken: z.string().regex(CAPABILITY_TOKEN_PATTERN),
@@ -70,3 +75,11 @@ export type ClaimDetailsResponse = z.infer<typeof ClaimDetailsResponseSchema>;
 export const ClaimConflictProblemSchema = ProblemSchema.extend({
   remaining: z.number().int().min(0),
 });
+
+/**
+ * How many of an item are still wanted (spec §2): what the owner wants less what's claimed. Never
+ * stored, and never below 0, because an owner may lower a quantity below what's claimed (D19).
+ */
+export function remainingOf(quantity: number, claimed: number): number {
+  return Math.max(0, quantity - claimed);
+}
