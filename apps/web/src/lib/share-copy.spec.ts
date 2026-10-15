@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  claimButtonLabel,
+  claimedLine,
   countLine,
   isTaken,
   joinNames,
   mineOf,
   ownerSeesLine,
+  ownStripText,
+  stepperHint,
   takenLine,
   type ItemClaims,
 } from './share-copy';
@@ -85,5 +89,25 @@ describe('share page copy', () => {
   it('never calls an item taken when the viewer may not see claims (spec §5.1)', () => {
     expect(isTaken({ wants: 'You want', quantity: 1 })).toBe(false);
     expect(mineOf({ wants: 'You want', quantity: 1 })).toBe(0);
+  });
+});
+
+describe('claim sheet copy', () => {
+  it('hints at the most you can claim, but not when it’s one', () => {
+    expect(stepperHint(2)).toBe('Up to 2');
+    expect(stepperHint(1)).toBeUndefined();
+  });
+
+  it('names the button for the last one after someone got there first', () => {
+    expect(claimButtonLabel(2, false)).toBe('Claim it');
+    expect(claimButtonLabel(1, false)).toBe('Claim it');
+    expect(claimButtonLabel(2, true)).toBe('Claim it');
+    expect(claimButtonLabel(1, true)).toBe('Claim the last one');
+  });
+
+  it('says what was claimed, and as whom', () => {
+    expect(claimedLine(1, 3, 'Ada', 'Priya')).toBe('1 of the 3 Ada wants, as Priya.');
+    expect(claimedLine(1, 1, 'Ada', 'Priya')).toBe('As Priya.');
+    expect(ownStripText(2)).toBe('You’re getting 2');
   });
 });

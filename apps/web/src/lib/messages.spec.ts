@@ -2,6 +2,7 @@ import { ErrorCode, UNFURL_FAILURE_REASONS, type Problem } from '@wishlist/contr
 import { describe, expect, it } from 'vitest';
 import { ApiError, ContractMismatchError } from './api-client';
 import {
+  claimConflictMessage,
   ERROR_MESSAGES,
   errorMessage,
   fieldErrors,
@@ -114,6 +115,17 @@ describe('prefillMessage (Plan 3b rule 6)', () => {
     expect(prefillMessage({ error: limited }, 'https://x.example/')).toBe(UNFURL_RATE_LIMITED);
     expect(prefillMessage({ error: new TypeError('offline') }, 'https://x.example/')).toBe(
       UNFURL_FAILED,
+    );
+  });
+});
+
+describe('claimConflictMessage', () => {
+  it('says how many are left, and that the stepper was set to it', () => {
+    expect(claimConflictMessage(1)).toBe(
+      'Someone else claimed some while you were choosing, so only 1 is left. We’ve set how many to 1.',
+    );
+    expect(claimConflictMessage(2)).toBe(
+      'Someone else claimed some while you were choosing, so only 2 are left. We’ve set how many to 2.',
     );
   });
 });

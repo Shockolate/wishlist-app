@@ -65,3 +65,23 @@ export function takenLine({ claims = [] }: ItemClaims): string {
   const names = [...new Set(claims.map((claim) => claim.claimerName))];
   return `Taken care of: ${joinNames(names)} ${isAre(names.length)} getting this`;
 }
+
+/** Under the claim sheet's stepper: the most you can claim. Nothing to say when it's one. */
+export function stepperHint(max: number): string | undefined {
+  return max > 1 ? `Up to ${max}` : undefined;
+}
+
+/** The claim sheet's button. After a 409 leaves one, it says so (the Plan 4b mockups). */
+export function claimButtonLabel(max: number, afterConflict: boolean): string {
+  return afterConflict && max === 1 ? 'Claim the last one' : 'Claim it';
+}
+
+/** Under "You're getting …" once a claim is made. */
+export function claimedLine(quantity: number, wanted: number, owner: string, name: string): string {
+  return wanted > 1 ? `${quantity} of the ${wanted} ${owner} wants, as ${name}.` : `As ${name}.`;
+}
+
+/** The card's strip for this browser's own claim. */
+export function ownStripText(mine: number): string {
+  return `You’re getting ${mine}`;
+}
