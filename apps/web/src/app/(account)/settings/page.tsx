@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { AccountHeader } from '@/components/account-header';
 import { DeleteAccountForm } from '@/components/account/delete-account-form';
+import { ClaimsCard } from '@/components/account/claims-card';
 import { ListNameForm } from '@/components/account/list-name-form';
 import { NameForm } from '@/components/account/name-form';
 import { PasswordForm } from '@/components/account/password-form';
@@ -26,6 +27,7 @@ export default async function SettingsPage() {
             <>
               <ListNameForm title={list.title} />
               <ShareLinkCard shareUrl={list.shareUrl} />
+              <ClaimsCard showClaimsToOwner={list.showClaimsToOwner === true} />
             </>
           ) : null}
           <PasswordForm />

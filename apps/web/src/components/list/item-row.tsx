@@ -2,9 +2,10 @@ import type { Item } from '@wishlist/contracts';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { ReactNode, Ref } from 'react';
+import { editorClaimLine } from '@/lib/editor-claims';
 import { shopName } from '@/lib/item-display';
 import { cn } from '@/lib/utils';
-import { ChevronDownIcon, ChevronUpIcon, GripIcon } from './icons';
+import { CheckIcon, ChevronDownIcon, ChevronUpIcon, GripIcon } from './icons';
 import { ItemPhoto } from './item-photo';
 
 const ARROW = 'inline-flex size-11 items-center justify-center rounded-control disabled:opacity-30';
@@ -114,6 +115,7 @@ export function ItemRow({
 /** The title and its details: price, how many, the shop, or what the idea is. */
 export function ItemSummary({ item }: { item: Item }) {
   const shop = shopName(item.url);
+  const claimLine = editorClaimLine(item);
   return (
     <>
       <span className="block text-base leading-snug font-semibold [overflow-wrap:anywhere]">
@@ -135,6 +137,18 @@ export function ItemSummary({ item }: { item: Item }) {
           </span>
         ) : null}
       </span>
+      {claimLine ? (
+        <span
+          className={cn(
+            'mt-0.5 flex items-center gap-1.5 text-sm [overflow-wrap:anywhere]',
+            claimLine.kind === 'none' ? 'text-muted-foreground' : 'text-success-foreground',
+            claimLine.kind === 'taken' && 'font-medium',
+          )}
+        >
+          {claimLine.kind === 'taken' ? <CheckIcon /> : null}
+          {claimLine.text}
+        </span>
+      ) : null}
     </>
   );
 }
