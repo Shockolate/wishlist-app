@@ -2,6 +2,8 @@
 
 import Script from 'next/script';
 import { useEffect, useRef, useState } from 'react';
+import { Notice } from '@/components/ui/notice';
+import { TURNSTILE_BLOCKED, TURNSTILE_FAILED } from '@/lib/messages';
 
 interface TurnstileApi {
   render(
@@ -29,7 +31,8 @@ const SCRIPT = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=exp
 /**
  * Cloudflare Turnstile, rendered explicitly (spec §6.5, §6.9). `onToken` gets a fresh token, or
  * null when one expires or fails. A token works once, so change `resetKey` after any submit that
- * used one, and the widget renders again for a new token.
+ * used one, and the widget renders again for a new token. A script that won't load, or a widget
+ * that fails, says so under the widget (D38).
  */
 export function Turnstile({
   nonce,
@@ -43,6 +46,7 @@ export function Turnstile({
   const container = useRef<HTMLDivElement>(null);
   const latest = useRef(onToken);
   const [ready, setReady] = useState(false);
+  const [failure, setFailure] = useState<'blocked' | 'error' | null>(null);
 
   useEffect(() => {
     latest.current = onToken;
@@ -58,9 +62,15 @@ export function Turnstile({
       theme: 'light',
       // The normal widget is 300px wide; narrow phones get the compact one.
       size: element.clientWidth < 300 ? 'compact' : 'normal',
-      callback: (token) => latest.current(token),
+      callback: (token) => {
+        setFailure(null);
+        latest.current(token);
+      },
       'expired-callback': () => latest.current(null),
-      'error-callback': () => latest.current(null),
+      'error-callback': () => {
+        latest.current(null);
+        setFailure('error');
+      },
     });
     return () => api.remove(widget);
   }, [ready, resetKey]);
@@ -72,9 +82,13 @@ export function Turnstile({
         strategy="afterInteractive"
         nonce={nonce}
         onReady={() => setReady(true)}
+        onError={() => setFailure('blocked')}
       />
       {/* data-turnstile: E2E excludes Cloudflare's iframe from axe; we can't fix its markup. */}
       <div ref={container} data-turnstile="" className="min-h-[65px] w-full" />
+      {failure ? (
+        <Notice tone="error">{failure === 'blocked' ? TURNSTILE_BLOCKED : TURNSTILE_FAILED}</Notice>
+      ) : null}
     </>
   );
 }

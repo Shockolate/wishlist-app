@@ -7,9 +7,10 @@ const VERIFY = 'Confirm your email for Hanker';
 const RESET = 'Reset your Hanker password';
 const NEW_PASSWORD = 'a brand new passphrase 2';
 
-test('a new person signs up, confirms, logs in, builds a list, renames, resets the password and leaves (spec §8)', async ({
+test('a new person signs up, confirms, builds and shares a list, a gifter claims and manages it, the owner sees it, then renames, resets the password and leaves (spec §8)', async ({
   context,
   page,
+  browser,
 }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   // Two Turnstile passes and two mail waits can each take 15 s, more than the default 30 s.
@@ -69,6 +70,43 @@ test('a new person signs up, confirms, logs in, builds a list, renames, resets t
   await expect(page.getByRole('listitem').first()).toContainText('Enamel kettle');
   await page.getByRole('button', { name: 'Copy share link' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Link copied.' })).toBeVisible();
+
+  // A gifter claims in another browser and changes the claim; the owner chooses to see it.
+  const { shareUrl } = (await (await page.request.get('/api/wishlist')).json()) as {
+    shareUrl: string;
+  };
+  const gifterContext = await browser.newContext();
+  const gifter = await gifterContext.newPage();
+  await gifter.goto(shareUrl);
+  await gifter
+    .getByRole('listitem')
+    .filter({ hasText: 'Enamel kettle' })
+    .getByRole('button', { name: 'I’ll get this' })
+    .click();
+  await gifter.getByRole('dialog').getByLabel('Your name').fill('Aunt Sue');
+  await gifter.getByRole('dialog').getByRole('button', { name: 'Claim it' }).click();
+  const manageUrl =
+    (await gifter
+      .getByRole('dialog')
+      .getByText(/\/c\/[\w-]{22}$/)
+      .textContent()) ?? '';
+  await gifter.goto(manageUrl);
+  await gifter.getByLabel('Your name').fill('Aunt Susan');
+  await gifter.getByRole('button', { name: 'Save changes' }).click();
+  await expect(gifter.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+  await gifterContext.close();
+
+  await mainNav.getByRole('link', { name: 'Settings' }).click();
+  await page.getByRole('switch', { name: 'Show me who’s getting what' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Show me' }).click();
+  await expect(page.getByRole('switch', { name: 'Show me who’s getting what' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await mainNav.getByRole('link', { name: 'Your list' }).click();
+  await expect(page.getByRole('listitem').filter({ hasText: 'Enamel kettle' })).toContainText(
+    'Aunt Susan is getting this',
+  );
 
   await mainNav.getByRole('link', { name: 'Settings' }).click();
   await page.getByLabel('Display name').fill('Ada Lovelace');

@@ -98,7 +98,7 @@ SHARE=<share token>; ITEM=<item id>
 curl -s "$API/shared/$SHARE"
 curl -s -X POST "$API/shared/$SHARE/items/$ITEM/claims" -H "Origin: $ORIGIN" -H 'content-type: application/json' \
   -d '{"claimerName":"Aunt Sue","quantity":1}'
-# The answer carries the manage token, this once.
+# The answer carries the manage token. A client may mint its own and send it as "manageToken"; a replay with the same token returns the same claim, token included.
 MANAGE=<manage token>
 curl -s "$API/claims/$MANAGE"
 curl -s -X PATCH "$API/claims/$MANAGE" -H "Origin: $ORIGIN" -H 'content-type: application/json' -d '{"quantity":2}'

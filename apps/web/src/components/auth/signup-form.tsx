@@ -26,6 +26,11 @@ export function SignupForm({ nonce }: { nonce: string | undefined }) {
   const [formError, setFormError] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string | null>(null);
   const inFlight = useRef(false);
+  // A token means the check is done, so a reminder to finish it is out of date (D38).
+  const onToken = (next: string | null) => {
+    setToken(next);
+    if (next) setFormError((current) => (current === FINISH_CHECK ? null : current));
+  };
   const {
     register,
     handleSubmit,
@@ -114,7 +119,7 @@ export function SignupForm({ nonce }: { nonce: string | undefined }) {
             />
           )}
         </Field>
-        <Turnstile nonce={nonce} onToken={setToken} resetKey={challenge} />
+        <Turnstile nonce={nonce} onToken={onToken} resetKey={challenge} />
         {formError ? <Notice tone="error">{formError}</Notice> : null}
         <Button type="submit" disabled={isSubmitting}>
           Create account

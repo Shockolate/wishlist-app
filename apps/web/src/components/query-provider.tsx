@@ -1,10 +1,11 @@
 'use client';
 
-import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorCode, type WishlistResponse } from '@wishlist/contracts';
 import type { ReactNode } from 'react';
 import { stripClaims, WISHLIST_KEY } from '@/lib/list-cache';
 import { hasCode } from '@/lib/messages';
+import { reportListFailure } from '@/lib/off-page-failure';
 
 /**
  * Queries retry once; writes never retry (spec §9). A refetch that finds the session gone sends
@@ -20,6 +21,9 @@ function makeClient(): QueryClient {
         window.location.replace(`/login?next=${encodeURIComponent(here)}`);
       },
     }),
+    // Every mutation here is a list change. One that fails after the editor has gone would
+    // otherwise fail silently (Plan 3b carry).
+    mutationCache: new MutationCache({ onError: () => reportListFailure() }),
     defaultOptions: { queries: { retry: 1 }, mutations: { retry: false } },
   });
 }
@@ -55,7 +59,12 @@ export function updateCachedList(change: (list: WishlistResponse) => WishlistRes
   );
 }
 
-/** Marks the cached list stale, so /list fetches it again when it next shows (Plan 4b rule 12). */
+/**
+ * Marks the cached list stale (Plan 4b rule 12). The editor refetches on its next mount or tab
+ * focus, but only while no list change is waiting to be sent. While changes are queued it doesn't,
+ * and the refetch after they drain runs only if one of them failed or cancelled a fetch, so the
+ * list can stay as it is until the next mount or focus after the queue is empty.
+ */
 export function invalidateCachedList(): void {
   void browser?.client.invalidateQueries({ queryKey: WISHLIST_KEY });
 }

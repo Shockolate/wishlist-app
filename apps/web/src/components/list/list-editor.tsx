@@ -3,8 +3,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { WishlistResponseSchema, type WishlistResponse } from '@wishlist/contracts';
 import Link from 'next/link';
+import { useEffect } from 'react';
 import { browserApi } from '@/lib/browser-api';
 import { WISHLIST_KEY } from '@/lib/list-cache';
+import { editorShown } from '@/lib/off-page-failure';
 import { AddItem } from './add-item';
 import { ItemList } from './item-list';
 import { ListStatusLine, ListStatusProvider } from './list-status';
@@ -21,6 +23,7 @@ export function ListEditor({ initial }: { initial: WishlistResponse }) {
 
 function Editor({ initial }: { initial: WishlistResponse }) {
   const client = useQueryClient();
+  useEffect(() => editorShown(), []);
   const { data: list } = useQuery({
     queryKey: WISHLIST_KEY,
     queryFn: () => browserApi.get('/wishlist', WishlistResponseSchema),

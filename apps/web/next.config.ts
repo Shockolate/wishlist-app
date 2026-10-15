@@ -45,6 +45,12 @@ const TURNSTILE_SITE_KEY = readTurnstileSiteKey();
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Metadata is resolved before the page streams, for every client. By default Next streams it for
+  // browsers, and on a router.refresh() (a claim ends in one) an async generateMetadata, as /s
+  // has, arrived as a late chunk: the old <title> went ~300 ms before the new one came, so the
+  // page was untitled to screen readers and to axe. Every page here renders per request and waits
+  // for its own data anyway, so streaming metadata buys nothing.
+  htmlLimitedBots: /.*/,
   reactStrictMode: true,
   // Inlined at build: server code calls exactly the API the rewrite points at, and the browser
   // gets the Turnstile site key.

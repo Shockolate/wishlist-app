@@ -40,3 +40,13 @@ test('the login page renders with its nonce CSP (spec §6.9)', async ({ page }) 
   );
   await expect(page.getByRole('heading', { name: 'Log in' })).toBeVisible();
 });
+
+test('an unknown share page is a 404 that search engines skip (spec §6.7)', async ({ page }) => {
+  const res = await page.goto('/s/AAAAAAAAAAAAAAAAAAAAAA');
+  expect(res?.status()).toBe(404);
+  expect(res?.headers()['x-robots-tag']).toBe('noindex');
+  expect(res?.headers()['referrer-policy']).toBe('no-referrer');
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'This list’s link doesn’t work.' }),
+  ).toBeVisible();
+});

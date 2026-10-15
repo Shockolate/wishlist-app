@@ -11,6 +11,13 @@ export const WRONG_PASSWORD = 'That password isn’t right.';
 /** A form was sent before its Turnstile check produced a token. */
 export const FINISH_CHECK = 'Finish the check above, then try again.';
 
+/** Turnstile's script never loaded: a content blocker, or a network that drops it (D38). */
+export const TURNSTILE_BLOCKED =
+  'We couldn’t load the security check. If you use a content blocker, allow hanker.dev, or try another browser.';
+
+/** The widget loaded, then failed. */
+export const TURNSTILE_FAILED = 'The check didn’t work. Reload the page to try again.';
+
 /** What a person sees for each error code: the one table (spec §7, Plan 2b rule 23). */
 export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   [ErrorCode.INVALID_CREDENTIALS]: "That email and password don't match.",
@@ -126,3 +133,6 @@ export function prefillMessage(
   if (failureReason) return UNFURL_MESSAGES[failureReason];
   return `Filled in from ${shopName(url) ?? 'the page'}. Check it, then add it.`;
 }
+
+/** On /settings, when a list change made on /list failed after the owner left it. */
+export const LIST_CHANGE_NOT_SAVED = 'A change to your list didn’t save.';

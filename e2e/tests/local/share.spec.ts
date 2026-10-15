@@ -130,5 +130,7 @@ test('long titles, names and shops fit a phone (Review Focus 4)', async ({
 
   const gifter = await (await guest(browser, base)).newPage();
   await expectFitsPhone(gifter, `/s/${token}`);
+  // Fitting is only meaningful once the page is there: a missing page doesn't scroll sideways.
+  await expect(gifter.getByRole('heading', { level: 1, name: 'W'.repeat(100) })).toBeVisible();
   await expectAccessible(gifter);
 });

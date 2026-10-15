@@ -37,7 +37,7 @@ export function CancelClaim({
   async function cancel() {
     setError(null);
     try {
-      await browserApi.delete(`/claims/${manageToken}`, NoContentSchema, {});
+      await browserApi.delete(`/claims/${manageToken}`, NoContentSchema);
     } catch (failure) {
       if (!hasCode(failure, ErrorCode.NOT_FOUND)) {
         setError(errorMessage(failure));

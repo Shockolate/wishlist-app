@@ -47,10 +47,14 @@ test('a gifter claims in three taps and keeps the manage link (spec §1 criterio
   await sheet.getByLabel('Your name').fill('Aunt Sue');
   await sheet.getByRole('button', { name: 'Claim it' }).click();
 
+  // By text, not role: the dialog makes the page behind it inert.
+  const kettleCard = gifter.locator('li').filter({ hasText: 'Enamel kettle' });
   const done = gifter.getByRole('dialog', { name: 'You’re getting Enamel kettle' });
   await expect(done.getByText('Save this link to change or cancel your claim.')).toBeVisible();
   const manageUrl = (await done.getByText(/\/c\/[\w-]{22}$/).textContent()) ?? '';
-  // The refresh after a claim drops the streamed <title> for a moment; axe wants it back.
+  // axe should see the page the refresh leaves, not the one it replaces. The old title is there
+  // until the refresh lands, so wait for something only the refresh produces.
+  await expect(kettleCard).toContainText('You’re getting 1');
   await expect(gifter).toHaveTitle(/Hanker/);
   await expectAccessible(gifter);
   await expectNoSidewaysScroll(gifter);
@@ -66,6 +70,45 @@ test('a gifter claims in three taps and keeps the manage link (spec §1 criterio
   expect(await claimsOn(gifter, token)).toEqual([
     expect.objectContaining({ claimerName: 'Aunt Sue', quantity: 1 }),
   ]);
+});
+
+test('the page keeps its title through the refreshes a claim makes', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const { gifter } = await setUp(page, browser, baseURL ?? '', 'claim-title');
+  // A claim ends in router.refresh(). With streamed metadata the old <title> went for ~300 ms
+  // before the new one arrived, and a screen reader announced an untitled page. Next puts its
+  // router on window.next, so the refreshes can be made without spending claims.
+  const sampled = await gifter.evaluate(async () => {
+    // e2e has no DOM lib, so the page's globals are typed by hand.
+    const w = globalThis as unknown as {
+      document: { title: string };
+      next?: { router?: { refresh(): void } };
+      setInterval(run: () => void, ms: number): number;
+      clearInterval(id: number): void;
+    };
+    const router = w.next?.router;
+    if (!router) return null;
+    let samples = 0;
+    let empty = 0;
+    const timer = w.setInterval(() => {
+      samples += 1;
+      if (w.document.title === '') empty += 1;
+    }, 5);
+    for (let i = 0; i < 80; i += 1) {
+      router.refresh();
+      await new Promise((resolve) => setTimeout(resolve, i % 2 ? 0 : 100));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    w.clearInterval(timer);
+    return { samples, empty };
+  });
+  expect(sampled, 'Next exposes window.next.router').not.toBeNull();
+  expect(sampled?.samples).toBeGreaterThan(100);
+  expect(sampled?.empty, 'samples taken with no title').toBe(0);
+  await expect(gifter).toHaveTitle("Ada's wishlist | Hanker");
 });
 
 test('the stepper stops at what is left, and the name is remembered', async ({
@@ -143,6 +186,8 @@ test('resets the stepper when someone else took some first (spec §7 step 4)', a
     'Someone else claimed some while you were choosing, so only 1 is left. We’ve set how many to 1.',
   );
   await expect(sheet.getByRole('group', { name: 'How many' }).locator('output')).toHaveText('1');
+  // The description follows the refreshed page too, not the item as it was when the sheet opened.
+  await expect(sheet).toContainText('Ada wants 3. Sam is getting 2, so 1 is left.');
   await sheet.getByRole('button', { name: 'Claim the last one' }).click();
   await expect(gifter.getByRole('dialog', { name: 'You’re getting Merino socks' })).toBeVisible();
 });
@@ -279,6 +324,50 @@ test('claims without storage, and still hands over the manage link (Review Focus
   expect(errors).toEqual([]);
 });
 
+test('blocked storage, a lost answer, and a reopened sheet still make one claim (D42, Review Focus 1, 2)', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const base = baseURL ?? '';
+  await verifiedOwner(page, base, 'claim-nostorage-lost');
+  await addItemViaApi(page.request, base, { title: 'Enamel kettle', quantity: 3 });
+  const token = await shareTokenOf(page.request);
+  const context = await guest(browser, base);
+  await context.addInitScript(() => {
+    Object.defineProperty(globalThis, 'localStorage', {
+      get() {
+        throw new Error('storage is blocked');
+      },
+    });
+  });
+  const gifter = await context.newPage();
+  await gifter.goto(`/s/${token}`);
+  let lost = false;
+  await gifter.route('**/api/shared/*/items/*/claims', async (route) => {
+    if (lost) return route.continue();
+    lost = true;
+    await route.fetch(); // the API makes the claim…
+    await route.abort('internetdisconnected'); // …and its answer never arrives
+  });
+  const open = () =>
+    card(gifter, 'Enamel kettle').getByRole('button', { name: 'I’ll get this' }).click();
+  await open();
+  const sheet = gifter.getByRole('dialog');
+  await sheet.getByLabel('Your name').fill('Priya');
+  await sheet.getByRole('button', { name: 'Claim it' }).click();
+  await expect(sheet.getByRole('alert')).toContainText('reach Hanker');
+
+  // Nothing is stored, and the sheet that held the token is gone. The page remembers it instead.
+  await sheet.getByRole('button', { name: 'Close' }).click();
+  await expect(sheet).toHaveCount(0);
+  await open();
+  await sheet.getByLabel('Your name').fill('Priya');
+  await sheet.getByRole('button', { name: 'Claim it' }).click();
+  await expect(gifter.getByRole('dialog', { name: 'You’re getting Enamel kettle' })).toBeVisible();
+  expect(await claimsOn(gifter, token)).toHaveLength(1);
+});
+
 test('says when the item was taken off the list while the sheet was open (Review Focus 3)', async ({
   page,
   browser,
@@ -296,8 +385,12 @@ test('says when the item was taken off the list while the sheet was open (Review
   await sheet.getByLabel('Your name').fill('Priya');
   await sheet.getByRole('button', { name: 'Claim it' }).click();
   await expect(sheet.getByRole('alert')).toHaveText('This item was just taken off the list.');
+  // The refresh has to land first, or the button that opened the sheet still exists to take focus.
+  await expect(gifter.locator(`#item-${added.id}`)).toHaveCount(0);
   await sheet.getByRole('button', { name: 'Back to the list' }).click();
   await expect(card(gifter, 'Enamel kettle')).toHaveCount(0);
+  // Neither the button nor the item's title is left, so focus goes to the page's heading.
+  await expect(gifter.getByRole('heading', { level: 1 })).toBeFocused();
 });
 
 test('lands on the dead-link page when the link was replaced while the sheet was open (Review Focus 3)', async ({

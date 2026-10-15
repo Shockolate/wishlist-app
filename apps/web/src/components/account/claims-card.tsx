@@ -93,9 +93,15 @@ export function ClaimsCard({ showClaimsToOwner }: { showClaimsToOwner: boolean }
           role="switch"
           aria-checked={on}
           aria-labelledby="claims-switch-label"
-          disabled={busy}
-          onClick={() => (on ? void save(false) : setConfirming(true))}
-          className="group inline-flex h-8 w-[52px] shrink-0 items-center rounded-full border-[1.5px] border-input bg-card p-[3px] disabled:opacity-60 aria-checked:border-foreground aria-checked:bg-foreground"
+          // Not `disabled`: the confirm dialog hands focus back to this switch as it closes, which is
+          // after "Show me" has set `busy`, and a disabled button can't take focus.
+          aria-disabled={busy}
+          onClick={() => {
+            if (busy) return;
+            if (on) void save(false);
+            else setConfirming(true);
+          }}
+          className="group inline-flex h-8 w-[52px] shrink-0 items-center rounded-full border-[1.5px] border-input bg-card p-[3px] aria-disabled:opacity-60 aria-checked:border-foreground aria-checked:bg-foreground"
         >
           <span className="size-6 rounded-full bg-input transition-transform group-aria-checked:translate-x-5 group-aria-checked:bg-background motion-reduce:transition-none" />
         </button>

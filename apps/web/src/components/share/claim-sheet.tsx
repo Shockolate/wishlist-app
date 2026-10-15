@@ -95,7 +95,7 @@ export function ClaimSheet({
   returnFocus: () => void;
 }) {
   const router = useRouter();
-  const { records, remember, forget } = useShareClaims();
+  const { records, remember, forget, pendingTokens } = useShareClaims();
   const [phase, setPhase] = useState<Phase>({ kind: 'form' });
   const [max, setMax] = useState(Math.max(1, item.remaining ?? item.quantity));
   const [quantity, setQuantity] = useState(1);
@@ -124,8 +124,10 @@ export function ClaimSheet({
 
   async function send({ claimerName }: { claimerName: string }) {
     // Reuse a claim whose answer never came, so a retry finds it rather than making another (D42).
-    token.current ??= pendingTokenFor(records, item.id) ?? mintManageToken();
+    token.current ??=
+      pendingTokenFor(records, item.id) ?? pendingTokens.get(item.id) ?? mintManageToken();
     const manageToken = token.current;
+    pendingTokens.set(item.id, manageToken);
     writeClaimerName(claimerName);
     remember({ itemId: item.id, manageToken });
     setFormError(null);
@@ -136,6 +138,7 @@ export function ClaimSheet({
         CreateClaimResponseSchema,
       );
       remember({ itemId: item.id, manageToken, claimId: claim.claim.id });
+      pendingTokens.delete(item.id);
       setPhase({ kind: 'done', claim });
       router.refresh();
     } catch (error) {
@@ -145,6 +148,7 @@ export function ClaimSheet({
       // visit's lookup does (D42, Plan 4b rule 5 as amended).
       if (provesNoClaim(error)) {
         forget(manageToken);
+        pendingTokens.delete(item.id);
         token.current = null;
       }
       failed(error);

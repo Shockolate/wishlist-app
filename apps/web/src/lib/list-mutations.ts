@@ -87,9 +87,7 @@ export function listMutations(client: QueryClient, api: ApiClient) {
   };
   const remove: MutationOptions<undefined, unknown, string> = {
     scope: LIST_SCOPE,
-    // An empty JSON body: the API's CSRF guard refuses a state-changing request without a JSON
-    // content type, and the client sets one only when there is a body.
-    mutationFn: (id) => api.delete(`/wishlist/items/${id}`, NoContentSchema, {}),
+    mutationFn: (id) => api.delete(`/wishlist/items/${id}`, NoContentSchema),
     onMutate: async (id) => {
       await holdRefetches();
       change((list) => removeItem(list, id));

@@ -53,6 +53,8 @@ test('with claims on, the owner sees them on /list and on their link, and gifter
     page.getByRole('status').filter({ hasText: 'You’ll see who’s getting what.' }),
   ).toBeVisible();
   await expect(toggle(page)).toHaveAttribute('aria-checked', 'true');
+  // The dialog gives focus back to the switch, which must still be enabled when it does.
+  await expect(toggle(page)).toBeFocused();
   expect(await setting(page)).toBe(true);
 
   // Back to the list by a client-side navigation: the cached list must fetch the claims.
@@ -134,6 +136,8 @@ test('turning claims off hides them at once, with no reload (Review Focus 5)', a
   await expect(
     page.getByRole('status').filter({ hasText: 'Claims are hidden from you again.' }),
   ).toBeVisible();
+  // Saving must not take focus off the switch (a disabled button can't keep it).
+  await expect(toggle(page)).toBeFocused();
   await mainNav(page).getByRole('link', { name: 'Your list' }).click();
   await expect(row(page, 'Enamel kettle')).toBeVisible();
   await expect(page.getByText('Aunt Sue')).toHaveCount(0);

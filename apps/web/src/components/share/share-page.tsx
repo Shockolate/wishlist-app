@@ -58,7 +58,9 @@ export function SharePage({
     );
   return (
     <>
-      <h1 className={H1}>{list.title}</h1>
+      <h1 tabIndex={-1} className={H1}>
+        {list.title}
+      </h1>
       {list.viewerIsOwner ? (
         <OwnerNote ownerSeesClaims={list.ownerSeesClaims} />
       ) : (

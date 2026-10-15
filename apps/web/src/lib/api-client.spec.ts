@@ -43,6 +43,20 @@ describe('createApiClient', () => {
     expect(calls[0]?.init.body).toBe('{"password":"x"}');
   });
 
+  it('sends {} as JSON on a write with no body, so the CSRF guard passes (spec §6.2, §7)', async () => {
+    const { client, calls } = clientReturning(new Response(null, { status: 204 }));
+    await client.delete('/claims/abcdefghijklmnopqrstuv', NoContentSchema);
+    expect(calls[0]?.init.body).toBe('{}');
+    expect(calls[0]?.init.headers).toMatchObject({ 'content-type': 'application/json' });
+  });
+
+  it('sends no body and no content type on a GET', async () => {
+    const { client, calls } = clientReturning(json({ id: 't1' }));
+    await client.get('/things/t1', Thing);
+    expect(calls[0]?.init.body).toBeUndefined();
+    expect(calls[0]?.init.headers).not.toHaveProperty('content-type');
+  });
+
   it('forwards configured headers such as the incoming cookie', async () => {
     const { client, calls } = clientReturning(json({ id: 't1' }), { cookie: 'a=b' });
     await client.get('/things/t1', Thing);
