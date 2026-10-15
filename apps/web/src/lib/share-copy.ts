@@ -85,3 +85,16 @@ export function claimedLine(quantity: number, wanted: number, owner: string, nam
 export function ownStripText(mine: number): string {
   return `You’re getting ${mine}`;
 }
+
+/** On the manage page's card: how much of the item is yours. */
+export function yourClaimLine(quantity: number, wanted: number, owner: string): string {
+  return wanted > 1
+    ? `You’re getting ${quantity} of the ${wanted} ${owner} wants`
+    : 'You’re getting this';
+}
+
+/** Under the manage page's stepper: what's left plus what the claim holds (spec §2). */
+export function manageHint(remaining: number, current: number): string {
+  const most = `Up to ${remaining + current}`;
+  return remaining > 0 ? `${most}: ${remaining} more ${isAre(remaining)} free` : most;
+}

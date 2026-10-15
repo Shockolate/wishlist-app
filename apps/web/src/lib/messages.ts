@@ -75,6 +75,11 @@ export function claimConflictMessage(left: number): string {
   return `Someone else claimed some while you were choosing, so only ${left} ${left === 1 ? 'is' : 'are'} left. We’ve set how many to ${left}.`;
 }
 
+/** The manage page's 409: the claim can go no higher than this now (spec §2). */
+export function claimChangeConflictMessage(max: number): string {
+  return `Someone else claimed some, so you can have up to ${max} now. We’ve set how many to ${max}.`;
+}
+
 /** errorMessage for the list editor, where a 404 can only mean the item is gone (Plan 3b rule 4). */
 export function listErrorMessage(error: unknown): string {
   return hasCode(error, ErrorCode.NOT_FOUND) ? ITEM_GONE : errorMessage(error);
