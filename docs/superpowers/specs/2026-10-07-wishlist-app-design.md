@@ -444,7 +444,7 @@ These are the initial values. They're configurable, and every limited endpoint r
 
 - **Referrer policy:** `/s/*` and `/c/*` respond with `Referrer-Policy: no-referrer`. Outbound product links also carry `rel="noopener noreferrer"`. Without this, clicking through to a retailer would send the share or manage URL in the `Referer` header.
 - **Indexing:** the same pages respond with `X-Robots-Tag: noindex`, and they're disallowed in `robots.txt`.
-- **Sentry:** `beforeSend` scrubs token path segments. It arrives with Sentry, in Plan 5; until then nothing reports errors off the platform.
+- **Sentry:** `beforeSend` scrubs token path segments. It arrives with Sentry, in Plan 5b; until then nothing reports errors off the platform.
 - **Accepted:** Vercel's request logs contain the tokens. They're retained for 1 hour and only the account owner can read them.
 - **Token query strings:** the verify and reset pages read the token from the query string and remove it from the address bar with `history.replaceState` as soon as they load. They POST it only when the person presses the page's button, so a mail scanner or link preview can't use it up. Both pages send `Referrer-Policy: no-referrer` and `X-Robots-Tag: noindex`.
 
@@ -480,7 +480,7 @@ These are the initial values. They're configurable, and every limited endpoint r
   - `style-src 'self' 'unsafe-inline'`. React and `next/font` set style attributes, which a nonce can't cover (Plan 2b)
   - `img-src 'self' https: data:`
   - `font-src 'self'`
-  - `connect-src 'self'` plus Sentry's ingest origin (Plan 5)
+  - `connect-src 'self'` plus Sentry's ingest origin (Plan 5b)
   - `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`
   - `frame-ancestors 'none'`
   - On every page, `https://challenges.cloudflare.com` is added to `script-src`, and `frame-src` allows it, for Turnstile (amended 2026-10-10, Ted). A CSP belongs to the document, and client-side navigation keeps the first page's policy, so a per-page allowance broke the widget after in-app navigation onto an auth page. With `'strict-dynamic'`, CSP3 browsers ignore the `script-src` host, so the effective widening is `frame-src` to that one origin.
@@ -601,7 +601,7 @@ When a dependency fails, the behavior is fixed per service:
 |---|---|
 | HIBP | Skip the breach check and log it |
 | Turnstile | Refuse the email-sending endpoints and tell the user to try again later |
-| Resend | The endpoint still returns `202`: email is delivered in the background, after the response (Plan 2a). The error is logged (Sentry from Plan 5), and the user can resend |
+| Resend | The endpoint still returns `202`: email is delivered in the background, after the response (Plan 2a). The error is logged (Sentry from Plan 5b), and the user can resend |
 | Unfurl target | `200` with empty fields; the owner fills them in by hand |
 | Neon cold start | The `pg` connect timeout is 10 s. Non-idempotent writes aren't retried |
 
@@ -633,8 +633,8 @@ When a dependency fails, the behavior is fixed per service:
 | `preview.yml` | PR opened, synchronized or reopened | `settings` (pull project settings) → `build-api` (no secrets) → `provision` (check `preview-seed` → create or reuse `pr-<n>` from it → assert it descends from `preview-seed` → migrate with the migrator from source → deploy the API preview → wait for health) → `build-web` (no secrets) → `deploy-web` (deploy, alias) → `smoke` → `comment` (web alias only). Concurrency `preview-<n>`, cancel-in-progress |
 | `cleanup.yml` | PR closed; nightly | Delete Neon branch `pr-<n>`. The nightly sweep deletes `pr-*` branches whose PR is closed, a safety net for Neon's free cap of 10 branches |
 | `preview-seed.yml` | Manual (`reset`, `init_source`); push to `main` touching migrations | Ensure `preview-seed` exists (schema-only root branch, never `main`) → wipe and replay migrations from zero when created or reset → migrate incrementally otherwise |
-| `deploy.yml` | Push to `main` | `guard` (stale-commit check) → `settings` → `build` (gates and `vercel build` for both apps, no secrets) → `migrate` (migrator from source) → `deploy-api` → health → `deploy-web` → `smoke` → upload Sentry source maps (Plan 5). Every production job re-checks it is deploying `main`'s tip. Concurrency `production`, `cancel-in-progress: false` |
-| `backup.yml` | Nightly | `pg_dump` prod → encrypt with `age` → upload to Cloudflare R2. An R2 lifecycle rule keeps 30 days |
+| `deploy.yml` | Push to `main` | `guard` (stale-commit check) → `settings` → `build` (gates and `vercel build` for both apps, no secrets) → `migrate` (migrator from source) → `deploy-api` → health → `deploy-web` → `smoke` → upload Sentry source maps (Plan 5b). Every production job re-checks it is deploying `main`'s tip. Concurrency `production`, `cancel-in-progress: false` |
+| `backup.yml` | Nightly; manual | `pg_dump` prod as the read-only `hanker_backup` role (D48) → encrypt with `age` in the pipe → upload to Cloudflare R2 → ping the backup heartbeat, or its `/fail` URL on any error (D47). An R2 lifecycle rule keeps 30 days (Plan 5a) |
 
 **Ordering that isn't obvious:**
 
@@ -663,10 +663,28 @@ When a dependency fails, the behavior is fixed per service:
 
 **Why backups can't go in Actions artifacts:** on a public repo, anyone can download them.
 
+**Backups and the restore drill (Plan 5a).**
+- **The dump.** `scripts/backup.sh` runs `pg_dump --format=custom --no-owner --no-privileges` from a `postgres:17` image pinned by digest, so its major version matches Neon's whatever the runner ships. It pipes the dump straight into `age -r "$AGE_RECIPIENT"`, so plaintext never touches the runner's disk, and it refuses to upload a file without the `age` header. `age` is a pinned release whose sha256 the script checks.
+- **The upload.** It uses the runner's `curl --aws-sigv4` against R2's S3 API, so no new tool is installed. A `HEAD` afterwards checks the stored size. The key is `daily/<UTC timestamp>.dump.age`.
+- **The job's least privilege.** The job connects as `hanker_backup`, a role that can only read (D48). Its R2 token can read and write objects in the one bucket. A bucket lock rule on `daily/` for 30 days stops a leaked token from deleting or overwriting the dumps already there.
+- **The restore drill (D49).** A backup job that passes proves only that bytes reached R2. The drill proves they come back as the data. `scripts/restore-drill.sh <dump.age> <identity>` runs on the owner's machine, the only place the private key exists. It decrypts the dump, restores it with `pg_restore --exit-on-error --single-transaction` into a `postgres:17` container the script creates and removes (labeled `hanker.restore-drill`, with no published port), then checks the migration count against production's `/api/health`, checks every `public` table came back, and prints each table's row count. Plan 5a is done only when a drill passes against a real nightly dump.
+- **Real recovery from a dump.** Restoring a whole dump over `main` would lose everything written since, so recovery restores locally and copies the lost rows back with `psql` (runbook in `docs/deployment.md`).
+
 ### Monitoring and maintenance
 
-- Sentry in both apps.
-- A free external uptime monitor on `/api/health`. The endpoint checks database connectivity and returns the applied migration version and the git SHA.
+- Sentry in both apps (Plan 5b).
+- **Uptime: Better Stack's free plan (D47), alerting by email.**
+
+  | Monitor | URL | Interval | Proves |
+  |---|---|---|---|
+  | Live | `https://hanker.dev/api/health/live` | 3 min | The web project, the `/api` rewrite and the API function are up |
+  | Site | `https://hanker.dev/` | 3 min | The landing page renders. It's static, so it touches neither the API nor the database |
+  | Deep | `https://hanker.dev/api/health` | Hourly, or the longest the free plan allows | Neon is reachable and migrated. A `503` alerts |
+  | Backup heartbeat | `BACKUP_HEARTBEAT_URL` | A ping every 24 h, with 2 h of grace | The nightly backup ran and uploaded |
+
+- **Why the frequent checks avoid the database.** `/api/health` queries Neon and so wakes it, and Neon Free stops compute only after 5 idle minutes and allows 100 CU-hours per project per month. A deep check every 3–5 minutes would keep a 0.25 CU compute awake all month, about 180 CU-hours, and Neon would suspend the database once the quota ran out. `/api/health/live` returns `{ status, sha }` and never touches the pool. An hourly deep check costs about 15 CU-hours a month, and a 30-minute one about 30.
+- **Why the backup needs a heartbeat.** GitHub disables scheduled workflows in a public repository after 60 days without activity, and a failed nightly run alerts nobody. The heartbeat alerts when the pings stop for any reason.
+- `/api/health` checks database connectivity and returns the applied migration version and the git SHA.
 - A daily Vercel cron at `/api/internal/cron/daily`, authenticated with `CRON_SECRET`. It purges expired rate-limit windows, expired email tokens, expired sessions, and unverified accounts older than 7 days.
 
 ### Repository settings (all free on public repos)
@@ -690,11 +708,11 @@ When a dependency fails, the behavior is fixed per service:
 
 | Where | Secrets |
 |---|---|
-| GitHub Environment `production` | `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID_WEB`, `VERCEL_PROJECT_ID_API`, `NEON_API_KEY`, `NEON_PROJECT_ID`, `DATABASE_URL_DIRECT` (for migrations and dumps), `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `AGE_RECIPIENT`, `SENTRY_AUTH_TOKEN` |
+| GitHub Environment `production` | `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID_WEB`, `VERCEL_PROJECT_ID_API`, `NEON_API_KEY`, `NEON_PROJECT_ID`, `DATABASE_URL_DIRECT` (for migrations), `DATABASE_URL_BACKUP` (the read-only `hanker_backup` role, direct; D48), `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `AGE_RECIPIENT`, `BACKUP_HEARTBEAT_URL` (Plan 5a), `SENTRY_AUTH_TOKEN` (Plan 5b) |
 | GitHub Environment `preview` | The Vercel and Neon secrets above, plus `VERCEL_AUTOMATION_BYPASS_SECRET` |
 | Vercel project env | `DATABASE_URL` (pooled), `APP_ORIGIN`, `RESEND_API_KEY`, `TURNSTILE_SECRET_KEY`, `SENTRY_DSN`, `CRON_SECRET`, `EMAIL_TRANSPORT` (`resend`, `mailpit` for local development and E2E, or `log`), `EMAIL_FROM` |
 
-The private `age` key is never stored in GitHub. It's kept offline by the owner.
+The private `age` key is never stored in GitHub. It's kept offline by the owner, passphrase-protected, and used only for the restore drill and real recovery.
 
 ## 11. Developer environment prerequisites
 
@@ -770,3 +788,7 @@ As of 2026-10-07 on the development machine:
 | D43 | A claim checks the owner before the list's rate limit, so a `429` can't tell an owner that gifters have been claiming (Plan 4b, 2026-10-14) | The Plan 4a order, list limit first |
 | D44 | Blank in `visibleOnly` means every default-ignorable code point plus U+2800, not a hand-kept list; amends D41 (Plan 4b, 2026-10-14) | D41's seven code points, which let variation selectors through |
 | D45 | The browser keeps its claims under one `localStorage` key, by item ID, so a rotated share link keeps them (Plan 4b, 2026-10-14) | `claims:<shareToken>`, which loses every claim's strip when the owner rotates the link |
+| D46 | Plan 5 split into 5a (backups, the restore drill, uptime monitoring) and 5b (Sentry and the readiness checklist), so the backup ships first: losing data is the one failure the live site can't undo (Ted, 2026-10-19) | One Plan 5, with the backup behind the larger Sentry work |
+| D47 | Better Stack's free plan for both the uptime checks and the backup heartbeat. The frequent checks hit `/api/health/live`, which never touches the database, and the deep `/api/health` check runs hourly, so the monitor can't keep Neon awake past its free compute quota (Ted, 2026-10-19) | UptimeRobot plus Healthchecks.io, two accounts because UptimeRobot's heartbeats are paid; a scheduled GitHub Actions job, which GitHub disables after 60 quiet days and which can't report GitHub's own outage |
+| D48 | The backup job connects as a read-only `hanker_backup` role through its own `DATABASE_URL_BACKUP`, so a leaked backup credential can read but never change or destroy data (Ted, 2026-10-19) | Reusing the owner role's `DATABASE_URL_DIRECT` |
+| D49 | The restore drill decrypts and restores on the owner's machine, into a throwaway local `postgres:17` container (Ted, 2026-10-19) | A Neon branch, which costs the last of Neon Free's three root branches and puts a second copy of production data in the cloud |
