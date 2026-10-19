@@ -114,6 +114,36 @@ describe('TurnstileVerifier', () => {
       expect(loggedText()).not.toContain('t0ken-value');
     });
 
+    // Cloudflare answers a bad secret with HTTP 400 and the reason in the body, not a 200.
+    it.each(['invalid-input-secret', 'missing-input-secret'])(
+      'names the code Cloudflare gives with an HTTP error (%s), and stays unavailable',
+      async (code) => {
+        const { fn } = fakeFetch(() => json({ success: false, 'error-codes': [code] }, 400));
+        expect(await new TurnstileVerifier('secret', fn).verify('token', '203.0.113.7')).toBe(
+          'unavailable',
+        );
+        expect(warn).toHaveBeenCalledWith(
+          `captcha unavailable: siteverify answered HTTP 400 (${code})`,
+        );
+      },
+    );
+
+    it('logs only the status when an HTTP error has no siteverify body', async () => {
+      const { fn } = fakeFetch(() => new Response('<html>', { status: 502 }));
+      await new TurnstileVerifier('secret', fn).verify('token', '203.0.113.7');
+      expect(warn).toHaveBeenCalledWith('captcha unavailable: siteverify answered HTTP 502');
+    });
+
+    it('logs only plain error codes, so a response can’t write arbitrary text to the log', async () => {
+      const { fn } = fakeFetch(() =>
+        json({ success: false, 'error-codes': ['bad-request', 'evil\ncode', 'X'.repeat(80)] }, 400),
+      );
+      await new TurnstileVerifier('secret', fn).verify('token', '203.0.113.7');
+      expect(warn).toHaveBeenCalledWith(
+        'captcha unavailable: siteverify answered HTTP 400 (bad-request)',
+      );
+    });
+
     it('warns when Cloudflare is unreachable, without leaking the secret or the token', async () => {
       const fn = (() => Promise.reject(new TypeError('fetch failed'))) as unknown as typeof fetch;
       await new TurnstileVerifier('s3cret-key', fn).verify('t0ken-value', '203.0.113.7');
