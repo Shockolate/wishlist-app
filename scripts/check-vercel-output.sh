@@ -20,9 +20,9 @@ while IFS= read -r -d '' config; do
 done < <(find "$dir" -name .vc-config.json -print0)
 
 # Defence in depth: the output is built by a job that runs untrusted code and deployed by one that
-# holds VERCEL_TOKEN. Vercel CLI 62.5.0 uploads a symlink as its link text, never its target, but
-# nothing legitimate (pnpm's layout) points outside the output, so refuse it rather than rely on
-# that staying true.
+# holds VERCEL_TOKEN. Vercel CLI 62.5.0 was checked to upload a symlink as its link text, never its
+# target; later versions weren't re-checked. Nothing legitimate (pnpm's layout) points outside the
+# output, so refuse it rather than rely on the CLI.
 root=$(realpath "$dir")
 while IFS= read -r -d '' link; do
   target=$(readlink "$link")
