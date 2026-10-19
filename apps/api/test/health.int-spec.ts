@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { HealthResponseSchema } from '@wishlist/contracts';
+import { HealthResponseSchema, LiveResponseSchema } from '@wishlist/contracts';
 import { afterEach, describe, expect, it } from 'vitest';
 import { MIGRATIONS_DIR } from '../src/db/migrate.js';
 import { http } from '../src/testing/app.js';
@@ -34,5 +34,17 @@ describe('GET /api/health (real database)', () => {
     expect(res.status).toBe(503);
     expect(HealthResponseSchema.parse(res.body).status).toBe('degraded');
     expect(Date.now() - started).toBeLessThan(6_000);
+  });
+
+  it('answers live at once while the database is unreachable', async () => {
+    app = await createTestApp({
+      databaseUrl: 'postgres://nobody:nothing@127.0.0.1:1/none',
+      env: { GIT_SHA: 'int-sha' },
+    });
+    const started = Date.now();
+    const res = await http(app).get('/api/health/live');
+    expect(res.status).toBe(200);
+    expect(LiveResponseSchema.parse(res.body)).toEqual({ status: 'ok', sha: 'int-sha' });
+    expect(Date.now() - started).toBeLessThan(1_000);
   });
 });

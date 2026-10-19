@@ -12,3 +12,14 @@ export const HealthResponseSchema = z.object({
 });
 
 export type HealthResponse = z.infer<typeof HealthResponseSchema>;
+
+/**
+ * GET /api/health/live: the API function is up. It never touches the database, so the frequent
+ * uptime check can't keep Neon awake past its free compute quota (spec §10 Monitoring, D47).
+ */
+export const LiveResponseSchema = z.object({
+  status: z.literal('ok'),
+  sha: z.string().min(1),
+});
+
+export type LiveResponse = z.infer<typeof LiveResponseSchema>;
