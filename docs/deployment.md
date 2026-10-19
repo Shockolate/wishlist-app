@@ -138,6 +138,12 @@ gh workflow run deploy.yml --ref main
 
 Then check, without making an account: a sign-up with a made-up Turnstile token is now refused with `400 CAPTCHA_FAILED`, not `503 CAPTCHA_UNAVAILABLE`. Finally, sign up with a real address on https://hanker.dev, and check that the verification email arrives from `no-reply@mail.hanker.dev`.
 
+If it still answers `503`, the API's runtime log says why (Vercel → `wishlist-api` → Logs, filter `captcha`):
+
+- **No `captcha unavailable` line:** the deployment has no secret. Check the variable is in `wishlist-api`'s Production environment, then deploy again.
+- **`siteverify answered HTTP 400 (invalid-input-secret)`:** Cloudflare doesn't recognise the stored value. The site key and the secret key both start `0x4AAAAAAA`, so check it's the widget's **Secret Key**. Replace it with `vercel env rm TURNSTILE_SECRET_KEY production` and the steps above, then deploy again.
+- **A network error or another status:** Cloudflare can't be reached from the function.
+
 ## GitHub configuration
 
 | Kind      | Scope            | Names                                                                                                                                                   |
