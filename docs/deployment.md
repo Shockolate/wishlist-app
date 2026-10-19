@@ -102,7 +102,7 @@ Set a sensitive production variable without it touching disk or shell history. F
 
 ```bash
 openssl rand -base64 48 | tr -d '\n' \
-  | npx --yes vercel@62.5.0 env add CRON_SECRET production --sensitive --project wishlist-api --scope shockolate
+  | npx --yes vercel@64.5.0 env add CRON_SECRET production --sensitive --project wishlist-api --scope shockolate
 ```
 
 Runtime variables apply to the **next** deployment. Redeploy, or merge to `main`, after changing one.
@@ -126,7 +126,7 @@ Sign-up is dark until the Turnstile secret is set (D29, D31). To open it:
 
 ```bash
 read -rs TURNSTILE_SECRET && printf %s "$TURNSTILE_SECRET" \
-  | npx --yes vercel@62.5.0 env add TURNSTILE_SECRET_KEY production --sensitive --project wishlist-api --scope shockolate
+  | npx --yes vercel@64.5.0 env add TURNSTILE_SECRET_KEY production --sensitive --project wishlist-api --scope shockolate
 unset TURNSTILE_SECRET
 ```
 
