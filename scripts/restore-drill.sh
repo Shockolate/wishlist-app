@@ -75,10 +75,19 @@ $(diff <(echo "$listed") <(echo "$restored") || true)"
 fi
 
 migrations=$(sql 'select count(*) from drizzle.__drizzle_migrations')
-production=$(curl -fsS --max-time 15 "$health_url" | jq -r '.db.migrationsApplied') \
-  || die "couldn't read $health_url"
-if [[ "$migrations" != "$production" ]]; then
-  die "the dump has $migrations migrations and production reports $production. If a migration shipped after this dump was taken, use a newer dump."
+production=$(curl -fsS --max-time 15 "$health_url" | jq -r '.db.migrationsApplied') || production=
+problem=
+if [[ -z "$production" ]]; then
+  problem="couldn't read $health_url"
+elif [[ "$migrations" != "$production" ]]; then
+  problem="the dump has $migrations migrations and production reports $production. If a migration shipped after this dump was taken, use a newer dump."
+fi
+# A recovery (--keep) restores a dump from before the bad change, which can predate a migration,
+# and production may be the thing that's down. There the checks only warn; the drill fails on them.
+if [[ -n "$problem" ]]; then
+  [[ -n "$keep" ]] || die "$problem"
+  echo "warning: $problem" >&2
+  echo "Keeping the restore for recovery. If the migrations differ, name the columns when you copy rows back." >&2
 fi
 
 echo "Rows per table:"
@@ -87,7 +96,11 @@ while IFS= read -r table; do
 done <<<"$restored"
 
 passed=1
-echo "restore drill: ok ($dump decrypted and restored; $migrations migrations, matching production)"
+if [[ -n "$problem" ]]; then
+  echo "restored for recovery, not a passing drill: $dump ($migrations migrations; see the warning above)"
+else
+  echo "restore drill: ok ($dump decrypted and restored; $migrations migrations, matching production)"
+fi
 if [[ -n "$keep" ]]; then
   echo "Kept $name. Query it:  docker exec -it $name psql -h 127.0.0.1 -U postgres -d drill"
   echo "Remove it when done:  docker rm -fv $name"

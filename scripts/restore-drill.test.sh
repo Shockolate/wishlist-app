@@ -44,6 +44,7 @@ EOF
 cat > "$bin/curl" <<'EOF'
 #!/usr/bin/env bash
 echo "curl $*" >> "$STUB_LOG"
+if [[ "${STUB_HEALTH_DOWN:-}" == 1 ]]; then exit 22; fi
 printf '{"status":"ok","sha":"abc","db":{"ok":true,"migrationsApplied":%s}}\n' "${STUB_PROD_MIGRATIONS:-4}"
 EOF
 chmod +x "$bin"/*
@@ -98,6 +99,9 @@ fi
 grep -q 'use a newer dump' "$tmp/out" || fail "a migration mismatch must say to use a newer dump"
 removed || fail "a failed drill must still remove its container"
 
+[[ $(run STUB_HEALTH_DOWN=1 "$dump" "$identity") != 0 ]] || fail "a drill must fail when production can't be read"
+removed || fail "a failed drill must still remove its container"
+
 [[ $(run STUB_TABLES=users "$dump" "$identity") != 0 ]] || fail "a table missing from the restore must fail"
 removed || fail "a failed drill must still remove its container"
 
@@ -108,6 +112,15 @@ removed || fail "a refused restore must still remove its container"
 [[ $(run --keep "$dump" "$identity") == 0 ]] || fail "--keep should pass"
 ! grep -q '^docker rm ' "$STUB_LOG" || fail "--keep must leave the container running"
 grep -q "docker rm -fv $(container)" "$tmp/out" || fail "--keep must print how to remove the container"
+# A recovery restores a dump from before the bad change, which may predate a migration, while
+# production may be down: --keep warns about both and keeps the restore, but never calls it a pass.
+[[ $(run STUB_PROD_MIGRATIONS=5 --keep "$dump" "$identity") == 0 ]] || fail "--keep must keep a dump older than a migration"
+! grep -q '^docker rm ' "$STUB_LOG" || fail "--keep must keep a dump older than a migration"
+grep -q 'production reports 5' "$tmp/out" || fail "--keep must warn about the migration difference"
+! grep -q 'restore drill: ok' "$tmp/out" || fail "--keep with a warning is not a passing drill"
+[[ $(run STUB_HEALTH_DOWN=1 --keep "$dump" "$identity") == 0 ]] || fail "--keep must not need production to be up"
+! grep -q '^docker rm ' "$STUB_LOG" || fail "--keep must keep the restore while production is down"
+grep -q "couldn't read" "$tmp/out" || fail "--keep must warn that production couldn't be read"
 [[ $(run STUB_RESTORE_EXIT=1 --keep "$dump" "$identity") != 0 ]] || fail "--keep with a refused restore must fail"
 removed || fail "--keep must still remove a failed drill's container"
 

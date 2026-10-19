@@ -167,7 +167,7 @@ CREATE ROLE hanker_backup WITH LOGIN;
 GRANT pg_read_all_data TO hanker_backup;
 ```
 
-`\password` prompts twice and sends only a hash, so the password never appears in a log or in history. Generate it with your password manager (Neon requires at least 60 bits of entropy) and keep it there.
+`\password` prompts twice and sends only a hash, so the password never appears in a log or in history. Generate it with your password manager (Neon requires at least 60 bits of entropy) and keep it there. If Neon refuses the hash, run `\set HISTFILE /dev/null` first and then `ALTER ROLE hanker_backup PASSWORD '…';`, so the password doesn't land in `~/.psql_history`.
 
 If Neon refuses the `GRANT pg_read_all_data` (the docs don't confirm it's allowed), grant the same reads explicitly. The default privileges cover tables a future migration creates; `<owner>` is the role in `DATABASE_URL_DIRECT` (Neon's default is `neondb_owner`) and `<database>` its database (default `neondb`):
 
@@ -257,14 +257,14 @@ A backup job that passes proves only that bytes reached R2. The drill proves the
 **Real recovery.** Within 6 hours of the bad change, use Neon's point-in-time restore instead (see [Rollback](#rollback)). Older than that, recover from a dump:
 
 1. Pick the newest dump from before the bad change.
-2. Restore it and keep the container: `scripts/restore-drill.sh --keep <dump> <identity>`. It prints the container's name and how to remove it.
+2. Restore it and keep the container: `scripts/restore-drill.sh --keep <dump> <identity>`. It prints the container's name and how to remove it. With `--keep`, a dump that predates a migration, or a production that's down, gets a warning instead of a failure, because recovery needs exactly that dump.
 3. Find what was lost, for example a deleted list's items:
 
    ```bash
    docker exec -it <container> psql -h 127.0.0.1 -U postgres -d drill
    ```
 
-4. Copy those rows into production. Parents go before children: `users`, then `wishlists`, then `items`, then `claims`. Stream them straight across rather than restoring the whole dump over `main`, which would lose everything written since:
+4. Copy those rows into production. Parents go before children: `users`, then `wishlists`, then `items`, then `claims`. Stream them straight across rather than restoring the whole dump over `main`, which would lose everything written since. If the drill warned that the migrations differ, name the columns on both sides (`select id, wishlist_id, … from items` and `\copy items (id, wishlist_id, …) from stdin`), since `select *` no longer lines up:
 
    ```bash
    read -rs OWNER_URL
