@@ -281,14 +281,14 @@ A backup job that passes proves only that bytes reached R2. The drill proves the
 
 Better Stack's free plan watches the site and the backup, and emails you (D47). Create these in Better Stack → Uptime, with email alerts to you:
 
-| Monitor          | URL                                  | Check every                                          | Proves                                                                                |
-| ---------------- | ------------------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Live             | `https://hanker.dev/api/health/live` | 3 minutes                                            | The web project, the `/api` rewrite and the API function are up                       |
-| Site             | `https://hanker.dev/`                | 3 minutes                                            | The landing page renders. It's static, so it touches neither the API nor the database |
-| Deep             | `https://hanker.dev/api/health`      | 1 hour, or the longest the free plan offers          | Neon is reachable and migrated. It answers `503` when not                             |
-| Backup heartbeat | set up in [Backups](#backups) step 4 | expects a ping every 24 hours, with 2 hours of grace | The nightly backup ran and uploaded                                                   |
+| Monitor          | URL                                  | Check every                                              | Proves                                                                                |
+| ---------------- | ------------------------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Live             | `https://hanker.dev/api/health/live` | 3 minutes                                                | The web project, the `/api` rewrite and the API function are up                       |
+| Site             | `https://hanker.dev/`                | 3 minutes                                                | The landing page renders. It's static, so it touches neither the API nor the database |
+| Deep             | `https://hanker.dev/api/health`      | 30 minutes (the longest Better Stack's free plan offers) | Neon is reachable and migrated. It answers `503` when not                             |
+| Backup heartbeat | set up in [Backups](#backups) step 4 | expects a ping every 24 hours, with 2 hours of grace     | The nightly backup ran and uploaded                                                   |
 
-**Why only the deep check touches the database.** `/api/health` runs a query, which wakes Neon, and Neon Free scales to zero only after 5 idle minutes, with 100 CU-hours per project per month. A deep check every 3 minutes would keep it awake all month, about 180 CU-hours, and Neon would then suspend the database until the month ends. Hourly costs about 15 CU-hours; every 30 minutes, about 30. `/api/health/live` never touches the database. After the first week, check Neon → your project → Usage to see that compute stays well under the quota.
+**Why only the deep check touches the database.** `/api/health` runs a query, which wakes Neon, and Neon Free scales to zero only after 5 idle minutes, with 100 CU-hours per project per month. A deep check every 3 minutes would keep it awake all month, about 180 CU-hours, and Neon would then suspend the database until the month ends. Every 30 minutes costs about 30 CU-hours, since Neon sleeps for 25 of every 30 minutes. `/api/health/live` never touches the database. Check Neon → your project → Usage after the first week; if compute trends past about 70% of the quota, pause the Deep monitor. The backup heartbeat still proves the database daily.
 
 **When an alert comes:**
 
