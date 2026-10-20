@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { EmailSchema } from './auth.js';
 import { redactDeep, redactTokens } from './redact.js';
 
 const CAPABILITY = 'AbCdEfGhIjKlMnOpQrStUv'; // 22 base64url characters
@@ -47,6 +48,18 @@ describe('redactTokens', () => {
     ['a segment that is too long to be a token', `/c/${CAPABILITY}W`],
   ])('leaves %s alone', (_label, input) => {
     expect(redactTokens(input)).toBe(input);
+  });
+
+  // Whatever sign-up accepts as an address must be redacted whole, not just its tail.
+  it.each([
+    'ada@example.com',
+    'Ada.Lovelace@Example.COM',
+    "ann.o'brien@example.com",
+    'first_last+tag@mail.example.co.uk',
+    'x-y@ex-ample.io',
+  ])('redacts all of %s, an address EmailSchema accepts', (address) => {
+    expect(EmailSchema.safeParse(address).success).toBe(true);
+    expect(redactTokens(`mail to ${address}.`)).toBe('mail to [email].');
   });
 });
 

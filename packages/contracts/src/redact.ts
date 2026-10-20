@@ -1,22 +1,38 @@
 /**
  * Redaction for anything that leaves the app for a third party, today Sentry (spec §6.7, D50).
- * The token shapes match CAPABILITY_TOKEN_PATTERN (claims.ts) and EmailTokenSchema (auth.ts).
+ * The token and email patterns are built from the ones the app validates with (patterns.ts).
  */
+import { CAPABILITY_TOKEN_PATTERN, EMAIL_PATTERN, EMAIL_TOKEN_PATTERN } from './patterns.js';
 
 const REDACTED = '[redacted]';
 
+/** The body of a /^…$/ validation pattern, to find what it accepts inside longer text. */
+function unanchored(pattern: RegExp): string {
+  const { source } = pattern;
+  if (!source.startsWith('^') || !source.endsWith('$')) {
+    throw new Error(`expected an anchored pattern, got /${source}/`);
+  }
+  return `(?:${source.slice(1, -1)})`;
+}
+
 /** A share or manage token where the app's URLs carry one: /s/, /c/, /shared/, /claims/. */
-const PATH_TOKEN = /(\/(?:s|c|shared|claims)\/)[A-Za-z0-9_-]{22}(?![A-Za-z0-9_-])/g;
+const PATH_TOKEN = new RegExp(
+  `(\\/(?:s|c|shared|claims)\\/)${unanchored(CAPABILITY_TOKEN_PATTERN)}(?![A-Za-z0-9_-])`,
+  'g',
+);
 /** The verify and reset pages' ?token=… */
 const QUERY_TOKEN = /([?&]token=)[^&#\s"'<>]+/gi;
-/** An email token (32 random bytes, base64url) wherever it appears. */
-const EMAIL_TOKEN = /(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{43}(?![A-Za-z0-9_-])/g;
+/** An email token wherever it appears. */
+const EMAIL_TOKEN = new RegExp(
+  `(?<![A-Za-z0-9_-])${unanchored(EMAIL_TOKEN_PATTERN)}(?![A-Za-z0-9_-])`,
+  'g',
+);
 /**
- * An email address. The domain must end in letters, so pnpm's `@sentry+node@11.8.0/…` paths in
- * stack traces are left alone.
+ * An email address, as z.email() (EmailSchema) accepts one. Its domain ends in letters, so pnpm's
+ * `@sentry+node@11.8.0/…` paths in stack traces are left alone. There's no boundary before it: a
+ * run that isn't a valid address as a whole still gets its valid tail redacted.
  */
-const EMAIL =
-  /(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}(?![A-Za-z0-9-])/g;
+const EMAIL = new RegExp(unanchored(EMAIL_PATTERN), 'g');
 
 export function redactTokens(text: string): string {
   return text

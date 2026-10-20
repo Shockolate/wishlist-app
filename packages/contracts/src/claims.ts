@@ -1,13 +1,8 @@
 import { z } from 'zod';
 import { DisplayNameSchema } from './auth.js';
+import { CAPABILITY_TOKEN_PATTERN } from './patterns.js';
 import { ProblemSchema } from './problem.js';
 import { ClaimSchema, ITEM_CLAIM_FIELDS, ItemSchema, QuantitySchema } from './wishlist.js';
-
-/**
- * A share or manage token: 16 random bytes, base64url without padding (spec §4). The API checks
- * path parameters against it first: a malformed token gets the same 404 as an unknown one.
- */
-export const CAPABILITY_TOKEN_PATTERN = /^[A-Za-z0-9_-]{22}$/;
 
 /** A gifter's name, which the other gifters see: the display-name rule (spec §2, D35, D41). */
 export const ClaimerNameSchema = DisplayNameSchema;

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { EMAIL_TOKEN_PATTERN } from './patterns.js';
 import { VISIBLE_ONLY_MESSAGE, visibleOnly } from './text.js';
 
 /** Emails are stored and compared lowercased (spec §4). 254 characters is the longest valid address. */
@@ -18,8 +19,8 @@ export const DisplayNameSchema = z
   .max(50)
   .refine(visibleOnly, VISIBLE_ONLY_MESSAGE);
 
-/** An email-link token: 256 random bits, base64url without padding (spec §4). */
-export const EmailTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/, 'Invalid token');
+/** An email-link token; see EMAIL_TOKEN_PATTERN. */
+export const EmailTokenSchema = z.string().regex(EMAIL_TOKEN_PATTERN, 'Invalid token');
 
 const TurnstileTokenSchema = z.string().min(1).max(2048);
 
