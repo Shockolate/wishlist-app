@@ -1,5 +1,5 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { HealthResponseSchema } from '@wishlist/contracts';
+import { HealthResponseSchema, LiveResponseSchema } from '@wishlist/contracts';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ENV } from '../core/env.js';
 import { createUnitApp, http } from '../testing/app.js';
@@ -42,5 +42,29 @@ describe('GET /api/health', () => {
       sha: 'abc123',
       db: { ok: false, migrationsApplied: null },
     });
+  });
+});
+
+describe('GET /api/health/live', () => {
+  it('reports ok with the deployed commit, never cached, without asking the database', async () => {
+    let checks = 0;
+    const db: DbHealth = {
+      check: () => {
+        checks += 1;
+        return Promise.resolve({ ok: false });
+      },
+    };
+    app = await createUnitApp({
+      controllers: [HealthController],
+      providers: [
+        { provide: ENV, useValue: testEnv({ GIT_SHA: 'abc123' }) },
+        { provide: DB_HEALTH, useValue: db },
+      ],
+    });
+    const res = await http(app).get('/api/health/live');
+    expect(res.status).toBe(200);
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(LiveResponseSchema.parse(res.body)).toEqual({ status: 'ok', sha: 'abc123' });
+    expect(checks).toBe(0);
   });
 });
