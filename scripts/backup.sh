@@ -34,8 +34,9 @@ key="daily/$(date -u +%Y-%m-%dT%H%M%SZ).dump.age"
 url="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${R2_BUCKET}/${key}"
 file="$work/backup.dump.age"
 
-# The URL reaches pg_dump through the container's environment, never argv, and the plaintext
-# exists only inside the pipe.
+# The URL reaches the container through its environment, so it's never on the runner's docker
+# command line. Inside the container it's pg_dump's argument, visible only to that container.
+# The plaintext exists only inside the pipe.
 docker run --rm -e DATABASE_URL_BACKUP "$pg_image" \
   sh -c 'exec pg_dump --dbname="$DATABASE_URL_BACKUP" --format=custom --no-owner --no-privileges' \
   | age -r "$AGE_RECIPIENT" > "$file"

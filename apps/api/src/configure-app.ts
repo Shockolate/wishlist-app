@@ -15,7 +15,7 @@ import {
  */
 export const APP_OPTIONS = { bodyParser: false } satisfies NestApplicationOptions;
 
-/** The production HTTP pipeline. main.ts and every test app go through this one function. */
+/** The production HTTP pipeline. bootstrap.ts and every test app go through this one function. */
 export function configureApp(app: NestExpressApplication): NestExpressApplication {
   app.disable('x-powered-by');
   app.setGlobalPrefix('api');

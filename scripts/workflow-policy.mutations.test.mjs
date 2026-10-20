@@ -206,6 +206,13 @@ const mutations = [
     },
   ],
   [
+    "the build job's sentry-cli install can fail the release",
+    'deploy.yml',
+    (wf) => {
+      delete runStep(wf.jobs.build, /install-sentry-cli/)['continue-on-error'];
+    },
+  ],
+  [
     'a release waits on the source-map upload',
     'deploy.yml',
     (wf) => {
