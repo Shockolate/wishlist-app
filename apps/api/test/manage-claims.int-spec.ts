@@ -16,6 +16,7 @@ import { createAuthTestApp, type AuthTestApp } from './support/auth-app.js';
 import { client, type ApiResponse } from './support/client.js';
 import { openTestDatabase } from './support/database.js';
 import { seedItem, shareTokenOf, wishlistIdOf } from './support/lists.js';
+import { untilBlockedBy } from './support/locks.js';
 import { fillBucket } from './support/rate-limits.js';
 
 const db = openTestDatabase();
@@ -204,6 +205,8 @@ describe('PATCH /claims/:manageToken (spec §5)', () => {
     let patch: Promise<ApiResponse> | undefined;
     try {
       await holder.query('begin');
+      const holderPid = (await holder.query<{ pid: number }>('select pg_backend_pid() as pid'))
+        .rows[0]!.pid;
       await holder.query('select id from items where id = $1 for update', [kettle]);
       await holder.query(
         `insert into claims (id, item_id, claimer_name, quantity, manage_token_hash)
@@ -212,7 +215,7 @@ describe('PATCH /claims/:manageToken (spec §5)', () => {
       );
       // supertest sends nothing until `.then` is called, so start it here, not at the `await`.
       patch = change(sue.manageToken, { quantity: 2 }).then((res) => res);
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await untilBlockedBy(db.pool, holderPid, 1, patch);
       await holder.query('commit');
     } finally {
       await holder.query('rollback').catch(() => undefined);
@@ -235,6 +238,8 @@ describe('PATCH /claims/:manageToken (spec §5)', () => {
     let patch: Promise<ApiResponse> | undefined;
     try {
       await holder.query('begin');
+      const holderPid = (await holder.query<{ pid: number }>('select pg_backend_pid() as pid'))
+        .rows[0]!.pid;
       await holder.query('select id from items where id = $1 for update', [kettle]);
       await holder.query('update claims set quantity = 1 where manage_token_hash = $1', [
         hashToken(sue.manageToken),
@@ -245,7 +250,7 @@ describe('PATCH /claims/:manageToken (spec §5)', () => {
         [kettle, hashToken('kim')],
       );
       patch = change(sue.manageToken, { quantity: 2 }).then((res) => res);
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await untilBlockedBy(db.pool, holderPid, 1, patch);
       await holder.query('commit');
     } finally {
       await holder.query('rollback').catch(() => undefined);

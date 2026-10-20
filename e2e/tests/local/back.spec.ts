@@ -38,6 +38,12 @@ async function holdListRefetches(page: Page) {
   });
 }
 
+// A test can end while a held refetch is still in flight. Its route.fetch then throws "Test ended",
+// which Playwright reports as a worker error that fails the run and skips the worker's next test.
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+});
+
 async function owner(page: Page, context: BrowserContext, baseURL: string, label: string) {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await verifiedOwner(page, baseURL, label);

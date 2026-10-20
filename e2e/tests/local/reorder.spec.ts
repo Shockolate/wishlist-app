@@ -39,7 +39,15 @@ test('moves an item with the arrows, keeping focus, and the order is saved', asy
 
 test('moves an item with the keyboard, by its drag handle', async ({ page, baseURL }) => {
   await ownerWith(page, baseURL ?? '', 'keyboard', ['A', 'B', 'C']);
-  await page.getByRole('button', { name: 'Drag “C” to reorder' }).focus();
+  const handle = page.getByRole('button', { name: 'Drag “C” to reorder' });
+  // The handle takes keys as soon as hydration commits, but dnd-kit's Accessibility subscribes to
+  // drag events in a useEffect. A Space in between starts the drag and loses "Picked up" for good.
+  // The handle's instructions appear only after that effect has run, so once they exist, the
+  // announcement has a listener.
+  await expect(
+    page.locator(`[id="${await handle.getAttribute('aria-describedby')}"]`),
+  ).toBeAttached();
+  await handle.focus();
   await page.keyboard.press('Space');
   await expect(status(page, 'Picked up “C”, position 3 of 3.')).toBeVisible();
   // The announcement comes from a render and doesn't mean the sensor can take a key yet: dnd-kit's
