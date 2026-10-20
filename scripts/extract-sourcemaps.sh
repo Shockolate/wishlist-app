@@ -7,6 +7,9 @@ set -euo pipefail
 
 src="${1:?usage: extract-sourcemaps.sh <static-dir> <dest>}"
 dest="${2:?usage: extract-sourcemaps.sh <static-dir> <dest>}"
+# A trailing slash would leave the "/" in front of each path, so the relative path below would
+# keep the absolute prefix.
+src="${src%/}"
 mkdir -p "$dest"
 # Always something to upload, so the sourcemaps job's download never fails on an empty artifact.
 echo "Browser source maps for Sentry, from scripts/extract-sourcemaps.sh" > "$dest/README.txt"
