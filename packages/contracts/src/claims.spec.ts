@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CAPABILITY_TOKEN_PATTERN,
   ClaimConflictProblemSchema,
   ClaimDetailsResponseSchema,
   ClaimerNameSchema,
@@ -11,6 +10,7 @@ import {
   remainingOf,
 } from './claims.js';
 import { ErrorCode } from './error-codes.js';
+import { CAPABILITY_TOKEN_PATTERN } from './patterns.js';
 
 const ID = '0199a3b2-0000-7000-8000-000000000001';
 const TOKEN = 'abcdefghijklmnopqrstuv';
