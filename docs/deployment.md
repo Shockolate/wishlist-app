@@ -23,7 +23,7 @@ Vercel assigned these names because `wishlist-web.vercel.app` and `wishlist-api.
 
 **Why Neon is set up directly, not through the Vercel integration:** our GitHub Actions own preview branching and env wiring. The integration would add a second system creating branches against Neon's 10-branch cap, and it would inject database credentials into projects outside our control. It would also tie the database account to the hosting account.
 
-Later plans add: domain and DNS, Resend and Turnstile (Plan 2); Sentry, Cloudflare R2 backups and uptime monitoring (Plan 5).
+Later plans add: domain and DNS, Resend and Turnstile (Plan 2); Cloudflare R2 backups and Better Stack uptime monitoring (Plan 5a, see [Backups](#backups) and [Monitoring](#monitoring)); Sentry (Plan 5b).
 
 ## Neon
 
@@ -119,6 +119,114 @@ The response lists the counts.
 
 - **Check it ran:** Vercel → `wishlist-api` → Settings → Cron Jobs shows the schedule and has a **Run** button. The run's logs show the JSON counts.
 - **It refuses** any request without `Authorization: Bearer $CRON_SECRET` with a `401`.
+
+## Backups
+
+`.github/workflows/backup.yml` runs `scripts/backup.sh` every night at 07:17 UTC (spec §10 Recovery). It:
+
+1. dumps production with `pg_dump` as `hanker_backup`, a role that can only read (D48);
+2. encrypts the dump with `age` inside the pipe, so the plaintext never touches the runner's disk;
+3. uploads it to R2 as `daily/<UTC timestamp>.dump.age`, and checks the stored size;
+4. pings the Better Stack heartbeat, or its `/fail` URL if any step failed.
+
+R2 keeps each dump for 30 days. Only the private `age` key, which never leaves your hands, can read one. The restore drill below proves they can be read.
+
+### One-off setup
+
+Do these in order. Each secret goes into the GitHub `production` environment with `gh secret set <NAME> --env production`, which prompts for the value without echoing it.
+
+**1. The `age` key pair.** On your machine, install the same release the workflow uses:
+
+```bash
+curl -fsSL -o /tmp/age.tar.gz https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-linux-amd64.tar.gz
+echo "cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10  /tmp/age.tar.gz" | sha256sum -c -
+tar -xzf /tmp/age.tar.gz -C /tmp && sudo install /tmp/age/age /tmp/age/age-keygen /usr/local/bin/
+```
+
+Generate the key straight into a passphrase-protected file. The private key never exists unencrypted on disk:
+
+```bash
+age-keygen | age -p -a > ~/hanker-backup-identity.age
+```
+
+`age-keygen` prints `Public key: age1…` to the terminal; that's the recipient, and it isn't secret. `age -p` asks for a passphrase. Then:
+
+- **Prove the pair matches** before anything depends on it: `echo ok | age -r <public key> | age -d -i ~/hanker-backup-identity.age` must print `ok`. A recipient that doesn't match the key would make every dump unreadable, and nothing else would notice.
+- **Store the identity file in two places you control**, for example a password-manager attachment and an offline USB drive, and the passphrase in your password manager. Losing either one makes every backup unreadable.
+- **Set `AGE_RECIPIENT`** to the public key.
+
+**2. The read-only role.** Roles created in the Neon console join `neon_superuser`, so create this one in SQL. Connect to the production branch as the owner role, using the direct (not `-pooler`) connection string from the Neon console:
+
+```bash
+read -rs OWNER_URL && psql "$OWNER_URL"; unset OWNER_URL
+```
+
+```sql
+CREATE ROLE hanker_backup WITH LOGIN;
+\password hanker_backup
+GRANT pg_read_all_data TO hanker_backup;
+```
+
+`\password` prompts twice and sends only a hash, so the password never appears in a log or in history. Generate it with your password manager (Neon requires at least 60 bits of entropy) and keep it there.
+
+If Neon refuses the `GRANT pg_read_all_data` (the docs don't confirm it's allowed), grant the same reads explicitly. The default privileges cover tables a future migration creates; `<owner>` is the role in `DATABASE_URL_DIRECT` (Neon's default is `neondb_owner`) and `<database>` its database (default `neondb`):
+
+```sql
+GRANT CONNECT ON DATABASE <database> TO hanker_backup;
+GRANT USAGE ON SCHEMA public, drizzle TO hanker_backup;
+GRANT SELECT ON ALL TABLES IN SCHEMA public, drizzle TO hanker_backup;
+GRANT SELECT ON ALL SEQUENCES IN SCHEMA public, drizzle TO hanker_backup;
+ALTER DEFAULT PRIVILEGES FOR ROLE <owner> IN SCHEMA public, drizzle GRANT SELECT ON TABLES TO hanker_backup;
+ALTER DEFAULT PRIVILEGES FOR ROLE <owner> IN SCHEMA public, drizzle GRANT SELECT ON SEQUENCES TO hanker_backup;
+```
+
+Prove it can read but not write, connected as `hanker_backup` this time:
+
+```sql
+SELECT count(*) FROM users;                        -- works
+CREATE TABLE backup_write_probe (id int);          -- must fail: permission denied
+SELECT rolsuper, rolcreaterole, rolcreatedb, rolbypassrls
+FROM pg_roles WHERE rolname = 'hanker_backup';     -- all f
+```
+
+Set `DATABASE_URL_BACKUP` to the role's **direct** connection string with `sslmode=require`. `pg_dump` doesn't work reliably through the pooler.
+
+**3. R2.** In the Cloudflare dashboard, under R2:
+
+- **Bucket:** create `hanker-backups` with automatic location and Standard storage. Keep it private: no public access, no custom domain.
+- **Lifecycle rule:** under the bucket's Settings → Object lifecycle rules, add a rule for prefix `daily/` that deletes objects 30 days after upload.
+- **Bucket lock:** under Settings → Bucket lock rules, add a rule for prefix `daily/` that retains objects for 30 days. A lock blocks deletes and overwrites, and takes precedence over the lifecycle rule, so a leaked token can't destroy the dumps already there.
+- **Token:** under Manage API tokens, create a token with **Object Read & Write**, applied to `hanker-backups` only. Copy the Access Key ID and Secret Access Key; the secret is shown once.
+
+Set `R2_ACCOUNT_ID` (on the R2 overview page), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `R2_BUCKET` (`hanker-backups`).
+
+**4. The heartbeat.** In Better Stack, under Uptime → Heartbeats, create "Hanker nightly backup", expected every **1 day**, with a **2 hour** grace period, alerting you by email. Set `BACKUP_HEARTBEAT_URL` to its URL. It's a secret because anyone holding it can send a fake "all good".
+
+**5. First run.**
+
+```bash
+gh workflow run backup.yml --ref main
+gh run watch "$(gh run list --workflow backup.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
+```
+
+The log ends with `backup uploaded: daily/<timestamp>.dump.age (<n> bytes)`, the object appears in the bucket, and the heartbeat turns green. Then run the [restore drill](#restore-drill-and-recovery) against it.
+
+### When it fails
+
+The heartbeat emails you: right away if a run failed, or after the grace period if no run reported at all. Read the newest run with `gh run view --log-failed`.
+
+| Symptom                               | Cause and fix                                                                                                                                   |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `permission denied for table …`       | A migration added a table `hanker_backup` can't read. Only possible with the explicit-grant fallback: re-run its `GRANT SELECT ON ALL …` lines. |
+| `403` from `r2.cloudflarestorage.com` | The R2 token was revoked, expired or scoped to another bucket. Create a new one and update the two `R2_*_KEY*` secrets.                         |
+| `the dump isn't age-encrypted`        | `age` failed or `AGE_RECIPIENT` isn't a valid public key.                                                                                       |
+| No run at all                         | GitHub disables scheduled workflows in a public repository after 60 days without activity. Re-enable it with `gh workflow enable backup.yml`.   |
+
+### Rotation and upgrades
+
+- **A new `age` key.** Dumps already in R2 stay readable only with the old key, so keep the old identity file until the last of them expires, 30 days after the switch. Re-run the drill with the new key.
+- **The R2 token or the role's password.** Replace the secret, then dispatch a run to prove it.
+- **Postgres.** `scripts/postgres-image` pins `postgres:17-alpine` by digest. When Neon's production moves to a new major version, pin the matching image, because `pg_dump` refuses servers newer than itself.
 
 ## Opening sign-up (end of Plan 4)
 

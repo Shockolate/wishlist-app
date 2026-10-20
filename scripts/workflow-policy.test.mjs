@@ -230,6 +230,38 @@ for (const file of ['preview.yml', 'cleanup.yml']) {
   }
 }
 
+// Rule 8 (Plan 5a; D48, spec §10 Recovery): the backup runs only on main, holds only its own
+// secrets (never the owner role's DATABASE_URL_DIRECT), checks age's checksum before extracting
+// it, and never uploads an artifact: on a public repo anyone can download one.
+const BACKUP_SECRETS = [
+  'DATABASE_URL_BACKUP',
+  'AGE_RECIPIENT',
+  'R2_ACCOUNT_ID',
+  'R2_ACCESS_KEY_ID',
+  'R2_SECRET_ACCESS_KEY',
+  'R2_BUCKET',
+  'BACKUP_HEARTBEAT_URL',
+];
+const backupJobs = Object.entries(byFile['backup.yml']?.jobs ?? {});
+if (backupJobs.length === 0) fail('backup.yml: missing, or has no jobs');
+for (const [jobName, job] of backupJobs) {
+  const where = `backup.yml#${jobName}`;
+  if (!String(job.if ?? '').includes("github.ref == 'refs/heads/main'"))
+    fail(`${where}: must be gated with if: github.ref == 'refs/heads/main'`);
+  const extra = secretsIn(job).filter((s) => !BACKUP_SECRETS.includes(s));
+  if (extra.length)
+    fail(`${where}: may hold only ${BACKUP_SECRETS.join(', ')} (got ${extra.join(', ')})`);
+  const steps = job.steps ?? [];
+  if (steps.some((s) => String(s.uses ?? '').startsWith('actions/upload-artifact@')))
+    fail(`${where}: never upload an artifact; anyone can download it from a public repo`);
+  for (const step of steps.filter((s) => /FiloSottile\/age\/releases/.test(s.run ?? ''))) {
+    const run = String(step.run);
+    const verifyAt = run.indexOf('sha256sum -c');
+    if (verifyAt === -1 || verifyAt > run.indexOf('tar '))
+      fail(`${where}: check age's sha256 (sha256sum -c) before extracting it`);
+  }
+}
+
 // Secret jobs run `npx vercel@<this version>`; a range would float in token-holding jobs.
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 if (!/^\d+\.\d+\.\d+$/.test(pkg.devDependencies?.vercel ?? ''))

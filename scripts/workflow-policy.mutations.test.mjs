@@ -12,6 +12,7 @@ const root = new URL('..', import.meta.url).pathname;
 const policy = join(root, 'scripts/workflow-policy.test.mjs');
 const PINNED_CACHE = 'actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830';
 const PINNED_DOWNLOAD = 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333';
+const PINNED_UPLOAD = 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9';
 
 function find(job, predicate) {
   const step = job.steps.find(predicate);
@@ -136,6 +137,42 @@ const mutations = [
       pkg.devDependencies.vercel = '^62.5.0';
     },
   ],
+  [
+    'the backup holds the owner database URL (D48)',
+    'backup.yml',
+    (wf) => {
+      runStep(wf.jobs.backup, /scripts\/backup\.sh/).env.DATABASE_URL_BACKUP =
+        '${{ secrets.DATABASE_URL_DIRECT }}';
+    },
+  ],
+  [
+    'the backup uploads its dump as an artifact',
+    'backup.yml',
+    (wf) => {
+      wf.jobs.backup.steps.push({
+        uses: PINNED_UPLOAD,
+        with: { name: 'dump', path: '${{ runner.temp }}' },
+      });
+    },
+  ],
+  [
+    'age extracted without its checksum',
+    'backup.yml',
+    (wf) => {
+      const s = runStep(wf.jobs.backup, /FiloSottile\/age\/releases/);
+      s.run = s.run
+        .split('\n')
+        .filter((l) => !l.includes('sha256sum'))
+        .join('\n');
+    },
+  ],
+  [
+    'the backup runs from a branch other than main',
+    'backup.yml',
+    (wf) => {
+      delete wf.jobs.backup.if;
+    },
+  ],
 ];
 
 function copyRoot() {
@@ -164,7 +201,7 @@ const problems = [];
 
 // Baseline: the real workflows, round-tripped through the YAML serializer, still pass.
 const base = copyRoot();
-for (const f of ['deploy.yml', 'preview.yml', 'preview-seed.yml']) rewrite(base, f);
+for (const f of ['deploy.yml', 'preview.yml', 'preview-seed.yml', 'backup.yml']) rewrite(base, f);
 const baseline = check(base);
 rmSync(base, { recursive: true, force: true });
 if (baseline.status !== 0) problems.push(`baseline should pass: ${baseline.stderr.trim()}`);
