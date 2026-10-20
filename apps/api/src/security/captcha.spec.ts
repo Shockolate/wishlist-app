@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { FakeErrorReporter } from '../testing/fakes.js';
 import { TurnstileVerifier } from './captcha.js';
 
 function fakeFetch(respond: () => Response) {
@@ -166,5 +167,17 @@ describe('TurnstileVerifier', () => {
       await new TurnstileVerifier('secret', fn).verify('token', '203.0.113.7');
       expect(warn).not.toHaveBeenCalled();
     });
+  });
+
+  it('reports an unavailable verdict to the error reporter as a warning', async () => {
+    const reporter = new FakeErrorReporter();
+    const { fn } = fakeFetch(() =>
+      json({ success: false, 'error-codes': ['invalid-input-secret'] }, 400),
+    );
+    const verifier = new TurnstileVerifier('secret', fn, reporter);
+    expect(await verifier.verify('token', '203.0.113.7')).toBe('unavailable');
+    expect(reporter.warnings).toEqual([
+      { message: 'captcha unavailable: siteverify answered HTTP 400 (invalid-input-secret)' },
+    ]);
   });
 });

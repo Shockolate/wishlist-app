@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { Logger } from '@nestjs/common';
+import { NOOP_REPORTER, type ErrorReporter } from '../observability/error-reporter.js';
 
 /** Port for the breached-password check (spec §6.4, §8). */
 export interface BreachedPasswordChecker {
@@ -16,7 +17,10 @@ export const BREACHED_PASSWORD_CHECKER = Symbol('BREACHED_PASSWORD_CHECKER');
 export class PwnedPasswordsChecker implements BreachedPasswordChecker {
   private readonly logger = new Logger('PwnedPasswords');
 
-  constructor(private readonly fetchFn: typeof fetch = fetch) {}
+  constructor(
+    private readonly fetchFn: typeof fetch = fetch,
+    private readonly reporter: ErrorReporter = NOOP_REPORTER,
+  ) {}
 
   async isBreached(password: string): Promise<boolean> {
     const digest = createHash('sha1').update(password, 'utf8').digest('hex').toUpperCase();
@@ -34,9 +38,9 @@ export class PwnedPasswordsChecker implements BreachedPasswordChecker {
       }
       return false;
     } catch (error) {
-      this.logger.warn(
-        `breach check skipped: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      const message = `breach check skipped: ${error instanceof Error ? error.message : String(error)}`;
+      this.logger.warn(message);
+      this.reporter.captureWarning(message);
       return false;
     }
   }

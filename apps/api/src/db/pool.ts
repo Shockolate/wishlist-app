@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { attachDatabasePool } from '@vercel/functions';
 import { Pool } from 'pg';
+import { NOOP_REPORTER, type ErrorReporter } from '../observability/error-reporter.js';
 
 const logger = new Logger('PgPool');
 
@@ -9,7 +10,10 @@ const logger = new Logger('PgPool');
  * pool outlives a single invocation; attachDatabasePool closes idle clients before Vercel
  * suspends the instance.
  */
-export function createPool(connectionString: string): Pool {
+export function createPool(
+  connectionString: string,
+  reporter: ErrorReporter = NOOP_REPORTER,
+): Pool {
   const pool = new Pool({
     connectionString,
     max: 5,
@@ -18,7 +22,10 @@ export function createPool(connectionString: string): Pool {
   });
   // Neon drops idle connections when its compute scales to zero. pg reports that as an 'error'
   // event on the pool, and an unhandled 'error' event would crash the process.
-  pool.on('error', (err) => logger.warn(`idle client error: ${err.message}`));
+  pool.on('error', (err) => {
+    logger.warn(`idle client error: ${err.message}`);
+    reporter.captureWarning(`idle client error: ${err.message}`);
+  });
   if (process.env.VERCEL) attachDatabasePool(pool);
   return pool;
 }

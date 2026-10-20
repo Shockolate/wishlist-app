@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { FakeErrorReporter } from '../testing/fakes.js';
 import { PwnedPasswordsChecker } from './breached-passwords.js';
 
 // SHA-1("password") = 5BAA61E4C9B93F3F0682250B6CF8331B7EE68FD8
@@ -46,5 +47,17 @@ describe('PwnedPasswordsChecker (spec §6.4)', () => {
     const unreachable = (() =>
       Promise.reject(new TypeError('fetch failed'))) as unknown as typeof fetch;
     expect(await new PwnedPasswordsChecker(unreachable).isBreached('password')).toBe(false);
+  });
+});
+
+describe('PwnedPasswordsChecker reporting', () => {
+  it('reports a skipped check as a warning, never the password', async () => {
+    const reporter = new FakeErrorReporter();
+    const down = (() => Promise.resolve(new Response('', { status: 503 }))) as typeof fetch;
+    expect(await new PwnedPasswordsChecker(down, reporter).isBreached('hunter2 hunter2')).toBe(
+      false,
+    );
+    expect(reporter.warnings).toEqual([{ message: 'breach check skipped: HIBP answered 503' }]);
+    expect(JSON.stringify(reporter.warnings)).not.toContain('hunter2');
   });
 });
