@@ -279,7 +279,8 @@ if (!JSON.stringify(byFile['deploy.yml']?.jobs?.build ?? {}).includes('vars.SENT
 
 // Rule 10 (Plan 5b, D52): source maps reach Sentry from a job that holds only SENTRY_AUTH_TOKEN,
 // runs sentry-cli only after installing it through its checksum check, and that no release waits
-// on, so a Sentry outage never blocks a deploy (Review Focus #5).
+// on, so a Sentry outage never blocks a deploy (Review Focus #5). The build job's own sentry-cli
+// install is continue-on-error for the same reason.
 const deployJobs = byFile['deploy.yml']?.jobs ?? {};
 const mapsJob = deployJobs.sourcemaps;
 if (!mapsJob) fail('deploy.yml: missing job sourcemaps');
@@ -298,6 +299,12 @@ for (const [jobName, job] of Object.entries(deployJobs)) {
     fail(
       `deploy.yml#${jobName}: install sentry-cli with scripts/install-sentry-cli.sh before using it`,
     );
+  // The build job's CLI is only for the Sentry-tooling steps there; a GitHub releases outage
+  // must not block the release. The sourcemaps job's install must fail loudly: nothing waits on it.
+  if (jobName === 'build')
+    for (const s of steps)
+      if (/scripts\/install-sentry-cli\.sh/.test(s.run ?? '') && s['continue-on-error'] !== true)
+        fail('deploy.yml#build: the sentry-cli install must be continue-on-error: true');
 }
 
 // Secret jobs run `npx vercel@<this version>`; a range would float in token-holding jobs.
