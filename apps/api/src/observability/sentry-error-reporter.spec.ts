@@ -31,7 +31,7 @@ const sentEvents = () =>
   );
 
 describe('SentryErrorReporter (the real SDK, a fake transport)', () => {
-  it('sends a scrubbed exception tagged with the request ID, grouped by route', async () => {
+  it('sends a scrubbed exception tagged with the request ID, labeled with its route pattern', async () => {
     function claim(password: string): never {
       throw new Error(`failed for /api/claims/${TOKEN} by ada@example.com (${password.length})`);
     }
