@@ -15,6 +15,7 @@ import { createAuthTestApp, type AuthTestApp } from './support/auth-app.js';
 import { client, type ApiResponse } from './support/client.js';
 import { openTestDatabase } from './support/database.js';
 import { seedItem, shareTokenOf, wishlistIdOf } from './support/lists.js';
+import { untilBlockedBy } from './support/locks.js';
 import { fillBucket } from './support/rate-limits.js';
 
 const db = openTestDatabase();
@@ -194,6 +195,8 @@ describe('POST /shared/:shareToken/items/:itemId/claims (spec §5)', () => {
     const holder = await db.pool.connect();
     try {
       await holder.query('begin');
+      const holderPid = (await holder.query<{ pid: number }>('select pg_backend_pid() as pid'))
+        .rows[0]!.pid;
       await holder.query('select id from items where id = $1 for update', [kettle]);
       await holder.query(
         `insert into claims (id, item_id, claimer_name, quantity, manage_token_hash)
@@ -203,8 +206,8 @@ describe('POST /shared/:shareToken/items/:itemId/claims (spec §5)', () => {
       const pending = Promise.all(
         Array.from({ length: 5 }, (_, i) => claim(token, kettle, { claimerName: `Gifter ${i}` })),
       );
-      // Long enough for the claims to reach the row lock, or to finish if nothing locks.
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      // Every claim is waiting on the item's row lock, or behind one that is.
+      await untilBlockedBy(db.pool, holderPid, 5, pending);
       await holder.query('commit');
       const results = await pending;
       for (const res of results) {
@@ -371,14 +374,16 @@ describe('replaying a claim with the sheet’s own manage token (D42)', () => {
     const holder = await db.pool.connect();
     try {
       await holder.query('begin');
+      const holderPid = (await holder.query<{ pid: number }>('select pg_backend_pid() as pid'))
+        .rows[0]!.pid;
       await holder.query(
         `insert into claims (id, item_id, claimer_name, quantity, manage_token_hash)
          values ($1, $2, 'Holder', 1, $3)`,
         [newId(), socks, hashToken(manageToken)],
       );
-      const pending = claim(token, kettle, { claimerName: 'Sue', manageToken });
-      // Long enough for the claim to reach the unique index and wait on the holder's row.
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      // supertest sends nothing until .then: start the claim now, before the holder commits.
+      const pending = claim(token, kettle, { claimerName: 'Sue', manageToken }).then((res) => res);
+      await untilBlockedBy(db.pool, holderPid, 1, pending);
       await holder.query('commit');
       const res = await pending;
       expect([res.status, codeOf(res)]).toEqual([409, ErrorCode.MANAGE_TOKEN_IN_USE]);
