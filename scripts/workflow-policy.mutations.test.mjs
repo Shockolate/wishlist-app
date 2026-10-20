@@ -173,6 +173,14 @@ const mutations = [
       delete wf.jobs.backup.if;
     },
   ],
+  [
+    'a preview build inlines the web DSN (D50)',
+    'preview.yml',
+    (wf) => {
+      const job = wf.jobs['build-web'];
+      job.env = { ...(job.env ?? {}), SENTRY_DSN_WEB: '${{ vars.SENTRY_DSN_WEB }}' };
+    },
+  ],
 ];
 
 function copyRoot() {
