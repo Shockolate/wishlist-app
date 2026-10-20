@@ -109,7 +109,10 @@ jobs:
         with:
           name: vercel-settings
           path: vercel-settings
+      # A failed download or checksum must not block a release: the binary is then never
+      # installed, and extract-sourcemaps.sh drops the maps with a warning (Review Focus #5).
       - name: Install sentry-cli (pinned release, checksum checked)
+        continue-on-error: true
         run: |
           scripts/install-sentry-cli.sh "$RUNNER_TEMP/sentry-cli"
           echo "$RUNNER_TEMP/sentry-cli" >> "$GITHUB_PATH"

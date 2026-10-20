@@ -47,4 +47,30 @@ echo '{}' > "$slash/_next/static/chunks/d.js.map"
 PATH="$tmp/bin:$PATH" "$here/extract-sourcemaps.sh" "$slash/" "$slashdest" >/dev/null || fail "a trailing slash should extract"
 [[ -f "$slashdest/_next/static/chunks/d.js.map" ]] || fail "with a trailing slash, the map must land at <dest>/_next/..., not under its absolute path"
 [[ ! -e "$slashdest$slash" ]] || fail "with a trailing slash, no map may land under an absolute path"
+# Sentry tooling must never block a release: when inject fails, or sentry-cli is missing, the maps
+# are dropped from the deploy output with a warning, and the script still succeeds.
+check_degraded() {
+  local label="$1" path="$2" d="$tmp/deg-$1" out="$tmp/deg-$1.out"
+  local st="$tmp/deg-static-$1"
+  mkdir -p "$st/_next/static/chunks"
+  echo 'e()' > "$st/_next/static/chunks/e.js"
+  echo '{}' > "$st/_next/static/chunks/e.js.map"
+  PATH="$path" "$here/extract-sourcemaps.sh" "$st" "$d" >"$out" 2>&1 || fail "$label: must exit 0 (output: $(cat "$out"))"
+  grep -q '^::warning::' "$out" || fail "$label: print a ::warning:: saying why"
+  ! find "$st" -name '*.map' | grep -q . || fail "$label: no map may remain in the deploy output"
+  [[ "$(cat "$st/_next/static/chunks/e.js")" == 'e()' ]] || fail "$label: leave the chunk untouched"
+  [[ -f "$d/README.txt" ]] || fail "$label: still write README.txt"
+  grep -qi 'skipped' "$d/README.txt" || fail "$label: README.txt should note the skip"
+  ! find "$d" -name '*.map' | grep -q . || fail "$label: no map may reach the artifact"
+}
+mkdir -p "$tmp/failbin" "$tmp/emptybin"
+printf '#!/usr/bin/env bash\nexit 1\n' > "$tmp/failbin/sentry-cli"
+chmod +x "$tmp/failbin/sentry-cli"
+# The script's own tools must come from /usr/bin:/bin, so a PATH without sentry-cli is honest.
+for tool in find grep mkdir cp mv dirname cat rm; do
+  PATH=/usr/bin:/bin command -v "$tool" >/dev/null || fail "test setup: $tool not in /usr/bin:/bin"
+done
+! PATH="$tmp/emptybin:/usr/bin:/bin" command -v sentry-cli >/dev/null || fail "test setup: sentry-cli is on the bare PATH"
+check_degraded inject-fails "$tmp/failbin:/usr/bin:/bin"
+check_degraded no-sentry-cli "$tmp/emptybin:/usr/bin:/bin"
 echo "extract-sourcemaps: ok"

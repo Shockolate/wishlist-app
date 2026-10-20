@@ -2,6 +2,9 @@
 # Takes the browser source maps out of a web build's deploy output (D52). sentry-cli first writes
 # a debug ID into each chunk and its map, so Sentry pairs them without release bookkeeping. Each
 # map then moves to <dest> with a copy of its chunk, and hanker.dev never serves it.
+# Sentry tooling must never block a release: if sentry-cli is missing or inject fails, the maps
+# are useless without debug IDs, so they are deleted (never served), the skip is noted in
+# <dest>/README.txt, and the script still exits 0 with a ::warning::.
 # Usage: scripts/extract-sourcemaps.sh <static-dir> <dest>   (sentry-cli on PATH)
 set -euo pipefail
 
@@ -19,7 +22,14 @@ if ! find "$src" -name '*.map' -print -quit | grep -q .; then
   exit 0
 fi
 
-sentry-cli sourcemaps inject "$src"
+skip_maps() {
+  echo "::warning::$1; dropping the source maps, so this release deploys without them"
+  find "$src" -name '*.map' -delete
+  echo "Skipped: $1. No source maps were extracted for this release." >> "$dest/README.txt"
+  exit 0
+}
+command -v sentry-cli >/dev/null 2>&1 || skip_maps "sentry-cli isn't on PATH"
+sentry-cli sourcemaps inject "$src" || skip_maps "sentry-cli sourcemaps inject failed"
 moved=0
 while IFS= read -r -d '' map; do
   rel="${map#"$src"/}"
