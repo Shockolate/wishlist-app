@@ -1,3 +1,4 @@
+import { DrizzleQueryError } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { SentryErrorReporter } from './sentry-error-reporter.js';
 
@@ -66,5 +67,19 @@ describe('SentryErrorReporter (the real SDK, a fake transport)', () => {
       message: 'captcha unavailable: siteverify answered HTTP 400',
       tags: { requestId: 'req-2' },
     });
+  });
+
+  it('sends no bound parameters when a failed query arrives as a cause', async () => {
+    const failure = new DrizzleQueryError(
+      'insert into "users" ("email", "password_hash") values ($1, $2)',
+      ['ada@example.com', '$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA'],
+      new Error('duplicate key'),
+    );
+    reporter.captureException(new Error('outer', { cause: failure }));
+    await reporter.flush();
+    const json = JSON.stringify(sentEvents().at(-1));
+    expect(json).not.toContain('ada@example.com');
+    expect(json).not.toContain('argon2id');
+    expect(json).toContain('insert into \\"users\\"');
   });
 });

@@ -32,4 +32,27 @@ describe('scrubEvent', () => {
     });
     expect(scrubbed?.tags).toEqual({ route: '/api/claims/:manageToken' });
   });
+
+  it("cuts a failed query at its bound parameters and drops a thrown object's serialized fields", () => {
+    const event = {
+      exception: {
+        values: [
+          {
+            type: 'DrizzleQueryError',
+            value:
+              'Failed query: insert into "users" ("email", "password_hash") values ($1, $2)\nparams: ada@example.com,$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA',
+          },
+          { type: 'Error', value: 'plain' },
+        ],
+      },
+      extra: { __serialized__: { password: 'plainpw' }, note: 'kept' },
+    } as unknown as ErrorEvent;
+    const scrubbed = scrubEvent(event);
+    expect(scrubbed?.exception?.values?.map((v) => v.value)).toEqual([
+      'Failed query: insert into "users" ("email", "password_hash") values ($1, $2)',
+      'plain',
+    ]);
+    expect(scrubbed?.extra).toEqual({ note: 'kept' });
+    expect(JSON.stringify(scrubbed)).not.toContain('plainpw');
+  });
 });

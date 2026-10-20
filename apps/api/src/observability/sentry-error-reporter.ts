@@ -17,6 +17,9 @@ export const DATA_COLLECTION_OFF = {
   databaseQueryData: false,
   queues: false,
   stackFrameVariables: false,
+  graphQL: { document: false, variables: false },
+  genAI: { inputs: false, outputs: false },
+  frameContextLines: 0,
 } satisfies Sentry.NodeOptions['dataCollection'];
 
 export interface SentryReporterOptions {
