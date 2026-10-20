@@ -37,6 +37,8 @@ const EnvSchema = z
     TURNSTILE_SECRET_KEY: z.string().min(1).optional(),
     /** Vercel Cron sends it as a bearer token. Unset means the cron endpoint refuses everyone. */
     CRON_SECRET: z.string().min(32).optional(),
+    /** The API's Sentry project. Set only in production (spec §10); unset means no reporting. */
+    SENTRY_DSN: z.url().optional(),
   })
   .superRefine((env, ctx) => {
     if (env.EMAIL_TRANSPORT === 'resend' && !env.RESEND_API_KEY) {
