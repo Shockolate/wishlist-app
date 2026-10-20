@@ -50,12 +50,19 @@ export function scrubEvent(event: ErrorEvent): ErrorEvent | null {
   return redactDeep(kept);
 }
 
-/** The origin browsers post reports to, for connect-src (D51). Only an https DSN counts. */
+const SENTRY_INGEST_ORIGIN = /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.sentry\.io$/i;
+
+/**
+ * The origin browsers post reports to, for connect-src (D51): exactly the DSN's origin, and only
+ * when it is an https host under sentry.io with no port. URL accepts "*" and ";" in a host, so a
+ * mistyped DSN could otherwise add a wildcard or start another CSP directive. Anything else gives
+ * undefined: connect-src stays 'self' and browser reports fail, rather than the policy widening.
+ */
 export function sentryIngestOrigin(dsn: string | undefined): string | undefined {
   if (!dsn) return undefined;
   try {
-    const url = new URL(dsn);
-    return url.protocol === 'https:' ? url.origin : undefined;
+    const { origin } = new URL(dsn);
+    return SENTRY_INGEST_ORIGIN.test(origin) ? origin : undefined;
   } catch {
     return undefined;
   }

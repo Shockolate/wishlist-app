@@ -57,6 +57,19 @@ describe('sentryIngestOrigin', () => {
     expect(sentryIngestOrigin('not a url')).toBeUndefined();
     expect(sentryIngestOrigin('http://k@o1.ingest.us.sentry.io/1')).toBeUndefined();
   });
+
+  it('is undefined for anything that would widen or corrupt connect-src (D51)', () => {
+    expect(sentryIngestOrigin('https://k@*.sentry.io/1')).toBeUndefined();
+    expect(sentryIngestOrigin('https://k@x.io;sandbox/1')).toBeUndefined();
+    expect(sentryIngestOrigin('https://k@evil.example/1')).toBeUndefined();
+    expect(sentryIngestOrigin('https://k@o1.ingest.us.sentry.io:8443/1')).toBeUndefined();
+  });
+
+  it('gives the lowercased origin for an uppercase host', () => {
+    expect(sentryIngestOrigin('https://k@O1.INGEST.US.SENTRY.IO/1')).toBe(
+      'https://o1.ingest.us.sentry.io',
+    );
+  });
 });
 
 describe('shouldReportBoundaryError', () => {
