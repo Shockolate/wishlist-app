@@ -181,6 +181,13 @@ const mutations = [
       job.env = { ...(job.env ?? {}), SENTRY_DSN_WEB: '${{ vars.SENTRY_DSN_WEB }}' };
     },
   ],
+  [
+    'a preview workflow inlines the web DSN at workflow level (D50)',
+    'preview.yml',
+    (wf) => {
+      wf.env = { ...(wf.env ?? {}), SENTRY_DSN_WEB: '${{ vars.SENTRY_DSN_WEB }}' };
+    },
+  ],
 ];
 
 function copyRoot() {

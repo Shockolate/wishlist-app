@@ -1,7 +1,10 @@
 import { expect, test } from '@playwright/test';
 
-// CI and local builds have no SENTRY_DSN_WEB, the same as a preview (spec §10, D50). Such a
-// build must never talk to Sentry, and its CSP must not allow it to (Review Focus #4).
+// CI and local builds have no SENTRY_DSN_WEB, the same as a preview (spec §10, D50). This is a
+// regression guard: neither assertion can fail in the DSN-less build E2E runs against today.
+// - The exact `connect-src 'self';` CSP assertion proves the build carries no DSN (Review Focus #4).
+// - The request assertion catches a hardcoded DSN, or a future change that inlines one into the
+//   CI or E2E build.
 test('a build without a DSN sends nothing to Sentry, and its CSP allows only self', async ({
   page,
 }) => {

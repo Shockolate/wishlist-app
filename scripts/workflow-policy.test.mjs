@@ -265,6 +265,9 @@ for (const [jobName, job] of backupJobs) {
 // Rule 9 (Plan 5b, D50): the web DSN reaches only the production build. A preview, CI or any
 // other job that inlined it would report from unreviewed code.
 for (const { file, wf } of workflows) {
+  // Workflow-level env reaches every job, so no workflow may set it there.
+  if (JSON.stringify(wf.env ?? {}).includes('SENTRY_DSN_WEB'))
+    fail(`${file}: SENTRY_DSN_WEB must not be set in workflow-level env; only deploy.yml#build`);
   for (const [jobName, job] of Object.entries(wf.jobs ?? {})) {
     const allowed = file === 'deploy.yml' && jobName === 'build';
     if (!allowed && JSON.stringify(job).includes('SENTRY_DSN_WEB'))
