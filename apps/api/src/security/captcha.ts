@@ -1,6 +1,7 @@
 import { isIP } from 'node:net';
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
+import { NOOP_REPORTER, type ErrorReporter } from '../observability/error-reporter.js';
 
 export type CaptchaVerdict = 'passed' | 'failed' | 'unavailable';
 
@@ -43,6 +44,7 @@ export class TurnstileVerifier implements CaptchaVerifier {
   constructor(
     private readonly secret: string | undefined,
     private readonly fetchFn: typeof fetch = fetch,
+    private readonly reporter: ErrorReporter = NOOP_REPORTER,
   ) {}
 
   async verify(token: string, remoteIp: string): Promise<CaptchaVerdict> {
@@ -84,6 +86,7 @@ export class TurnstileVerifier implements CaptchaVerifier {
    */
   private unavailable(reason: string): CaptchaVerdict {
     this.logger.warn(`captcha unavailable: ${reason}`);
+    this.reporter.captureWarning(`captcha unavailable: ${reason}`);
     return 'unavailable';
   }
 }

@@ -1,5 +1,10 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { waitUntil } from '@vercel/functions';
+import {
+  ERROR_REPORTER,
+  NOOP_REPORTER,
+  type ErrorReporter,
+} from '../observability/error-reporter.js';
 import { EMAIL_SENDER, type EmailMessage, type EmailSender } from './email-sender.js';
 
 /**
@@ -12,14 +17,18 @@ import { EMAIL_SENDER, type EmailMessage, type EmailSender } from './email-sende
 export class Mailer {
   private readonly logger = new Logger('Mailer');
 
-  constructor(@Inject(EMAIL_SENDER) private readonly sender: EmailSender) {}
+  constructor(
+    @Inject(EMAIL_SENDER) private readonly sender: EmailSender,
+    @Optional() @Inject(ERROR_REPORTER) private readonly reporter: ErrorReporter = NOOP_REPORTER,
+  ) {}
 
   queue(message: EmailMessage): void {
     const delivery = this.sender.send(message).catch((error: unknown) => {
-      // No recipient in the log line: it's personal data. Sentry arrives in Plan 5.
+      // No recipient in the log line: it's personal data. Sentry gets the error itself; neither carries the recipient.
       this.logger.error(
         `delivery of "${message.subject}" failed: ${error instanceof Error ? error.message : String(error)}`,
       );
+      this.reporter.captureException(error);
     });
     waitUntil(delivery);
   }

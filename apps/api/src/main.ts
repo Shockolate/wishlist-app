@@ -1,3 +1,5 @@
+// Vercel deploys a source map beside each compiled file: report TypeScript lines (D52).
+process.setSourceMapsEnabled(true);
 import './load-env.js';
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';

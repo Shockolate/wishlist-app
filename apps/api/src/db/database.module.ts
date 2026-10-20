@@ -2,6 +2,7 @@ import { Global, Inject, Module, type OnApplicationShutdown } from '@nestjs/comm
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import type { Pool } from 'pg';
 import { ENV, type Env } from '../core/env.js';
+import { ERROR_REPORTER, type ErrorReporter } from '../observability/error-reporter.js';
 import { createPool } from './pool.js';
 import * as schema from './schema.js';
 
@@ -17,8 +18,9 @@ export const DB = Symbol('DB');
   providers: [
     {
       provide: PG_POOL,
-      inject: [ENV],
-      useFactory: (env: Env): Pool => createPool(env.DATABASE_URL),
+      inject: [ENV, ERROR_REPORTER],
+      useFactory: (env: Env, reporter: ErrorReporter): Pool =>
+        createPool(env.DATABASE_URL, reporter),
     },
     {
       provide: DB,

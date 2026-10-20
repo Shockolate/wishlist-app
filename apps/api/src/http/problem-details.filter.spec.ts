@@ -1,7 +1,9 @@
-import { Logger, type ArgumentsHost } from '@nestjs/common';
+import { Logger, NotFoundException, type ArgumentsHost } from '@nestjs/common';
 import { DrizzleQueryError } from 'drizzle-orm';
 import type { Response } from 'express';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ErrorReporter } from '../observability/error-reporter.js';
+import { FakeErrorReporter } from '../testing/fakes.js';
 import { ProblemDetailsFilter } from './problem-details.filter.js';
 
 function fakeHost() {
@@ -80,5 +82,57 @@ describe('ProblemDetailsFilter logging', () => {
       host,
     );
     expect(logged).toHaveLength(0);
+  });
+});
+
+function hostWith(route?: string) {
+  const { host, res } = fakeHost();
+  const req = route ? { route: { path: route } } : {};
+  const withRequest = {
+    switchToHttp: () => ({ ...host.switchToHttp(), getRequest: <T>() => req as unknown as T }),
+  } as unknown as ArgumentsHost;
+  return { host: withRequest, res };
+}
+
+describe('ProblemDetailsFilter reporting', () => {
+  beforeEach(() => vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined));
+  afterEach(() => vi.restoreAllMocks());
+
+  it('reports an unexpected error with its request ID and route pattern', () => {
+    const reporter = new FakeErrorReporter();
+    const error = new Error('boom');
+    const { host } = hostWith('/api/claims/:manageToken');
+    new ProblemDetailsFilter(reporter).catch(error, host);
+    expect(reporter.exceptions).toEqual([
+      { error, context: { requestId: 'req-1', route: '/api/claims/:manageToken' } },
+    ]);
+  });
+
+  it('reports nothing for a 4xx', () => {
+    const reporter = new FakeErrorReporter();
+    const { host } = hostWith('/api/x');
+    new ProblemDetailsFilter(reporter).catch(new NotFoundException(), host);
+    expect(reporter.exceptions).toEqual([]);
+  });
+
+  it('still sends the 500 problem when the reporter throws (Review Focus #3)', () => {
+    const throwing: ErrorReporter = {
+      captureException: () => {
+        throw new Error('reporter broke');
+      },
+      captureWarning: () => undefined,
+    };
+    const { host, res } = hostWith('/api/x');
+    expect(() => new ProblemDetailsFilter(throwing).catch(new Error('boom'), host)).not.toThrow();
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalled();
+  });
+
+  it('still reports, and still sends the 500, when the host has no request', () => {
+    const reporter = new FakeErrorReporter();
+    const { host, res } = fakeHost();
+    expect(() => new ProblemDetailsFilter(reporter).catch(new Error('boom'), host)).not.toThrow();
+    expect(reporter.exceptions).toHaveLength(1);
+    expect(res.status).toHaveBeenCalledWith(500);
   });
 });

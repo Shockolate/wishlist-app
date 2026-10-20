@@ -1,6 +1,7 @@
 import type { UnfurlResponse } from '@wishlist/contracts';
 import type { Clock } from '../core/clock.js';
 import type { EmailMessage, EmailSender } from '../email/email-sender.js';
+import type { ErrorContext, ErrorReporter } from '../observability/error-reporter.js';
 import type { BreachedPasswordChecker } from '../security/breached-passwords.js';
 import type { CaptchaVerdict, CaptchaVerifier } from '../security/captcha.js';
 import type { MetadataFetcher } from '../unfurl/metadata-fetcher.js';
@@ -75,5 +76,19 @@ export class FakeMetadataFetcher implements MetadataFetcher {
   fetch(url: string): Promise<UnfurlResponse> {
     this.urls.push(url);
     return Promise.resolve(this.next);
+  }
+}
+
+/** Error-reporting stand-in. Records every report. */
+export class FakeErrorReporter implements ErrorReporter {
+  readonly exceptions: { error: unknown; context?: ErrorContext }[] = [];
+  readonly warnings: { message: string; context?: ErrorContext }[] = [];
+
+  captureException(error: unknown, context?: ErrorContext): void {
+    this.exceptions.push({ error, context });
+  }
+
+  captureWarning(message: string, context?: ErrorContext): void {
+    this.warnings.push({ message, context });
   }
 }
