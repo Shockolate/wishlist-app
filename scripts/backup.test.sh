@@ -83,7 +83,7 @@ mapfile -t pipeline < <(printf '%s\n' "${lines[@]:0:2}" | LC_ALL=C sort)
 [[ ${lines[3]} == *" --head "* ]] || fail "check the stored object after uploading"
 [[ ${lines[4]} == *" $heartbeat" ]] || fail "ping the heartbeat last"
 ! grep -q '/fail' "$STUB_LOG" || fail "a clean run must not report a failure"
-! grep -qF -e "$db_secret" -e "$r2_secret" "$STUB_LOG" || fail "a secret reached a command line"
+! grep -qF -e "$db_secret" -e "$r2_secret" "$STUB_LOG" || fail "a secret reached the runner's command line"
 grep -qxF 'user = "akid:r2-secret-456"' "$STUB_CONFIG" || fail "R2 credentials go to curl on stdin"
 
 # Review Focus #4: each failure uploads nothing wrong and reports to /fail.

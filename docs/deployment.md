@@ -155,10 +155,10 @@ age-keygen | age -p -a > ~/hanker-backup-identity.age
 - **Store the identity file in two places you control**, for example a password-manager attachment and an offline USB drive, and the passphrase in your password manager. Losing either one makes every backup unreadable.
 - **Set `AGE_RECIPIENT`** to the public key.
 
-**2. The read-only role.** Roles created in the Neon console join `neon_superuser`, so create this one in SQL. Connect to the production branch as the owner role, using the direct (not `-pooler`) connection string from the Neon console:
+**2. The read-only role.** Roles created in the Neon console join `neon_superuser`, so create this one in SQL. Connect to the production branch as the owner role, using the direct (not `-pooler`) connection string from the Neon console, with the password removed, so psql prompts for it and it never appears in a process list:
 
 ```bash
-read -rs OWNER_URL && psql "$OWNER_URL"; unset OWNER_URL
+psql 'postgresql://neondb_owner@<direct-host>/neondb?sslmode=require'   # psql prompts for the password
 ```
 
 ```sql
@@ -215,12 +215,13 @@ The log ends with `backup uploaded: daily/<timestamp>.dump.age (<n> bytes)`, the
 
 The heartbeat emails you: right away if a run failed, or after the grace period if no run reported at all. Read the newest run with `gh run view --log-failed`.
 
-| Symptom                               | Cause and fix                                                                                                                                   |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `permission denied for table …`       | A migration added a table `hanker_backup` can't read. Only possible with the explicit-grant fallback: re-run its `GRANT SELECT ON ALL …` lines. |
-| `403` from `r2.cloudflarestorage.com` | The R2 token was revoked, expired or scoped to another bucket. Create a new one and update the two `R2_*_KEY*` secrets.                         |
-| `the dump isn't age-encrypted`        | `age` failed or `AGE_RECIPIENT` isn't a valid public key.                                                                                       |
-| No run at all                         | GitHub disables scheduled workflows in a public repository after 60 days without activity. Re-enable it with `gh workflow enable backup.yml`.   |
+| Symptom                                            | Cause and fix                                                                                                                                   |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `permission denied for table …`                    | A migration added a table `hanker_backup` can't read. Only possible with the explicit-grant fallback: re-run its `GRANT SELECT ON ALL …` lines. |
+| `curl: (22) The requested URL returned error: 403` | The R2 token was revoked, expired or scoped to another bucket. Create a new one and update the two `R2_*_KEY*` secrets.                         |
+| `age: error: …`                                    | `age` refused to encrypt, usually because `AGE_RECIPIENT` isn't a valid `age1…` public key. Set it again from your key pair.                    |
+| `the dump isn't age-encrypted`                     | `age` exited cleanly but wrote no header. That shouldn't happen; check the "Install age" step installed v1.3.2.                                 |
+| No run at all                                      | GitHub disables scheduled workflows in a public repository after 60 days without activity. Re-enable it with `gh workflow enable backup.yml`.   |
 
 ### Rotation and upgrades
 
@@ -267,14 +268,12 @@ A backup job that passes proves only that bytes reached R2. The drill proves the
 4. Copy those rows into production. Parents go before children: `users`, then `wishlists`, then `items`, then `claims`. Stream them straight across rather than restoring the whole dump over `main`, which would lose everything written since. If the drill warned that the migrations differ, name the columns on both sides (`select id, wishlist_id, … from items` and `\copy items (id, wishlist_id, …) from stdin`), since `select *` no longer lines up:
 
    ```bash
-   read -rs OWNER_URL
    docker exec <container> psql -h 127.0.0.1 -U postgres -d drill -XqAt \
      -c "\copy (select * from items where wishlist_id = '<id>') to stdout with (format csv)" \
-     | psql "$OWNER_URL" -v ON_ERROR_STOP=1 -c "\copy items from stdin with (format csv)"
-   unset OWNER_URL
+     | psql 'postgresql://neondb_owner@<direct-host>/neondb?sslmode=require' -v ON_ERROR_STOP=1 -c "\copy items from stdin with (format csv)"
    ```
 
-   This writes to production, so plan the statements first and try them on a Neon branch of `main` if the change is large.
+   psql asks for the owner's password on the terminal even while its input is the pipe. This writes to production, so plan the statements first and try them on a Neon branch of `main` if the change is large.
 
 5. Remove the container: `docker rm -fv <container>`.
 

@@ -66,15 +66,17 @@ docker exec "$name" pg_restore -h 127.0.0.1 -U postgres -d drill \
   || die "pg_restore refused the dump"
 
 listed=$(docker exec "$name" pg_restore --list /tmp/dump.pgc \
-  | awk '$4 == "TABLE" && $5 == "public" { print $6 }' | LC_ALL=C sort)
-restored=$(sql "select tablename from pg_tables where schemaname = 'public'" | LC_ALL=C sort)
+  | awk '$4 == "TABLE" && $5 == "public" { print $6 }' | LC_ALL=C sort) \
+  || die "couldn't list the tables in $dump"
+restored=$(sql "select tablename from pg_tables where schemaname = 'public'" | LC_ALL=C sort) \
+  || die "couldn't list the restored tables"
 [[ -n "$listed" ]] || die "the dump has no tables in public"
 if [[ "$listed" != "$restored" ]]; then
   die "the restore doesn't have the dump's tables:
 $(diff <(echo "$listed") <(echo "$restored") || true)"
 fi
 
-migrations=$(sql 'select count(*) from drizzle.__drizzle_migrations')
+migrations=$(sql 'select count(*) from drizzle.__drizzle_migrations') || die "the dump has no drizzle migrations table"
 production=$(curl -fsS --max-time 15 "$health_url" | jq -r '.db.migrationsApplied') || production=
 problem=
 if [[ -z "$production" ]]; then
@@ -92,7 +94,8 @@ fi
 
 echo "Rows per table:"
 while IFS= read -r table; do
-  printf '  %-24s %s\n' "$table" "$(sql "select count(*) from public.\"$table\"")"
+  rows=$(sql "select count(*) from public.\"$table\"") || die "couldn't count the rows in $table"
+  printf '  %-24s %s\n' "$table" "$rows"
 done <<<"$restored"
 
 passed=1

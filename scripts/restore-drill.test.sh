@@ -21,6 +21,7 @@ case "$1" in
     if [[ "$args" == *" pg_isready "* ]]; then exit 0; fi
     if [[ "$args" == *"cat > /tmp/dump.pgc"* ]]; then cat > /dev/null; exit 0; fi
     if [[ "$args" == *" pg_restore --list "* ]]; then
+      if [[ "${STUB_LIST_FAILS:-}" == 1 ]]; then exit 1; fi
       printf '%s\n' \
         '218; 1259 16386 TABLE drizzle __drizzle_migrations postgres' \
         '219; 1259 16389 TABLE public users postgres' \
@@ -31,7 +32,10 @@ case "$1" in
     if [[ "$args" == *" pg_restore "* ]]; then exit "${STUB_RESTORE_EXIT:-0}"; fi
     if [[ "$args" == *"pg_tables"* ]]; then printf '%s\n' ${STUB_TABLES:-items users}; exit 0; fi
     if [[ "$args" == *"__drizzle_migrations"* ]]; then echo "${STUB_MIGRATIONS:-4}"; exit 0; fi
-    if [[ "$args" == *"count(*)"* ]]; then echo 7; exit 0; fi
+    if [[ "$args" == *"count(*)"* ]]; then
+      if [[ "${STUB_COUNT_FAILS:-}" == 1 ]]; then exit 1; fi
+      echo 7; exit 0
+    fi
     echo "unexpected: docker $*" >&2; exit 99 ;;
   *) echo "unexpected: docker $*" >&2; exit 99 ;;
 esac
@@ -123,6 +127,13 @@ grep -q 'production reports 5' "$tmp/out" || fail "--keep must warn about the mi
 grep -q "couldn't read" "$tmp/out" || fail "--keep must warn that production couldn't be read"
 [[ $(run STUB_RESTORE_EXIT=1 --keep "$dump" "$identity") != 0 ]] || fail "--keep with a refused restore must fail"
 removed || fail "--keep must still remove a failed drill's container"
+
+# Plan 5a M4: every failure says "restore drill FAILED", and none is swallowed.
+[[ $(run STUB_LIST_FAILS=1 "$dump" "$identity") != 0 ]] || fail "a failed table listing must fail"
+grep -q 'restore drill FAILED' "$tmp/out" || fail "a failed table listing must say the drill FAILED"
+[[ $(run STUB_COUNT_FAILS=1 "$dump" "$identity") != 0 ]] || fail "a failed row count must fail, not print a blank"
+grep -q 'restore drill FAILED' "$tmp/out" || fail "a failed row count must say the drill FAILED"
+removed || fail "a failed drill must still remove its container"
 
 # Bad arguments never start a container.
 [[ $(run) != 0 ]] || fail "no arguments must fail"
