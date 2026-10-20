@@ -19,7 +19,7 @@ export function initServerReporting(dsn: string, release: string): void {
 }
 
 /**
- * A render, route or action error from onRequestError, grouped by the route pattern
+ * A render, route or action error from onRequestError, labeled with the route pattern
  * (/s/[shareToken]), never the path. Flushed with waitUntil, since Vercel may freeze the function
  * once the response is sent. Reporting never throws.
  */
