@@ -6,3 +6,4 @@ export * from './health.js';
 export * from './problem.js';
 export * from './text.js';
 export * from './wishlist.js';
+export * from './redact.js';
