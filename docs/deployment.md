@@ -297,6 +297,47 @@ Better Stack's free plan watches the site and the backup, and emails you (D47). 
 - **Deep down but Live up:** the API is up and Neon isn't. Check Neon's status page and the project's compute quota.
 - **Backup heartbeat:** see [Backups → When it fails](#when-it-fails).
 
+## Sentry
+
+Errors from both apps go to Sentry's free Developer plan (spec §10 Monitoring, D50). Every event passes a scrubber that removes share, manage and email tokens and email addresses, and the SDKs collect nothing on their own: no cookies, headers, bodies or local variables. Only production reports. Previews, CI and local builds have no DSN.
+
+### One-off setup
+
+1. **Account and projects.** Create a Sentry account on the Developer plan, then two projects: `hanker-api` (platform Node.js) and `hanker-web` (platform Browser JavaScript).
+2. **Privacy settings, in each project:** under Settings → Security & Privacy, keep **Data Scrubber** and **Use Default Scrubbers** on, and turn on **Prevent Storing of IP Addresses**.
+3. **Alerts.** Keep the default alert rule that emails you on a new issue.
+4. **The API's DSN:** copy `hanker-api`'s DSN (Settings → Client Keys), then set it on the API's Vercel production environment. The value goes through your clipboard, so it never appears in the terminal:
+   ```bash
+   vercel env add SENTRY_DSN production --cwd apps/api   # paste when prompted
+   ```
+5. **The web's DSN, and the names the upload needs.** DSNs are public by design, so these are variables, not secrets:
+   ```bash
+   gh variable set SENTRY_DSN_WEB      # hanker-web's DSN
+   gh variable set SENTRY_ORG          # your organization slug
+   gh variable set SENTRY_PROJECT_WEB  # hanker-web
+   ```
+6. **The upload token.** Create an organization auth token under Settings → Auth Tokens; its default scopes cover source-map uploads. Then:
+   ```bash
+   gh secret set SENTRY_AUTH_TOKEN --env production
+   ```
+7. **Redeploy.** Merge anything to `main`, or re-run the latest deploy. The API reads `SENTRY_DSN` at runtime, and the web DSN is inlined at build.
+
+### Check it works
+
+Open `https://hanker.dev` and run this in the browser console:
+
+```js
+setTimeout(() => {
+  throw new Error('sentry check /c/AAAAAAAAAAAAAAAAAAAAAA');
+});
+```
+
+Within a minute, `hanker-web` has a new issue whose message reads `sentry check /c/[redacted]`, with a readable stack trace. That one event proves three things: the DSN is inlined, the CSP lets the report out, and the scrubber runs. There's no safe way to force a production API `500`, so the API's wiring is proven by its tests and by its first real error.
+
+### Source maps
+
+The production build emits browser source maps. The build job, which holds no secrets, writes debug IDs into them and moves them out of the deploy output into the `web-sourcemaps` artifact (`scripts/extract-sourcemaps.sh`), so `hanker.dev` never serves them; `scripts/check-vercel-output.sh` refuses to deploy one. The `sourcemaps` job uploads them with a checksum-pinned `sentry-cli`. Until `SENTRY_AUTH_TOKEN` is set, it skips the upload with a notice. No release waits on it. Both servers translate stack traces from their own deployed maps at runtime, so they need no upload.
+
 ## Opening sign-up (end of Plan 4)
 
 Sign-up is dark until the Turnstile secret is set (D29, D31). To open it:
