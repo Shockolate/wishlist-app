@@ -14,3 +14,25 @@ describe('contentSecurityPolicy (spec §6.9, Plan 2b rule 4)', () => {
     );
   });
 });
+
+const connectSrc = (csp: string) => csp.split('; ').find((d) => d.startsWith('connect-src '));
+
+describe('contentSecurityPolicy connect-src (spec §6.9, D51)', () => {
+  it('is only self without a Sentry origin', () => {
+    expect(connectSrc(contentSecurityPolicy({ nonce: 'n', dev: false }))).toBe(
+      "connect-src 'self'",
+    );
+  });
+
+  it('adds exactly the Sentry ingest origin when there is one', () => {
+    expect(
+      connectSrc(
+        contentSecurityPolicy({
+          nonce: 'n',
+          dev: false,
+          sentryOrigin: 'https://o456.ingest.us.sentry.io',
+        }),
+      ),
+    ).toBe("connect-src 'self' https://o456.ingest.us.sentry.io");
+  });
+});

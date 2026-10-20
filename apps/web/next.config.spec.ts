@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 async function loadConfig(apiOrigin: string, siteKey = '1x00000000000000000000AA') {
   vi.stubEnv('API_ORIGIN', apiOrigin);
   vi.stubEnv('TURNSTILE_SITE_KEY', siteKey);
+  vi.stubEnv('SENTRY_DSN_WEB', undefined);
+  vi.stubEnv('GITHUB_SHA', undefined);
   vi.resetModules();
   return (await import('./next.config')).default;
 }
@@ -28,12 +30,32 @@ describe('next.config', () => {
     ]);
   });
 
-  it('inlines API_ORIGIN and the Turnstile site key at build', async () => {
+  it('inlines API_ORIGIN and the Turnstile site key at build, and no Sentry DSN by default (D50)', async () => {
     const config = await loadConfig('https://api.example.test');
     expect(config.env).toEqual({
       API_ORIGIN: 'https://api.example.test',
       TURNSTILE_SITE_KEY: '1x00000000000000000000AA',
+      SENTRY_DSN_WEB: '',
+      SENTRY_RELEASE: 'dev',
     });
+  });
+
+  it('inlines the Sentry web DSN and the release (the commit) when the build sets them', async () => {
+    vi.stubEnv('API_ORIGIN', 'https://api.example.test');
+    vi.stubEnv('TURNSTILE_SITE_KEY', '1x00000000000000000000AA');
+    vi.stubEnv('SENTRY_DSN_WEB', 'https://k@o1.ingest.us.sentry.io/1');
+    vi.stubEnv('GITHUB_SHA', 'abc123');
+    vi.resetModules();
+    const config = (await import('./next.config')).default;
+    expect(config.env).toMatchObject({
+      SENTRY_DSN_WEB: 'https://k@o1.ingest.us.sentry.io/1',
+      SENTRY_RELEASE: 'abc123',
+    });
+  });
+
+  it('emits source maps for the server bundles (D52)', async () => {
+    const config = await loadConfig('https://api.example.test');
+    expect(config.experimental?.serverSourceMaps).toBe(true);
   });
 
   it('refuses to load without TURNSTILE_SITE_KEY (Plan 2b rule 11)', async () => {
