@@ -54,7 +54,16 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   // Inlined at build: server code calls exactly the API the rewrite points at, and the browser
   // gets the Turnstile site key.
-  env: { API_ORIGIN, TURNSTILE_SITE_KEY },
+  // Sentry's web DSN and release, inlined at build. Only deploy.yml sets SENTRY_DSN_WEB, so
+  // previews, CI and local builds carry none and report nothing (spec §10, D50).
+  env: {
+    API_ORIGIN,
+    TURNSTILE_SITE_KEY,
+    SENTRY_DSN_WEB: process.env.SENTRY_DSN_WEB ?? '',
+    SENTRY_RELEASE: process.env.GITHUB_SHA ?? 'dev',
+  },
+  // Maps for the server bundles, so the web server reports TypeScript lines at runtime (D52).
+  experimental: { serverSourceMaps: true },
   async rewrites() {
     return [{ source: '/api/:path*', destination: `${API_ORIGIN}/api/:path*` }];
   },

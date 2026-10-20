@@ -86,6 +86,9 @@ jobs:
       API_ORIGIN: ${{ vars.API_PRODUCTION_ORIGIN }}
       # The production widget's public site key (Plan 2b Task 1). The build fails without it.
       TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
+      # Sentry's web DSN, public by design. Only this job reads it (policy Rule 9), so no other
+      # build reports (spec §10, D50).
+      SENTRY_DSN_WEB: ${{ vars.SENTRY_DSN_WEB }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

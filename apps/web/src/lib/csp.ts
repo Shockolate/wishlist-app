@@ -7,7 +7,15 @@ const TURNSTILE_ORIGIN = 'https://challenges.cloudflare.com';
  * in-app link onto an auth page. With 'strict-dynamic', CSP3 browsers ignore the script-src host;
  * the effective widening is frame-src to that one origin.
  */
-export function contentSecurityPolicy({ nonce, dev }: { nonce: string; dev: boolean }): string {
+export function contentSecurityPolicy({
+  nonce,
+  dev,
+  sentryOrigin,
+}: {
+  nonce: string;
+  dev: boolean;
+  sentryOrigin?: string;
+}): string {
   const scripts = [
     "'self'",
     `'nonce-${nonce}'`,
@@ -22,7 +30,8 @@ export function contentSecurityPolicy({ nonce, dev }: { nonce: string; dev: bool
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' https: data:",
     "font-src 'self'",
-    "connect-src 'self'",
+    // Browser error reports go straight to Sentry, and only to the DSN's origin (D51).
+    `connect-src 'self'${sentryOrigin ? ` ${sentryOrigin}` : ''}`,
     `frame-src ${TURNSTILE_ORIGIN}`,
     "object-src 'none'",
     "base-uri 'self'",

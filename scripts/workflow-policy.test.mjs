@@ -262,6 +262,21 @@ for (const [jobName, job] of backupJobs) {
   }
 }
 
+// Rule 9 (Plan 5b, D50): the web DSN reaches only the production build. A preview, CI or any
+// other job that inlined it would report from unreviewed code.
+for (const { file, wf } of workflows) {
+  // Workflow-level env reaches every job, so no workflow may set it there.
+  if (JSON.stringify(wf.env ?? {}).includes('SENTRY_DSN_WEB'))
+    fail(`${file}: SENTRY_DSN_WEB must not be set in workflow-level env; only deploy.yml#build`);
+  for (const [jobName, job] of Object.entries(wf.jobs ?? {})) {
+    const allowed = file === 'deploy.yml' && jobName === 'build';
+    if (!allowed && JSON.stringify(job).includes('SENTRY_DSN_WEB'))
+      fail(`${file}#${jobName}: only deploy.yml#build may read SENTRY_DSN_WEB`);
+  }
+}
+if (!JSON.stringify(byFile['deploy.yml']?.jobs?.build ?? {}).includes('vars.SENTRY_DSN_WEB'))
+  fail('deploy.yml#build: set SENTRY_DSN_WEB from vars.SENTRY_DSN_WEB');
+
 // Secret jobs run `npx vercel@<this version>`; a range would float in token-holding jobs.
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 if (!/^\d+\.\d+\.\d+$/.test(pkg.devDependencies?.vercel ?? ''))
