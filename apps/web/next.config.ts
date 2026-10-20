@@ -62,6 +62,9 @@ const nextConfig: NextConfig = {
     SENTRY_DSN_WEB: process.env.SENTRY_DSN_WEB ?? '',
     SENTRY_RELEASE: process.env.GITHUB_SHA ?? 'dev',
   },
+  // Browser source maps only for a build that reports. deploy.yml moves them out of the deploy
+  // output and uploads them to Sentry, so they're never served (D52).
+  productionBrowserSourceMaps: Boolean(process.env.SENTRY_DSN_WEB),
   // Maps for the server bundles, so the web server reports TypeScript lines at runtime (D52).
   experimental: { serverSourceMaps: true },
   async rewrites() {

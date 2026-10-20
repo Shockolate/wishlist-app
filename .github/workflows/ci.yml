@@ -46,6 +46,8 @@ jobs:
           scripts/check-vercel-output.test.sh
           scripts/backup.test.sh
           scripts/restore-drill.test.sh
+          scripts/install-sentry-cli.test.sh
+          scripts/extract-sourcemaps.test.sh
           node scripts/workflow-policy.mutations.test.mjs
           node scripts/workflow-policy.test.mjs
       - run: pnpm turbo run lint typecheck test build
