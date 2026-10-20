@@ -11,6 +11,7 @@ Hanker is a wishlist app for family and friends: Next.js (web), NestJS (API), Po
 - **How to work here:**
   - [docs/development.md](docs/development.md): setup, tests, the database and pinned dependencies.
   - [docs/deployment.md](docs/deployment.md): Vercel, Neon, environment variables and the cron.
+  - [docs/operations.md](docs/operations.md): the readiness checklist, recurring chores and where to start when something breaks.
   - [CONTRIBUTING.md](CONTRIBUTING.md): stacked PRs and merge rules.
 
 ## Layout
@@ -56,6 +57,7 @@ Don't weaken or delete a test to get green. If a test is wrong, say why.
 - **API shape:** every route is under `/api`. Every error is `application/problem+json` with a stable `code` from `packages/contracts` and a `requestId`. Request bodies are validated per parameter with `ZodValidationPipe` (`400 VALIDATION_FAILED`).
 - **Claims (Plan 4a):** a claim or a claim edit locks only its item's row (`FOR UPDATE`), never the wishlist's, which keeps the users → wishlists → items lock order. A read that returns claims (`GET /shared`, `GET /claims`, `GET /wishlist`) runs in one `REPEATABLE READ, READ ONLY` transaction. Claim data reaches an item only through `projectWishlist` (`apps/api/src/claims/projection.ts`): for an owner who hasn't opted in, `remaining` and `claims` are absent, not empty. A claim may carry the client's own `manageToken`; the same token for the same item returns that claim with `201`, and on another item it's `409 MANAGE_TOKEN_IN_USE` (D42).
 - **Personal data:** a problem `detail` never echoes what the caller sent. Logs never contain passwords, tokens, raw email addresses or SQL parameters.
+- **Error reporting (Plan 5b):** report through the API's `ERROR_REPORTER` port or the web's `onRequestError`, never by calling Sentry directly, so every event passes `scrubEvent`. Never attach a request body, a URL, a user or a raw `DrizzleQueryError` (`reportable()` rebuilds it). `redactTokens` in `packages/contracts` is the one definition of what's redacted; a new token-bearing route must be covered by it, and its test.
 - **Tests:** unit tests are `*.spec.ts` and never touch Docker. Integration tests are `apps/api/test/*.int-spec.ts`; their files run serially against one Testcontainers Postgres. State-changing requests in tests go through `test/support/client.ts`, which sends the `Origin` and JSON content type the CSRF guard requires. Behavior changes are written test-first.
 - **Migrations:** edit `schema.ts`, then `pnpm --filter @wishlist/api db:generate --name <what_changed>`, and review the SQL. A migration must work alongside the API that is currently deployed (expand, then contract).
 - **Naming:** people see **Hanker** (pages, emails, sender names). Code, packages, tables and Vercel projects say `wishlist`.
