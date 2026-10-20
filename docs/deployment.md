@@ -167,7 +167,7 @@ CREATE ROLE hanker_backup WITH LOGIN;
 GRANT pg_read_all_data TO hanker_backup;
 ```
 
-`\password` prompts twice and sends only a hash, so the password never appears in a log or in history. Generate it with your password manager (Neon requires at least 60 bits of entropy) and keep it there.
+`\password` prompts twice and sends only a hash, so the password never appears in a log or in history. Generate it with your password manager (Neon requires at least 60 bits of entropy) and keep it there. If Neon refuses the hash, run `\set HISTFILE /dev/null` first and then `ALTER ROLE hanker_backup PASSWORD '…';`, so the password doesn't land in `~/.psql_history`.
 
 If Neon refuses the `GRANT pg_read_all_data` (the docs don't confirm it's allowed), grant the same reads explicitly. The default privileges cover tables a future migration creates; `<owner>` is the role in `DATABASE_URL_DIRECT` (Neon's default is `neondb_owner`) and `<database>` its database (default `neondb`):
 
@@ -227,6 +227,75 @@ The heartbeat emails you: right away if a run failed, or after the grace period 
 - **A new `age` key.** Dumps already in R2 stay readable only with the old key, so keep the old identity file until the last of them expires, 30 days after the switch. Re-run the drill with the new key.
 - **The R2 token or the role's password.** Replace the secret, then dispatch a run to prove it.
 - **Postgres.** `scripts/postgres-image` pins `postgres:17-alpine` by digest. When Neon's production moves to a new major version, pin the matching image, because `pg_dump` refuses servers newer than itself.
+
+## Restore drill and recovery
+
+A backup job that passes proves only that bytes reached R2. The drill proves they come back as the data: that the dump is complete, that `AGE_RECIPIENT` matches the key you kept, and that you can still find and unlock that key (D49). Plan 5a counts as done only once a drill passes against a real nightly dump.
+
+**Needs:** Docker running, `age` v1.3.2 ([Backups](#backups) step 1), `curl`, `jq`, and your identity file and its passphrase.
+
+**Run the drill:**
+
+1. In the Cloudflare dashboard, open R2 → `hanker-backups` → `daily/`, and download the newest `.dump.age`. It's encrypted, so it's safe on disk; delete it afterwards anyway.
+2. Run:
+
+   ```bash
+   scripts/restore-drill.sh ~/Downloads/<timestamp>.dump.age ~/hanker-backup-identity.age
+   ```
+
+   `age` asks for the passphrase. The script restores into an in-memory `postgres:17-alpine` container named `hanker-restore-drill-*`, which publishes no port and is removed when it finishes, pass or fail.
+
+3. A pass ends with `restore drill: ok`, after a row count per table. Check that the counts look like your data, for example that `users` has about as many rows as you have accounts.
+
+| Failure                                      | Meaning                                                                                                                                       |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `couldn't decrypt …`                         | Wrong passphrase, the wrong identity file, or `AGE_RECIPIENT` doesn't match this key. Fix it today: until you do, every backup is unreadable. |
+| `pg_restore refused the dump`                | The dump is incomplete or from a newer `pg_dump`. Read the error above it.                                                                    |
+| `… migrations and production reports …`      | A migration shipped after the dump was taken. Use a newer dump.                                                                               |
+| `the restore doesn't have the dump's tables` | A table didn't restore. Read the `pg_restore` output above it.                                                                                |
+
+**Real recovery.** Within 6 hours of the bad change, use Neon's point-in-time restore instead (see [Rollback](#rollback)). Older than that, recover from a dump:
+
+1. Pick the newest dump from before the bad change.
+2. Restore it and keep the container: `scripts/restore-drill.sh --keep <dump> <identity>`. It prints the container's name and how to remove it. With `--keep`, a dump that predates a migration, or a production that's down, gets a warning instead of a failure, because recovery needs exactly that dump.
+3. Find what was lost, for example a deleted list's items:
+
+   ```bash
+   docker exec -it <container> psql -h 127.0.0.1 -U postgres -d drill
+   ```
+
+4. Copy those rows into production. Parents go before children: `users`, then `wishlists`, then `items`, then `claims`. Stream them straight across rather than restoring the whole dump over `main`, which would lose everything written since. If the drill warned that the migrations differ, name the columns on both sides (`select id, wishlist_id, … from items` and `\copy items (id, wishlist_id, …) from stdin`), since `select *` no longer lines up:
+
+   ```bash
+   read -rs OWNER_URL
+   docker exec <container> psql -h 127.0.0.1 -U postgres -d drill -XqAt \
+     -c "\copy (select * from items where wishlist_id = '<id>') to stdout with (format csv)" \
+     | psql "$OWNER_URL" -v ON_ERROR_STOP=1 -c "\copy items from stdin with (format csv)"
+   unset OWNER_URL
+   ```
+
+   This writes to production, so plan the statements first and try them on a Neon branch of `main` if the change is large.
+
+5. Remove the container: `docker rm -fv <container>`.
+
+## Monitoring
+
+Better Stack's free plan watches the site and the backup, and emails you (D47). Create these in Better Stack → Uptime, with email alerts to you:
+
+| Monitor          | URL                                  | Check every                                          | Proves                                                                                |
+| ---------------- | ------------------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Live             | `https://hanker.dev/api/health/live` | 3 minutes                                            | The web project, the `/api` rewrite and the API function are up                       |
+| Site             | `https://hanker.dev/`                | 3 minutes                                            | The landing page renders. It's static, so it touches neither the API nor the database |
+| Deep             | `https://hanker.dev/api/health`      | 1 hour, or the longest the free plan offers          | Neon is reachable and migrated. It answers `503` when not                             |
+| Backup heartbeat | set up in [Backups](#backups) step 4 | expects a ping every 24 hours, with 2 hours of grace | The nightly backup ran and uploaded                                                   |
+
+**Why only the deep check touches the database.** `/api/health` runs a query, which wakes Neon, and Neon Free scales to zero only after 5 idle minutes, with 100 CU-hours per project per month. A deep check every 3 minutes would keep it awake all month, about 180 CU-hours, and Neon would then suspend the database until the month ends. Hourly costs about 15 CU-hours; every 30 minutes, about 30. `/api/health/live` never touches the database. After the first week, check Neon → your project → Usage to see that compute stays well under the quota.
+
+**When an alert comes:**
+
+- **Live or Site down:** check Vercel's status and the newest deploy. Roll back if a deploy caused it ([Rollback](#rollback)).
+- **Deep down but Live up:** the API is up and Neon isn't. Check Neon's status page and the project's compute quota.
+- **Backup heartbeat:** see [Backups → When it fails](#when-it-fails).
 
 ## Opening sign-up (end of Plan 4)
 
@@ -348,7 +417,7 @@ VERCEL_PROJECT_ID=<wishlist-web id> pnpm exec vercel rollback
 VERCEL_PROJECT_ID=<wishlist-api id> pnpm exec vercel rollback
 ```
 
-Data: Neon point-in-time restore (6-hour window) from the Neon console.
+Data: Neon point-in-time restore (6-hour window) from the Neon console. Older than that, recover the rows from a nightly dump ([Restore drill and recovery](#restore-drill-and-recovery)).
 
 ## Known issues
 

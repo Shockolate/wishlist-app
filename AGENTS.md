@@ -87,5 +87,6 @@ Get explicit approval before anything outward-facing or hard to undo:
 
 - Echo a secret to a terminal or a log. Use a hidden prompt (`read -rs`), or pipe the value straight into the tool that stores it.
 - Give a CI build job a secret, or relax the workflow policy tests. Jobs that hold secrets run only pinned tools ([CI isolation spec](docs/superpowers/specs/2026-10-08-ci-secret-isolation-and-seeded-previews-design.md)).
+- Put a database dump, decrypted or not, in an Actions artifact or a log. On a public repo anyone can download an artifact; backups go only to R2, encrypted (`scripts/backup.sh`).
 - Add a `branches:` or workflow-level `paths:` filter to a `pull_request` workflow. Stacked PRs target non-`main` bases, and required checks would wait forever.
 - Stop, remove or restart Docker containers or volumes that this repo's `docker-compose.yml` or its tests didn't create.
