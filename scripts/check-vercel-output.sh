@@ -32,4 +32,9 @@ while IFS= read -r -d '' link; do
     exit 1
   fi
 done < <(find "$dir" -type l -print0)
+# Browser source maps go to Sentry (scripts/extract-sourcemaps.sh), never to visitors (D52).
+if [[ -d "$dir/static" ]] && find "$dir/static" -name '*.map' -print -quit | grep -q .; then
+  echo "::error::$dir/static contains source maps; extract them before deploying" >&2
+  exit 1
+fi
 echo "build output complete: $dir"

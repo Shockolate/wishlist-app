@@ -58,6 +58,16 @@ describe('next.config', () => {
     expect(config.experimental?.serverSourceMaps).toBe(true);
   });
 
+  it('emits browser source maps only for a build that reports to Sentry (D52)', async () => {
+    expect((await loadConfig('https://api.example.test')).productionBrowserSourceMaps).toBe(false);
+    vi.stubEnv('API_ORIGIN', 'https://api.example.test');
+    vi.stubEnv('TURNSTILE_SITE_KEY', '1x00000000000000000000AA');
+    vi.stubEnv('SENTRY_DSN_WEB', 'https://k@o1.ingest.us.sentry.io/1');
+    vi.resetModules();
+    const config = (await import('./next.config')).default;
+    expect(config.productionBrowserSourceMaps).toBe(true);
+  });
+
   it('refuses to load without TURNSTILE_SITE_KEY (Plan 2b rule 11)', async () => {
     await expect(loadConfig('https://api.example.test', '')).rejects.toThrow(
       /TURNSTILE_SITE_KEY must be set/,

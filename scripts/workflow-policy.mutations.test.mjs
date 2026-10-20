@@ -188,6 +188,39 @@ const mutations = [
       wf.env = { ...(wf.env ?? {}), SENTRY_DSN_WEB: '${{ vars.SENTRY_DSN_WEB }}' };
     },
   ],
+  [
+    'the sourcemaps job holds the Vercel token',
+    'deploy.yml',
+    (wf) => {
+      const s = runStep(wf.jobs.sourcemaps, /sourcemaps upload/);
+      s.env.VERCEL_TOKEN = '${{ secrets.VERCEL_TOKEN }}';
+    },
+  ],
+  [
+    'sentry-cli used before its checksum check',
+    'deploy.yml',
+    (wf) => {
+      wf.jobs.sourcemaps.steps = wf.jobs.sourcemaps.steps.filter(
+        (s) => !/install-sentry-cli/.test(s.run ?? ''),
+      );
+    },
+  ],
+  [
+    'a release waits on the source-map upload',
+    'deploy.yml',
+    (wf) => {
+      wf.jobs['deploy-web'].needs = [wf.jobs['deploy-web'].needs, 'sourcemaps'].flat();
+    },
+  ],
+  [
+    'the sourcemaps job skips the main-tip check',
+    'deploy.yml',
+    (wf) => {
+      wf.jobs.sourcemaps.steps = wf.jobs.sourcemaps.steps.filter(
+        (s) => s.run !== 'scripts/assert-main-tip.sh',
+      );
+    },
+  ],
 ];
 
 function copyRoot() {

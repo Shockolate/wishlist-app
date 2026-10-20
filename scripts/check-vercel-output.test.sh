@@ -41,4 +41,12 @@ for target in /proc/self/environ ../../../../outside; do
     exit 1
   fi
 done
+# Browser source maps go to Sentry (scripts/extract-sourcemaps.sh), never to visitors.
+rm -rf "$work/mapped" && cp -R "$work/good" "$work/mapped"
+mkdir -p "$work/mapped/static/_next/static/chunks"
+echo '{}' > "$work/mapped/static/_next/static/chunks/a.js.map"
+if "$here/check-vercel-output.sh" "$work/mapped" >/dev/null 2>&1; then
+  echo "check-vercel-output: FAIL: accepted an output that would serve a source map" >&2
+  exit 1
+fi
 echo "check-vercel-output: ok"

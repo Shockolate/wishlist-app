@@ -21,7 +21,7 @@ const PROD_INSTALL =
   'pnpm install --prod --frozen-lockfile --ignore-scripts --filter @wishlist/api';
 const MIGRATOR = 'apps/api/src/db/migrate-cli.ts';
 // Data a secret job may download. Never anything it executes (final review C-1).
-const SAFE_ARTIFACTS = ['vercel-settings', 'api-output', 'web-output'];
+const SAFE_ARTIFACTS = ['vercel-settings', 'api-output', 'web-output', 'web-sourcemaps'];
 const PACKAGE_RUNNER = /\b(pnpm|pnpx|npm|npx|yarn|bun|bunx|corepack)\b/;
 
 // Secret names used in ${{ }} expressions, case-insensitive. '*' means the whole context
@@ -139,7 +139,7 @@ for (const { file, wf } of workflows) {
 
 // Rule 3: production is reachable only from main, only by the jobs that need it, and every job
 // that touches it re-checks that it is deploying main's tip (Review Focus #2).
-const PROD_JOBS = ['settings', 'migrate', 'deploy-api', 'deploy-web'];
+const PROD_JOBS = ['settings', 'migrate', 'deploy-api', 'deploy-web', 'sourcemaps'];
 for (const [jobName, job] of Object.entries(byFile['deploy.yml']?.jobs ?? {})) {
   const where = `deploy.yml#${jobName}`;
   if (!String(job.if ?? '').includes("github.ref == 'refs/heads/main'"))
@@ -276,6 +276,29 @@ for (const { file, wf } of workflows) {
 }
 if (!JSON.stringify(byFile['deploy.yml']?.jobs?.build ?? {}).includes('vars.SENTRY_DSN_WEB'))
   fail('deploy.yml#build: set SENTRY_DSN_WEB from vars.SENTRY_DSN_WEB');
+
+// Rule 10 (Plan 5b, D52): source maps reach Sentry from a job that holds only SENTRY_AUTH_TOKEN,
+// runs sentry-cli only after installing it through its checksum check, and that no release waits
+// on, so a Sentry outage never blocks a deploy (Review Focus #5).
+const deployJobs = byFile['deploy.yml']?.jobs ?? {};
+const mapsJob = deployJobs.sourcemaps;
+if (!mapsJob) fail('deploy.yml: missing job sourcemaps');
+const mapsSecrets = secretsIn(mapsJob ?? {}).filter((s) => s !== 'SENTRY_AUTH_TOKEN');
+if (mapsSecrets.length)
+  fail(`deploy.yml#sourcemaps: may hold only SENTRY_AUTH_TOKEN (got ${mapsSecrets.join(', ')})`);
+for (const [jobName, job] of Object.entries(deployJobs)) {
+  const needs = [job.needs ?? []].flat();
+  if (needs.includes('sourcemaps')) fail(`deploy.yml#${jobName}: no job may wait on sourcemaps`);
+  const steps = job.steps ?? [];
+  const installAt = steps.findIndex((s) => /scripts\/install-sentry-cli\.sh/.test(s.run ?? ''));
+  const usesAt = steps.findIndex((s) =>
+    /(^|\n|\s)(sentry-cli|scripts\/extract-sourcemaps\.sh)\s/.test(s.run ?? ''),
+  );
+  if (usesAt !== -1 && (installAt === -1 || installAt > usesAt))
+    fail(
+      `deploy.yml#${jobName}: install sentry-cli with scripts/install-sentry-cli.sh before using it`,
+    );
+}
 
 // Secret jobs run `npx vercel@<this version>`; a range would float in token-holding jobs.
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
