@@ -5,6 +5,7 @@ export * from './error-codes.js';
 export * from './health.js';
 export * from './patterns.js';
 export * from './problem.js';
+export * from './tags.js';
 export * from './text.js';
 export * from './wishlist.js';
 export * from './redact.js';

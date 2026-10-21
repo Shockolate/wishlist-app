@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { DisplayNameSchema } from './auth.js';
 import { CAPABILITY_TOKEN_PATTERN } from './patterns.js';
 import { ProblemSchema } from './problem.js';
+import { TagSchema } from './tags.js';
 import { ClaimSchema, ITEM_CLAIM_FIELDS, ItemSchema, QuantitySchema } from './wishlist.js';
 
 /** A gifter's name, which the other gifters see: the display-name rule (spec §2, D35, D41). */
@@ -39,6 +40,7 @@ export const SharedWishlistResponseSchema = z.object({
   ownerDisplayName: z.string(),
   viewerIsOwner: z.boolean(),
   ownerSeesClaims: z.boolean(),
+  tags: z.array(TagSchema).optional(),
   items: z.array(SharedItemSchema),
 });
 export type SharedWishlistResponse = z.infer<typeof SharedWishlistResponseSchema>;
@@ -57,7 +59,7 @@ export type CreateClaimResponse = z.infer<typeof CreateClaimResponseSchema>;
  */
 export const ClaimDetailsResponseSchema = z.object({
   claim: ClaimSchema,
-  item: SharedItemSchema.omit({ remaining: true, claims: true }),
+  item: SharedItemSchema.omit({ remaining: true, claims: true, tagIds: true }),
   wishlistTitle: z.string(),
   ownerDisplayName: z.string(),
   remaining: z.number().int().min(0),

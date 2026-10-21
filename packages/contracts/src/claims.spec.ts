@@ -107,6 +107,25 @@ describe('the public responses (spec §5)', () => {
     expect(parsed.items[0]).not.toHaveProperty('claims');
   });
 
+  it('carry the list’s tags and each item’s tagIds on the share page, and stay valid without them', () => {
+    const base = {
+      title: "Ada's wishlist",
+      ownerDisplayName: 'Ada',
+      viewerIsOwner: false,
+      ownerSeesClaims: false,
+    };
+    expect(SharedWishlistResponseSchema.parse({ ...base, items: [ITEM] })).not.toHaveProperty(
+      'tags',
+    );
+    const parsed = SharedWishlistResponseSchema.parse({
+      ...base,
+      tags: [{ id: ID, name: 'Home' }],
+      items: [{ ...ITEM, tagIds: [ID] }],
+    });
+    expect(parsed.tags).toEqual([{ id: ID, name: 'Home' }]);
+    expect(parsed.items[0]?.tagIds).toEqual([ID]);
+  });
+
   it('carry what is left and who is getting what when the viewer may see them', () => {
     const parsed = SharedWishlistResponseSchema.parse({
       title: "Ada's wishlist",
@@ -143,6 +162,19 @@ describe('the public responses (spec §5)', () => {
     );
   });
 
+  it('strip a tagIds sent on the item: the claimer sees no tags (Plan 7a ruling 2)', () => {
+    const parsed = ClaimDetailsResponseSchema.parse({
+      claim: { id: ID, claimerName: 'Sue', quantity: 1 },
+      item: { ...ITEM, tagIds: [ID] },
+      wishlistTitle: "Ada's wishlist",
+      ownerDisplayName: 'Ada',
+      remaining: 1,
+      shareUrl: `https://hanker.dev/s/${TOKEN}`,
+      ownerSeesClaims: false,
+    });
+    expect(parsed.item).not.toHaveProperty('tagIds');
+  });
+
   it('read how many are left from a 409', () => {
     const problem = {
       type: 'about:blank',
@@ -153,6 +185,14 @@ describe('the public responses (spec §5)', () => {
       remaining: 0,
     };
     expect(ClaimConflictProblemSchema.parse(problem).remaining).toBe(0);
+  });
+});
+
+describe('the tag error codes (Plan 7a)', () => {
+  it('are stable strings', () => {
+    expect(ErrorCode.TAG_NAME_TAKEN).toBe('TAG_NAME_TAKEN');
+    expect(ErrorCode.TAG_LIMIT_REACHED).toBe('TAG_LIMIT_REACHED');
+    expect(ErrorCode.ITEM_TAG_LIMIT_REACHED).toBe('ITEM_TAG_LIMIT_REACHED');
   });
 });
 

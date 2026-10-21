@@ -3,8 +3,10 @@ import { DisplayNameSchema } from './auth.js';
 import {
   CreateItemRequestSchema,
   ImageUrlSchema,
+  ItemSchema,
   ItemTitleSchema,
   ItemUrlSchema,
+  ItemWriteResponseSchema,
   MAX_ITEMS,
   NoteSchema,
   PriceTextSchema,
@@ -100,6 +102,55 @@ describe('UpdateItemRequestSchema (Plan 3a rule 1, Review Focus 2)', () => {
       note: null,
       priceText: null,
     });
+  });
+});
+
+describe('item tags on the item schemas (Plan 7a rulings 1 and 4)', () => {
+  it('leaves tags out of a PATCH that does not mention them, and clears them with []', () => {
+    expect(UpdateItemRequestSchema.parse({})).not.toHaveProperty('tags');
+    expect(UpdateItemRequestSchema.parse({ tags: [] })).toEqual({ tags: [] });
+  });
+
+  it('takes tags on a create, and leaves them out when absent', () => {
+    expect(CreateItemRequestSchema.parse({ title: 'Kettle' })).not.toHaveProperty('tags');
+    expect(
+      CreateItemRequestSchema.parse({ title: 'Kettle', tags: [{ name: ' #Home ' }] }).tags,
+    ).toEqual([{ name: 'Home' }]);
+  });
+
+  it('parses an item without tagIds, and keeps them when sent', () => {
+    const item = {
+      id: ID,
+      title: 'Kettle',
+      url: null,
+      imageUrl: null,
+      priceText: null,
+      note: null,
+      quantity: 1,
+      position: 0,
+    };
+    expect(ItemSchema.parse(item)).not.toHaveProperty('tagIds');
+    expect(ItemSchema.parse({ ...item, tagIds: [ID] }).tagIds).toEqual([ID]);
+  });
+
+  it('gives an item write response its tags beside its tagIds', () => {
+    const item = {
+      id: ID,
+      title: 'Kettle',
+      url: null,
+      imageUrl: null,
+      priceText: null,
+      note: null,
+      quantity: 1,
+      position: 0,
+    };
+    const tags = [{ id: ID, name: 'Home' }];
+    expect(ItemWriteResponseSchema.parse({ ...item, tagIds: [ID], tags })).toEqual({
+      ...item,
+      tagIds: [ID],
+      tags,
+    });
+    expect(ItemWriteResponseSchema.safeParse(item).success).toBe(true);
   });
 });
 
