@@ -66,12 +66,3 @@ export function ItemCardBody({ item, footer }: { item: CardItem; footer?: ReactN
     </>
   );
 }
-
-/** One item on the share page, as the approved share board draws it. */
-export function ShareCard({ item, footer }: { item: CardItem; footer: ReactNode }) {
-  return (
-    <li className={CARD}>
-      <ItemCardBody item={item} footer={footer} />
-    </li>
-  );
-}
