@@ -44,9 +44,9 @@ Tags let the owner say what each item is or what it's for, in their own words. T
 ### Tags (§2 Items)
 
 - A tag belongs to one list. An item has 0–10 tags. A list has at most 50 tags (_Claude's call_).
-- **A name is shown exactly as the owner typed it**, after clean-up: "Kitchen gadgets" stays "Kitchen gadgets" (_Ted_). There are no hashtags.
-- **Clean-up:** trim, collapse runs of whitespace to one space, and drop one leading `#`. Then the visible-text rules apply, as for titles and prices (D35, D41/D44): control and format characters are refused (bar the two joiners), and a name that draws nothing is refused. 1–30 characters, counted in UTF-16 code units (_Claude's call_).
-- **Identity is case-insensitive.** "kitchen", "Kitchen" and "#Kitchen" are the same tag. The key is the cleaned name, lowercased (`toLowerCase()`, no locale). The first spelling saved is the one shown; renaming changes it (_Claude's call_).
+- **A name is shown exactly as the owner typed it**, after clean-up: "Kitchen gadgets" stays "Kitchen gadgets" (_Ted_). Tags aren't hashtags, but a `#` the owner types is kept, leading or not: "#books" stays "#books" (_Ted_, 2026-10-21, changed before merge).
+- **Clean-up:** trim, and collapse runs of whitespace to one space. Nothing else changes, so cleaning a cleaned name changes nothing. Then the visible-text rules apply, as for titles and prices (D35, D41/D44): control and format characters are refused (bar the two joiners), and a name that draws nothing is refused. 1–30 characters, counted in UTF-16 code units (_Claude's call_).
+- **Identity is case-insensitive.** "kitchen", "Kitchen" and " KITCHEN " are the same tag; "#Kitchen" is another one. The key is the cleaned name, lowercased (`toLowerCase()`, no locale). The first spelling saved is the one shown; renaming changes it (_Claude's call_).
 - **A tag can exist with no items.** The owner creates it in the Tags view, then ticks items. An empty tag stays in the owner's Tags view and is never sent to gifters.
 - **Deleting a tag** removes it from every item, after a confirmation ("Remove Kitchen from 3 items?"). It never deletes items. Deleting an item leaves its tags in place, possibly empty.
 - **Renaming to a name the list already uses** (by key) is refused with `409 TAG_NAME_TAKEN`; tags are never silently merged (_Claude's call_). Renaming to a different spelling of the same key ("kitchen" → "Kitchen") is allowed.

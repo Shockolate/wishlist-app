@@ -18,6 +18,8 @@ It ships dark. No web code uses any of it until Plan 7b.
 - **Locking:** every tag write takes the owner's wishlist row lock first, as every list change does today. That serializes the 50-tag cap and the find-or-create by key.
 - **Reads:** tags are read inside the existing `SNAPSHOT` transactions.
 
+**Amended before merge (Ted, 2026-10-21):** a leading `#` is now kept as typed, so it is part of the key and "#books" and "books" are two tags. Where this plan says clean-up drops one leading `#`, design §3 and the code win.
+
 **Tech Stack:** NestJS 12, Drizzle with `pg`, Zod 4, Vitest, Testcontainers. **No new dependencies.**
 
 **Spec:**
