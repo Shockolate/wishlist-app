@@ -14,3 +14,6 @@ test-results/
 .env
 .env.local
 .env.*.local
+
+# Mockups and scratch files from the brainstorming skill's visual companion.
+.superpowers/
