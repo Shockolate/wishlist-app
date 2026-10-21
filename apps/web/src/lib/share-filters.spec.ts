@@ -32,6 +32,13 @@ describe('listCurrency (D61)', () => {
     expect(listCurrency([item('$5'), item('£10'), item('£20'), item('$7')])).toBe('$');
   });
 
+  it('treats $ and US$ as separate prefixes', () => {
+    expect(listCurrency([item('US$5'), item('$10'), item('US$20')])).toBe('US$');
+    expect(listCurrency([item('$5'), item('US$10'), item('US$20'), item('$7'), item('$9')])).toBe(
+      '$',
+    );
+  });
+
   it('is null for a yen majority, outside the dollar scale', () => {
     expect(listCurrency([item('¥100'), item('¥200'), item('$5')])).toBeNull();
   });
@@ -130,21 +137,35 @@ describe('counts', () => {
     expect(tagCount(items, f, '$', 'b')).toBe(shown(f));
   });
 
-  it('bandCount of a band equals the number shown with that band added (RF2)', () => {
-    for (const { id } of BANDS) {
-      expect(bandCount(items, NO_FILTERS, '$', id)).toBe(shown(filters([], [id])));
-      expect(bandCount(items, filters(['a']), '$', id)).toBe(shown(filters(['a'], [id])));
-      expect(bandCount(items, filters(['a'], ['25-50']), '$', id)).toBe(
-        shown(filters(['a'], ['25-50', id])),
-      );
+  it('bandCount of a band equals the items shown with only that band on (RF2)', () => {
+    const only = (f: Filters, band: BandId) =>
+      items.filter((it) => matches(it, { ...f, bands: [band] }, '$')).length;
+    for (const f of [
+      NO_FILTERS,
+      filters(['a']),
+      filters(['a'], ['25-50']),
+      filters([], ['25-50', '100-plus']),
+      filters(['b'], ['under-25', '25-50', '50-100', '100-plus']),
+    ]) {
+      for (const { id } of BANDS) expect(bandCount(items, f, '$', id)).toBe(only(f, id));
     }
     expect(bandCount(items, NO_FILTERS, '$', '25-50')).toBe(2);
     expect(bandCount(items, NO_FILTERS, '$', '100-plus')).toBe(1);
   });
 
-  it('bandCount of a selected band is the number shown', () => {
-    const f = filters(['a'], ['25-50', '100-plus']);
-    expect(bandCount(items, f, '$', '25-50')).toBe(shown(f));
+  it('bandCount counts a band on its own, not together with the bands already on', () => {
+    const f = filters([], ['25-50']);
+    expect(bandCount(items, f, '$', '25-50')).toBe(2);
+    expect(bandCount(items, f, '$', '100-plus')).toBe(1);
+    const both = filters([], ['25-50', '100-plus']);
+    expect(bandCount(items, both, '$', '25-50')).toBe(2);
+    expect(bandCount(items, both, '$', '100-plus')).toBe(1);
+  });
+
+  it('bandCount applies the selected tags', () => {
+    expect(bandCount(items, filters(['b']), '$', '25-50')).toBe(2);
+    expect(bandCount(items, filters(['b']), '$', '50-100')).toBe(0);
+    expect(bandCount(items, filters(['a']), '$', '25-50')).toBe(1);
   });
 
   it('bandCount("any") counts the tag matches, readable price or not', () => {

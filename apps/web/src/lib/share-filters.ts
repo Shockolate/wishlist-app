@@ -82,8 +82,9 @@ export function tagCount(
 }
 
 /**
- * How many items would be shown with this band on. `'any'` is the tag matches alone, whether or
- * not the price is readable (the pill's "Any price" row).
+ * How many items match the selected tags and fall in this band, on its own: any other selected
+ * band is replaced, not added, so a band's number doesn't change as others are ticked. `'any'` is
+ * the tag matches alone, whether or not the price is readable (the pill's "Any price" row).
  */
 export function bandCount(
   items: readonly FilterItem[],
@@ -92,8 +93,7 @@ export function bandCount(
   band: BandId | 'any',
 ): number {
   if (band === 'any') return countOf(items, { ...f, bands: [] }, currency);
-  const bands = f.bands.includes(band) ? f.bands : [...f.bands, band];
-  return countOf(items, { ...f, bands }, currency);
+  return countOf(items, { ...f, bands: [band] }, currency);
 }
 
 /**
