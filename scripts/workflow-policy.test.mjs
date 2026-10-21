@@ -355,6 +355,21 @@ if (scorecard) {
   }
 }
 
+// Rule 12: GitHub's dependency graph lists only direct packages, so Dependabot alerts and the
+// dependency-review check miss advisories in transitive ones. CI audits the lockfile itself, for
+// what ships. It must stay blocking, and --prod keeps the dev tooling's open advisories (the Vercel
+// CLI's tree) from failing every build.
+const auditGate = (byFile['ci.yml']?.jobs?.checks?.steps ?? []).find((s) =>
+  /^pnpm audit\b/.test(String(s.run ?? '').trim()),
+);
+if (
+  !auditGate ||
+  !/^pnpm audit --prod --audit-level (low|moderate|high)$/.test(auditGate.run.trim())
+)
+  fail('ci.yml#checks: run `pnpm audit --prod --audit-level high` (Rule 12)');
+else if (auditGate['continue-on-error'] === true || auditGate['continue-on-error'] === 'true')
+  fail('ci.yml#checks: the production audit must block the build (no continue-on-error)');
+
 // Secret jobs run `npx vercel@<this version>`; a range would float in token-holding jobs.
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 if (!/^\d+\.\d+\.\d+$/.test(pkg.devDependencies?.vercel ?? ''))

@@ -303,6 +303,28 @@ const mutations = [
       };
     },
   ],
+  [
+    'the production audit gate is removed from CI (Rule 12)',
+    'ci.yml',
+    (wf) => {
+      wf.jobs.checks.steps = wf.jobs.checks.steps.filter((s) => !/pnpm audit/.test(s.run ?? ''));
+    },
+  ],
+  [
+    'the production audit gate stops blocking (Rule 12)',
+    'ci.yml',
+    (wf) => {
+      runStep(wf.jobs.checks, /pnpm audit/)['continue-on-error'] = true;
+    },
+  ],
+  [
+    'the production audit gate drops --prod, so it would fail on dev tooling (Rule 12)',
+    'ci.yml',
+    (wf) => {
+      const s = runStep(wf.jobs.checks, /pnpm audit/);
+      s.run = s.run.replace(' --prod', '');
+    },
+  ],
 ];
 
 function copyRoot() {
