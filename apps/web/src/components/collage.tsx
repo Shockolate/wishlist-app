@@ -1,31 +1,62 @@
-/** A small board of example gifts. Decoration only: hidden from assistive tech, and on phones. */
-const TILES = [
-  { place: 'col-[1/4] row-[1/5]', tone: 'bg-[#d8ccbe]', label: 'Linen apron' },
-  { place: 'col-[4/7] row-[1/4]', tone: 'bg-[#c3cdb5]', label: 'Fig tree' },
-  { place: 'col-[4/7] row-[4/7]', tone: 'bg-[#e2d3c6]', label: 'Camp mug' },
-  { place: 'col-[1/3] row-[5/8]', tone: 'bg-[#bfc6b6]', label: 'Wool socks' },
-  { place: 'col-[3/4] row-[5/8]', tone: 'bg-[#c9c4b4]', label: null },
-  { place: 'col-[1/4] row-[8/9]', tone: 'bg-[#ddd3c7]', label: null },
-] as const;
+import Image from 'next/image';
+import { CARD } from '@/components/share/share-card';
+import { COLLAGE_COLUMNS, type CollageItem } from '@/lib/collage-items';
+import { cn } from '@/lib/utils';
 
+function SampleCard({ item }: { item: CollageItem }) {
+  return (
+    <div className={CARD}>
+      {item.photo ? (
+        <Image
+          src={item.photo}
+          alt=""
+          width={640}
+          height={320}
+          sizes="320px"
+          className="h-[150px] w-full bg-placeholder object-cover"
+        />
+      ) : null}
+      <div className="p-4">
+        {item.photo === null ? (
+          <p className="text-[13px] font-medium text-muted-foreground">An idea</p>
+        ) : null}
+        <h2
+          className={cn('text-[17px] leading-snug font-semibold', item.photo === null && 'mt-1.5')}
+        >
+          {item.title}
+        </h2>
+        {item.price || item.shop ? (
+          <p className="mt-1 flex flex-wrap items-center gap-x-3 text-[15px] text-muted-foreground">
+            {item.price ? <span className="font-medium text-foreground">{item.price}</span> : null}
+            {item.shop ? (
+              <span className="text-foreground underline">See it at {item.shop}</span>
+            ) : null}
+          </p>
+        ) : null}
+        {item.note ? <p className="mt-1 text-[15px] leading-relaxed">{item.note}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Sample gifts drawn as share cards. Decoration only: hidden from assistive tech, and on phones.
+ * The card is the share page's, so keep the two looking alike; the links are plain text because
+ * a focusable link inside aria-hidden content is an accessibility error.
+ */
 export function Collage() {
   return (
     <div
       aria-hidden="true"
-      className="hidden min-w-0 flex-[1_1_480px] auto-rows-[72px] grid-cols-6 gap-3.5 md:grid"
+      className="hidden min-w-0 flex-[1_1_480px] grid-cols-2 items-start gap-3.5 md:grid"
     >
-      {TILES.map((tile, index) => (
-        <div key={index} className={`relative rounded-card ${tile.place} ${tile.tone}`}>
-          {tile.label ? (
-            <span className="absolute bottom-3 left-3 rounded-full bg-card px-2.5 py-1 text-[13px]">
-              {tile.label}
-            </span>
-          ) : null}
+      {COLLAGE_COLUMNS.map((column, index) => (
+        <div key={index} className={cn('flex flex-col gap-3.5', index === 1 && 'mt-11')}>
+          {column.map((item) => (
+            <SampleCard key={item.title} item={item} />
+          ))}
         </div>
       ))}
-      <div className="col-[4/7] row-[7/9] flex items-end rounded-card border border-border bg-card p-4">
-        <span className="font-display text-[28px] italic leading-none">Pottery class for two</span>
-      </div>
     </div>
   );
 }
