@@ -89,7 +89,7 @@ describe('tags on POST /wishlist/items (design §6)', () => {
     const cookie = await owner();
     const kitchenId = await seedTag(db, ADA.email, 'Kitchen');
     const item = written(
-      await create(cookie, { title: 'Kettle', tags: [{ name: '  #KITCHEN ' }] }),
+      await create(cookie, { title: 'Kettle', tags: [{ name: '  KITCHEN ' }] }),
       201,
     );
     expect(item.tags).toEqual([{ id: kitchenId, name: 'Kitchen' }]);
@@ -115,26 +115,27 @@ describe('tags on POST /wishlist/items (design §6)', () => {
   it('makes a new tag once when two entries spell it differently', async () => {
     const cookie = await owner();
     const item = written(
-      await create(cookie, { title: 'Kettle', tags: [{ name: 'Gifts' }, { name: '#gifts' }] }),
+      await create(cookie, { title: 'Kettle', tags: [{ name: 'Gifts' }, { name: ' gifts ' }] }),
       201,
     );
     expect(item.tags).toEqual([{ id: expect.any(String) as string, name: 'Gifts' }]);
     expect(await count('tags')).toBe(1);
   });
 
-  it('keys a name by its cleaned spelling once: "##Kitchen" is not "Kitchen"', async () => {
+  it('keeps a leading # as part of the tag: "#Kitchen" is not "Kitchen"', async () => {
     const cookie = await owner();
     const kitchenId = await seedTag(db, ADA.email, 'Kitchen');
     const item = written(
-      await create(cookie, { title: 'Kettle', tags: [{ name: '##Kitchen' }] }),
+      await create(cookie, { title: 'Kettle', tags: [{ name: '#Kitchen' }] }),
       201,
     );
     expect(item.tags).toEqual([{ id: expect.any(String) as string, name: '#Kitchen' }]);
     expect(item.tagIds).not.toContain(kitchenId);
     const rows = await db.pool.query<{ name: string; name_key: string }>(
-      'select name, name_key from tags order by name_key',
+      'select name, name_key from tags',
     );
-    expect(rows.rows).toEqual([
+    // Sorted here, not in SQL: how '#' sorts against letters depends on the database's collation.
+    expect(rows.rows.sort((a, b) => (a.name < b.name ? -1 : 1))).toEqual([
       { name: '#Kitchen', name_key: '#kitchen' },
       { name: 'Kitchen', name_key: 'kitchen' },
     ]);
@@ -143,14 +144,14 @@ describe('tags on POST /wishlist/items (design §6)', () => {
   it('stores a new tag in its cleaned spelling', async () => {
     const cookie = await owner();
     const item = written(
-      await create(cookie, { title: 'Kettle', tags: [{ name: ' #Gifts ' }] }),
+      await create(cookie, { title: 'Kettle', tags: [{ name: ' #Gift   ideas ' }] }),
       201,
     );
-    expect(item.tags).toEqual([{ id: expect.any(String) as string, name: 'Gifts' }]);
+    expect(item.tags).toEqual([{ id: expect.any(String) as string, name: '#Gift ideas' }]);
     const rows = await db.pool.query<{ name: string; name_key: string }>(
       'select name, name_key from tags',
     );
-    expect(rows.rows).toEqual([{ name: 'Gifts', name_key: 'gifts' }]);
+    expect(rows.rows).toEqual([{ name: '#Gift ideas', name_key: '#gift ideas' }]);
   });
 
   it('accepts an upper-case id for a tag on the list', async () => {

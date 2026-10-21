@@ -50,9 +50,8 @@ export async function readTagIdsByItem(
 
 /**
  * The `name_key` of a name that `TagNameSchema` has already cleaned, which is every name in a
- * parsed request. Raw input uses `tagKey` from the contracts instead. Cleaning again would not be
- * harmless: `cleanTagName` drops only one leading `#`, so "##Kitchen" (cleaned to "#Kitchen")
- * would be keyed "kitchen" and join the wrong tag (design §3).
+ * parsed request (design §3). Raw input uses `tagKey` from the contracts, which cleans first; for
+ * a cleaned name the two agree.
  */
 export function keyOfCleanName(name: string): string {
   return name.toLowerCase();
