@@ -15,3 +15,13 @@ export const orderConflict = (): AppError =>
 
 export const tagLimitReached = (): AppError =>
   new AppError(422, ErrorCode.TAG_LIMIT_REACHED, 'A list holds at most 50 tags.');
+
+/** Another user's tag, a missing one and a malformed ID all look the same (design §6). */
+export const tagNotFound = (): AppError =>
+  new AppError(404, ErrorCode.NOT_FOUND, 'That tag no longer exists.');
+
+export const tagNameTaken = (): AppError =>
+  new AppError(409, ErrorCode.TAG_NAME_TAKEN, 'You already have a tag with that name.');
+
+export const itemTagLimitReached = (): AppError =>
+  new AppError(422, ErrorCode.ITEM_TAG_LIMIT_REACHED, 'An item holds at most 10 tags.');

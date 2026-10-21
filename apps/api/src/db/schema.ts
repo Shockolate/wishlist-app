@@ -157,8 +157,9 @@ export const claims = pgTable(
 /**
  * Tags (design §5): labels the owner makes to sort their list. A tag belongs to one wishlist, and
  * deleting the list or the account takes it away. `name` keeps the spelling the owner first used;
- * `nameKey` is its case-folded form (`tagKey` in the contracts), so "Kitchen" and "kitchen" are one
- * tag. The key is computed by the API, not by the database.
+ * `nameKey` is its case-folded form (`keyOfCleanName` for a name `TagNameSchema` has cleaned, `tagKey`
+ * in the contracts for raw input), so "Kitchen" and "kitchen" are one tag. The key is computed by
+ * the API, not by the database.
  */
 export const tags = pgTable(
   'tags',
