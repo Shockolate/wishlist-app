@@ -46,7 +46,7 @@ describe('TagNameSchema (design §3)', () => {
     expect(TagNameSchema.parse(' #Kitchen gadgets ')).toBe('Kitchen gadgets');
   });
 
-  it.each(['🎄 Christmas', '\u{1F469}‍\u{1F373}', 'می‌خواهم', 'a'.repeat(30)])(
+  it.each(['🎄 Christmas', '\u{1F469}\u200D\u{1F373}', 'می\u200Cخواهم', 'a'.repeat(30)])(
     'keeps %j',
     (input) => {
       expect(TagNameSchema.parse(input)).toBe(input);
@@ -57,8 +57,8 @@ describe('TagNameSchema (design §3)', () => {
     ['#', 'empty once cleaned'],
     ['   ', 'only whitespace'],
     ['a'.repeat(31), 'too long'],
-    ['a‮b', 'a bidirectional override'],
-    ['ㅤ', 'a blank letter'],
+    ['a\u202Eb', 'a bidirectional override'],
+    ['\u3164', 'a blank letter'],
   ])('refuses %j (%s) with exactly one issue', (input) => {
     const result = TagNameSchema.safeParse(input);
     expect(result.success).toBe(false);
@@ -66,7 +66,7 @@ describe('TagNameSchema (design §3)', () => {
   });
 
   it('says why a hidden character is refused', () => {
-    const result = TagNameSchema.safeParse('a‮b');
+    const result = TagNameSchema.safeParse('a\u202Eb');
     expect(result.success ? [] : result.error.issues.map((issue) => issue.message)).toEqual([
       VISIBLE_ONLY_MESSAGE,
     ]);
