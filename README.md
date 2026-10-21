@@ -3,6 +3,7 @@
 [![Deploy](https://github.com/Shockolate/wishlist-app/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/Shockolate/wishlist-app/actions/workflows/deploy.yml)
 [![License: MIT](https://img.shields.io/github/license/Shockolate/wishlist-app)](LICENSE)
 [![Better Stack Badge](https://incidents.betterstack.com/status-badges/v1/monitor/31a6h.svg)](https://incidents.betterstack.com/?utm_source=status_badge)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Shockolate/wishlist-app/badge)](https://scorecard.dev/viewer/?uri=github.com/Shockolate/wishlist-app)
 
 A wishlist app for family and friends, running at **https://hanker.dev**. You keep one list of things you'd love, then share a secret link. Anyone with the link can claim an item, so nobody buys the same gift twice, and you never see who is getting what.
 
@@ -50,6 +51,7 @@ Each of these has its rationale in the [design spec](docs/superpowers/specs/2026
 - **Link previews are hardened against SSRF.** The server resolves the host itself, accepts only public addresses from an allowlist, connects to the address it vetted, and re-checks every redirect. [`apps/api/src/unfurl`](apps/api/src/unfurl), [spec §6.8](docs/superpowers/specs/2026-10-07-wishlist-app-design.md#68-unfurl-ssrf).
 - **CI has a trust model.** Jobs that build or test workspace code hold no secrets, and jobs that hold secrets run only pinned tools. A [policy test](scripts/workflow-policy.test.mjs), itself checked by [mutation tests](scripts/workflow-policy.mutations.test.mjs), fails the build if a later edit weakens that. [Design note](docs/superpowers/specs/2026-10-08-ci-secret-isolation-and-seeded-previews-design.md).
 - **Someone has thought about the day it breaks.** Nightly encrypted backups go to object storage, and a restore drill proves they can be restored. Uptime monitors, error reporting and runbooks are in [docs/operations.md](docs/operations.md).
+- **Dependencies are audited, including the ones GitHub can't see.** GitHub's dependency graph lists only direct packages, so CI runs `pnpm audit --prod` against the lockfile and fails on a high or critical advisory in anything that ships. The Scorecard badge above still counts open advisories. They are in dev and deploy tooling, almost all in the Vercel CLI, where a newer version doesn't clear them, and none of it is part of the running app.
 - **Migrations are expand, then contract,** so each one works alongside the API version that is currently deployed. CI lints them with [squawk](https://squawkhq.com).
 
 The work was planned and delivered in order: a spec, a [roadmap](docs/superpowers/plans/2026-10-07-roadmap.md), then one plan per slice, all in [`docs/superpowers`](docs/superpowers).
