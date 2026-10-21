@@ -15,7 +15,7 @@ import { ADA, logIn, signUpVerified } from './support/accounts.js';
 import { createAuthTestApp, type AuthTestApp } from './support/auth-app.js';
 import { client, type ApiResponse } from './support/client.js';
 import { openTestDatabase } from './support/database.js';
-import { seedItem, shareTokenOf, wishlistIdOf } from './support/lists.js';
+import { linkTag, seedItem, seedTag, shareTokenOf, wishlistIdOf } from './support/lists.js';
 import { untilBlockedBy } from './support/locks.js';
 import { fillBucket } from './support/rate-limits.js';
 
@@ -92,6 +92,14 @@ describe('GET /claims/:manageToken (spec §5)', () => {
       shareUrl: `http://localhost:3000/s/${token}`,
       ownerSeesClaims: false,
     });
+  });
+
+  it('sends no tag IDs, even for an item that carries tags (Plan 7a ruling 2)', async () => {
+    const { token, kettle } = await adasKettle(1);
+    await linkTag(db, kettle, await seedTag(db, ADA.email, 'Kitchen'));
+    const sue = await claimed(token, kettle, 'Sue');
+    const { item } = (await details(sue.manageToken)).body as { item: object };
+    expect(item).not.toHaveProperty('tagIds');
   });
 
   it('never shows anyone else’s claim (spec §5.1)', async () => {

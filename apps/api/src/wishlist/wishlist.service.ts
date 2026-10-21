@@ -16,6 +16,7 @@ import { unauthenticated } from '../http/errors.js';
 import { newToken } from '../security/tokens.js';
 import { ITEM_COLUMNS } from './item-columns.js';
 import { shareUrl as shareUrlFor } from './links.js';
+import { readTagIdsByItem, readTags } from './tag-queries.js';
 
 /** The list itself: reading it, its settings, and rotating its share link (spec §5). */
 @Injectable()
@@ -27,8 +28,9 @@ export class WishlistService {
   ) {}
 
   /**
-   * The owner's list, its items in order, and claim data only after opting in (spec §5.1). One
-   * snapshot, so `remaining` agrees with the items beside it.
+   * The owner's list, its items in order with their tag IDs, every tag, and claim data only after
+   * opting in (spec §5.1). One snapshot, so `remaining` and the tags agree with the items beside
+   * them.
    */
   async get(ownerId: string): Promise<WishlistResponse> {
     return this.db.transaction(async (tx) => {
@@ -47,6 +49,8 @@ export class WishlistService {
         .from(items)
         .where(eq(items.wishlistId, list.id))
         .orderBy(asc(items.position), asc(items.id));
+      const tagIdsByItem = await readTagIdsByItem(tx, list.id);
+      const tagged = rows.map((row) => ({ ...row, tagIds: tagIdsByItem.get(row.id) ?? [] }));
       const viewer: Viewer = { kind: 'owner', showClaims: list.showClaims };
       // An owner who hasn't opted in never gets claim data: it isn't even read (spec §5).
       const claimRows = seesClaims(viewer) ? await readClaims(tx, list.id) : [];
@@ -54,7 +58,8 @@ export class WishlistService {
         title: list.title,
         shareUrl: this.shareUrl(list.shareToken),
         showClaimsToOwner: list.showClaims,
-        items: projectWishlist(rows, claimRows, viewer),
+        tags: await readTags(tx, list.id, { usedOnly: false }),
+        items: projectWishlist(tagged, claimRows, viewer),
       };
     }, SNAPSHOT);
   }
