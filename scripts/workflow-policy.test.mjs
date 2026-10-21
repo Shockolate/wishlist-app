@@ -49,8 +49,12 @@ const envName = (job) =>
   typeof job.environment === 'string' ? job.environment : job.environment?.name;
 
 for (const { file, wf } of workflows) {
-  // Rule 6: every run step fails on any error in a pipeline.
-  if (wf.defaults?.run?.shell !== 'bash')
+  // Rule 6: every run step fails on any error in a pipeline. A workflow with no run step has
+  // none to fail, which lets scorecard.yml omit `defaults` as publishing requires (Rule 11).
+  const hasRunStep = Object.values(wf.jobs ?? {}).some((job) =>
+    (job.steps ?? []).some((s) => s.run !== undefined),
+  );
+  if (hasRunStep && wf.defaults?.run?.shell !== 'bash')
     fail(`${file}: set defaults.run.shell: bash (-eo pipefail)`);
   if (secretsIn(wf.env).length) fail(`${file}: secrets at workflow level; scope them to steps`);
 
@@ -305,6 +309,50 @@ for (const [jobName, job] of Object.entries(deployJobs)) {
     for (const s of steps)
       if (/scripts\/install-sentry-cli\.sh/.test(s.run ?? '') && s['continue-on-error'] !== true)
         fail('deploy.yml#build: the sentry-cli install must be continue-on-error: true');
+}
+
+// Rule 11 (OpenSSF Scorecard): publishing the result is rejected by the Scorecard API unless the
+// workflow has no top-level env or defaults, no job env or defaults, no run step, only approved
+// actions, and `id-token: write` on the scorecard-action job alone. The job gets an OIDC token,
+// so it must never run on pull requests, hold a secret, or run anything but those actions.
+const SCORECARD_ACTIONS = [
+  'actions/checkout@',
+  'ossf/scorecard-action@',
+  'github/codeql-action/upload-sarif@',
+];
+const SCORECARD_TRIGGERS = ['schedule', 'push', 'branch_protection_rule'];
+const scorecard = byFile['scorecard.yml'];
+if (scorecard) {
+  const w = 'scorecard.yml';
+  if (scorecard.env !== undefined || scorecard.defaults !== undefined)
+    fail(`${w}: no top-level env or defaults; the Scorecard API rejects a publishing workflow`);
+  for (const trigger of Object.keys(scorecard.on ?? {}))
+    if (!SCORECARD_TRIGGERS.includes(trigger))
+      fail(`${w}: may only run on ${SCORECARD_TRIGGERS.join(', ')} (got ${trigger})`);
+  if (secretsIn(scorecard).length)
+    fail(`${w}: holds no secrets; it reads the ruleset with the default token`);
+  const top = scorecard.permissions ?? {};
+  if (typeof top === 'string' ? top === 'write-all' : Object.values(top).includes('write'))
+    fail(`${w}: no workflow-level write permissions`);
+  const scorecardJobs = Object.entries(scorecard.jobs ?? {}).filter(([, job]) =>
+    (job.steps ?? []).some((s) => String(s.uses ?? '').startsWith('ossf/scorecard-action@')),
+  );
+  if (scorecardJobs.length !== 1)
+    fail(`${w}: needs exactly one job that runs ossf/scorecard-action`);
+  for (const [jobName, job] of Object.entries(scorecard.jobs ?? {})) {
+    const where = `${w}#${jobName}`;
+    for (const key of ['env', 'defaults', 'container', 'services'])
+      if (job[key] !== undefined) fail(`${where}: no job-level ${key}`);
+    const isScorecardJob = scorecardJobs.some(([name]) => name === jobName);
+    if (job.permissions?.['id-token'] === 'write' && !isScorecardJob)
+      fail(`${where}: only the ossf/scorecard-action job may use id-token: write`);
+    for (const step of job.steps ?? []) {
+      if (step.run !== undefined) fail(`${where}: no run steps; the Scorecard API rejects them`);
+      const uses = String(step.uses ?? '');
+      if (uses && !SCORECARD_ACTIONS.some((a) => uses.startsWith(a)))
+        fail(`${where}: ${uses.split('@')[0]} is not on the Scorecard allowlist`);
+    }
+  }
 }
 
 // Secret jobs run `npx vercel@<this version>`; a range would float in token-holding jobs.

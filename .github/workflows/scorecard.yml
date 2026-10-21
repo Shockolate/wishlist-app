@@ -1,0 +1,38 @@
+name: Scorecard
+
+# Publishes the OpenSSF Scorecard result, which backs the README badge. Publishing is picky: the
+# Scorecard API rejects a workflow with top-level `env` or `defaults`, any `run` step, or an
+# action outside its approved list, so this file has none of them and the policy test checks that
+# (workflow-policy Rule 11). Only this job gets `id-token: write`. Nothing here holds a secret:
+# Scorecard reads the `main` ruleset with the default token.
+on:
+  schedule:
+    - cron: '41 6 * * 1'
+  push:
+    branches: [main]
+  branch_protection_rule:
+
+permissions:
+  contents: read
+
+jobs:
+  scorecard:
+    name: scorecard
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+      - uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          sarif_file: results.sarif

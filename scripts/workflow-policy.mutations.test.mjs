@@ -228,6 +228,81 @@ const mutations = [
       );
     },
   ],
+  [
+    'a workflow with run steps drops its bash default (Rule 6)',
+    'ci.yml',
+    (wf) => {
+      delete wf.defaults;
+    },
+  ],
+  [
+    'Scorecard gains top-level env (Rule 11)',
+    'scorecard.yml',
+    (wf) => {
+      wf.env = { FOO: 'bar' };
+    },
+  ],
+  [
+    'Scorecard gains top-level defaults (Rule 11)',
+    'scorecard.yml',
+    (wf) => {
+      wf.defaults = { run: { shell: 'bash' } };
+    },
+  ],
+  [
+    'Scorecard job gains env (Rule 11)',
+    'scorecard.yml',
+    (wf) => {
+      wf.jobs.scorecard.env = { FOO: 'bar' };
+    },
+  ],
+  [
+    'Scorecard job gains a run step (Rule 11)',
+    'scorecard.yml',
+    (wf) => {
+      wf.jobs.scorecard.steps.splice(1, 0, { run: 'echo hi' });
+    },
+  ],
+  [
+    'Scorecard job uses an action outside its allowlist (Rule 11)',
+    'scorecard.yml',
+    (wf) => {
+      wf.jobs.scorecard.steps.splice(1, 0, { uses: PINNED_CACHE, with: { path: 'x', key: 'x' } });
+    },
+  ],
+  [
+    'Scorecard holds a secret (Rule 11)',
+    'scorecard.yml',
+    (wf) => {
+      usesStep(wf.jobs.scorecard, 'ossf/scorecard-action@').with.repo_token =
+        '${{ secrets.SCORECARD_TOKEN }}';
+    },
+  ],
+  [
+    'Scorecard runs on pull requests (Rule 11)',
+    'scorecard.yml',
+    (wf) => {
+      wf.on.pull_request = null;
+    },
+  ],
+  [
+    'Scorecard gets workflow-level id-token write (Rule 11)',
+    'scorecard.yml',
+    (wf) => {
+      wf.permissions['id-token'] = 'write';
+    },
+  ],
+  [
+    'a second job in the Scorecard workflow gets id-token write (Rule 11)',
+    'scorecard.yml',
+    (wf) => {
+      wf.jobs.other = {
+        'runs-on': 'ubuntu-latest',
+        permissions: { 'id-token': 'write' },
+        steps: [{ uses: 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' }],
+      };
+    },
+  ],
 ];
 
 function copyRoot() {
@@ -256,7 +331,8 @@ const problems = [];
 
 // Baseline: the real workflows, round-tripped through the YAML serializer, still pass.
 const base = copyRoot();
-for (const f of ['deploy.yml', 'preview.yml', 'preview-seed.yml', 'backup.yml']) rewrite(base, f);
+for (const f of ['deploy.yml', 'preview.yml', 'preview-seed.yml', 'backup.yml', 'scorecard.yml'])
+  rewrite(base, f);
 const baseline = check(base);
 rmSync(base, { recursive: true, force: true });
 if (baseline.status !== 0) problems.push(`baseline should pass: ${baseline.stderr.trim()}`);
