@@ -12,3 +12,6 @@ export const listFull = (): AppError =>
 
 export const orderConflict = (): AppError =>
   new AppError(409, ErrorCode.ORDER_CONFLICT, 'The list changed. Reload it and try again.');
+
+export const tagLimitReached = (): AppError =>
+  new AppError(422, ErrorCode.TAG_LIMIT_REACHED, 'A list holds at most 50 tags.');

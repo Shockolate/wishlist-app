@@ -82,6 +82,7 @@ describe('POST /wishlist/items (spec §2, §5)', () => {
       note: null,
       quantity: 1,
       position: 0,
+      tagIds: [],
     });
     expect(teapot.position).toBe(1);
     expect((await listOf(cookie)).items.map((item) => item.title)).toEqual(['Kettle', 'Teapot']);
