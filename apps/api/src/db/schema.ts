@@ -8,6 +8,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
@@ -151,4 +152,42 @@ export const claims = pgTable(
     index('claims_item_id_idx').on(t.itemId),
     check('claims_quantity_check', sql`${t.quantity} >= 1`),
   ],
+);
+
+/**
+ * Tags (design §5): labels the owner makes to sort their list. A tag belongs to one wishlist, and
+ * deleting the list or the account takes it away. `name` keeps the spelling the owner first used;
+ * `nameKey` is its case-folded form (`tagKey` in the contracts), so "Kitchen" and "kitchen" are one
+ * tag. The key is computed by the API, not by the database.
+ */
+export const tags = pgTable(
+  'tags',
+  {
+    id: uuid('id').primaryKey(),
+    wishlistId: uuid('wishlist_id')
+      .notNull()
+      .references(() => wishlists.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    nameKey: text('name_key').notNull(),
+    ...timestamps(),
+  },
+  (t) => [unique('tags_wishlist_id_name_key_unique').on(t.wishlistId, t.nameKey)],
+);
+
+/**
+ * Which tags an item carries (design §5). Deleting either side removes the link and never the
+ * other side. The primary key serves lookups by item; the index serves lookups and deletes by tag.
+ * The limits on tags per item and per list are enforced by the API, under the list lock.
+ */
+export const itemTags = pgTable(
+  'item_tags',
+  {
+    itemId: uuid('item_id')
+      .notNull()
+      .references(() => items.id, { onDelete: 'cascade' }),
+    tagId: uuid('tag_id')
+      .notNull()
+      .references(() => tags.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.itemId, t.tagId] }), index('item_tags_tag_id_idx').on(t.tagId)],
 );

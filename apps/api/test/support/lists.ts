@@ -69,3 +69,20 @@ export async function setShowClaims(db: TestDatabase, email: string, on: boolean
     [email, on],
   );
 }
+
+/** A tag on the list of the account with this email, as the API would store it. */
+export async function seedTag(db: TestDatabase, email: string, name: string): Promise<string> {
+  const wishlistId = await wishlistIdOf(db, email);
+  const { rows } = await db.pool.query<{ id: string }>(
+    `insert into tags (id, wishlist_id, name, name_key)
+     values (gen_random_uuid(), $1, $2, lower($2))
+     returning id`,
+    [wishlistId, name],
+  );
+  return first(rows, 'tag').id;
+}
+
+/** Puts a tag on an item. Both must already exist. */
+export async function linkTag(db: TestDatabase, itemId: string, tagId: string): Promise<void> {
+  await db.pool.query('insert into item_tags (item_id, tag_id) values ($1, $2)', [itemId, tagId]);
+}
