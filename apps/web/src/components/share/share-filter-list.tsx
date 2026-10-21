@@ -2,6 +2,7 @@
 
 import type { Tag } from '@wishlist/contracts';
 import { useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { flushSync } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { shownLine, tagChipLabel } from '@/lib/share-copy';
 import {
@@ -71,11 +72,15 @@ export function ShareFilterList({
   const active = filters.tagIds.length > 0 || filters.bands.length > 0;
   const hasRow = mounted && (chips.length > 0 || currency !== null);
 
-  const clear = () => {
-    setPicked(NO_FILTERS);
-    // The button pressed goes with the line; focus goes to the start of the row instead.
-    rowRef.current?.querySelector('button')?.focus();
+  // Commits the change first, so the row's buttons are enabled or disabled as it leaves them, then
+  // gives focus to the row's first enabled button. Focusing before the commit could land on a chip
+  // the change is about to enable (a no-op), and focus would drop to the page.
+  const pickThenFocusRow = (next: Filters) => {
+    flushSync(() => setPicked(next));
+    rowRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
   };
+  // The Clear button pressed goes with the line, so focus goes to the start of the row.
+  const clear = () => pickThenFocusRow(NO_FILTERS);
 
   return (
     <>
@@ -85,7 +90,7 @@ export function ShareFilterList({
             ref={rowRef}
             role="group"
             aria-label="Filter the list"
-            className="-mx-4 flex gap-2 overflow-x-auto px-4 py-1 [scrollbar-width:none] sm:-mx-7 sm:px-7 [&::-webkit-scrollbar]:hidden"
+            className="-mx-4 flex gap-2 overflow-x-auto px-4 py-1.5 [scrollbar-width:none] sm:-mx-7 sm:px-7 [&::-webkit-scrollbar]:hidden"
           >
             {currency !== null ? (
               <PricePill
@@ -107,7 +112,13 @@ export function ShareFilterList({
                   aria-pressed={on}
                   aria-label={tagChipLabel(tag.name, count)}
                   disabled={count === 0 && !on}
-                  onClick={() => setPicked({ ...filters, tagIds: toggled(filters.tagIds, tag.id) })}
+                  onClick={() => {
+                    const next = { ...filters, tagIds: toggled(filters.tagIds, tag.id) };
+                    // A chip a refresh has emptied is disabled once it's off, which would drop
+                    // focus to the page.
+                    if (on && count === 0) pickThenFocusRow(next);
+                    else setPicked(next);
+                  }}
                   className={PILL_HIT}
                 >
                   <span className={pillFace(on)}>

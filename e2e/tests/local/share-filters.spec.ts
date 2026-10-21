@@ -256,3 +256,90 @@ test('a list with no tags and no prices has no row', async ({ page, browser, bas
   await expect(row(gifter)).toHaveCount(0);
   await expect(gifter.getByRole('button', { name: /price/i })).toHaveCount(0);
 });
+
+test('Clear filters from the keyboard leaves focus on the row, not the page (fix round 1)', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  // No prices, so no pill: the row starts with Books, which Kitchen's filter disables.
+  const { gifter } = await setUp(page, browser, baseURL ?? '', 'filters-clear-focus', [
+    tagged('Atlas', '', 'Books'),
+    tagged('Field guide', '', 'Books'),
+    tagged('Poetry', '', 'Books'),
+    tagged('Whisk', '', 'Kitchen'),
+    tagged('Ladle', '', 'Kitchen'),
+  ]);
+  await expect(row(gifter)).toBeVisible();
+  await gifter.getByRole('heading', { level: 1 }).focus();
+  await gifter.keyboard.press('Tab');
+  await expect(chip(gifter, 'Books')).toBeFocused();
+  await gifter.keyboard.press('Tab');
+  await expect(chip(gifter, 'Kitchen')).toBeFocused();
+  await gifter.keyboard.press('Space');
+  await expect(row(gifter).getByRole('button', { name: 'Books, 0 items' })).toBeDisabled();
+  await gifter.keyboard.press('Tab');
+  await expect(gifter.getByRole('button', { name: 'Clear filters' })).toBeFocused();
+  await gifter.keyboard.press('Enter');
+  await expect(shownTitles(gifter)).toHaveCount(5);
+  await expect(chip(gifter, 'Books')).toBeFocused();
+});
+
+test('the price menu closes on a click outside without taking focus, and on the pill with it (Ruling 4)', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const { gifter } = await setUp(page, browser, baseURL ?? '', 'filters-menu-close', ADAS_LIST);
+  const menu = gifter.getByRole('group', { name: 'Price' });
+  await pricePill(gifter).click();
+  await expect(menu).toBeVisible();
+  await chip(gifter, 'Books').click();
+  await expect(menu).toBeHidden();
+  await expect(chip(gifter, 'Books')).toBeFocused();
+  await expect(chip(gifter, 'Books')).toHaveAttribute('aria-pressed', 'true');
+
+  await pricePill(gifter).click();
+  await expect(menu).toBeVisible();
+  await pricePill(gifter).click();
+  await expect(menu).toBeHidden();
+  await expect(pricePill(gifter)).toBeFocused();
+});
+
+test('unticking a band a refresh has emptied keeps focus in the menu (fix round 1)', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const base = baseURL ?? '';
+  const { gifter } = await setUp(page, browser, base, 'filters-empty-band', ADAS_LIST);
+  const menu = gifter.getByRole('group', { name: 'Price' });
+  await pricePill(gifter).click();
+  await menu.getByRole('checkbox', { name: '$100+, 1 item' }).check();
+  await expect(gifter.getByText('1 of 7 items')).toBeVisible();
+
+  // The knife, the only item over $100, goes; a refresh brings the list without it.
+  const items = (await (await page.request.get('/api/wishlist')).json()) as {
+    items: { id: string; title: string }[];
+  };
+  const knife = items.items.find((item) => item.title === 'Chef’s knife');
+  const removed = await page.request.delete(`/api/wishlist/items/${knife?.id ?? ''}`, {
+    headers: { origin: base },
+    // The CSRF guard wants a JSON body on every state-changing request.
+    data: {},
+  });
+  expect(removed.status()).toBe(204);
+  await gifter.evaluate(() => {
+    const w = globalThis as unknown as { next?: { router?: { refresh(): void } } };
+    w.next?.router?.refresh();
+  });
+  await expect(gifter.locator('li').filter({ hasText: 'Chef’s knife' })).toHaveCount(0);
+  await expect(gifter.getByText('Nothing on the list matches these filters.')).toBeVisible();
+
+  const empty = menu.getByRole('checkbox', { name: '$100+, 0 items' });
+  await empty.focus();
+  await gifter.keyboard.press('Space');
+  await expect(empty).not.toBeChecked();
+  await expect(empty).toBeDisabled();
+  await expect(menu.getByRole('button', { name: /^Any price,/ })).toBeFocused();
+});

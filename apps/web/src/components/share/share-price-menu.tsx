@@ -136,6 +136,7 @@ export function PricePanel({
   onAny: () => void;
 }) {
   const titleId = useId();
+  const anyRef = useRef<HTMLButtonElement | null>(null);
   return (
     <div
       ref={ref}
@@ -149,6 +150,7 @@ export function PricePanel({
         Price
       </p>
       <button
+        ref={anyRef}
         type="button"
         aria-pressed={bands.length === 0}
         aria-label={tagChipLabel('Any price', anyCount)}
@@ -176,7 +178,12 @@ export function PricePanel({
                   checked={on}
                   disabled={count === 0 && !on}
                   aria-label={tagChipLabel(label, count)}
-                  onChange={() => onToggle(id)}
+                  onChange={() => {
+                    // A band a refresh has emptied is disabled once it's off, which would drop
+                    // focus to the page; "Any price" is always enabled.
+                    if (on && count === 0) anyRef.current?.focus();
+                    onToggle(id);
+                  }}
                   className="size-5 shrink-0 accent-foreground"
                 />
                 <span className="flex-1">{label}</span>
