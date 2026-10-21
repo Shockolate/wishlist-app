@@ -40,9 +40,10 @@ export default function PrivacyPage() {
 
       <h2>Cookies and storage</h2>
       <p>
-        One cookie, which keeps you logged in. Claim links stay in your browser’s own storage.
-        Cloudflare’s sign-up check keeps a small value in its own part of your browser’s storage.
-        Nothing else, which is why there’s no cookie banner.
+        One cookie, which keeps you logged in. Claim links, and the name you last claimed with, stay
+        in your browser’s own storage. Cloudflare’s check on sign-ups and email-link requests keeps
+        a small value in its own part of your browser’s storage. Nothing else, which is why there’s
+        no cookie banner.
       </p>
 
       <h2>Who else handles your information</h2>
@@ -58,8 +59,9 @@ export default function PrivacyPage() {
           record for 30 days.
         </li>
         <li>
-          Cloudflare checks that sign-ups come from a person, which means it sees your IP address
-          and browser details. It also stores Hanker’s encrypted backups.
+          Cloudflare checks that sign-ups and email-link requests (password resets and new
+          confirmation links) come from a person, which means it sees your IP address and browser
+          details. It also stores Hanker’s encrypted backups.
         </li>
         <li>
           GitHub runs the nightly backup, which is encrypted before it leaves GitHub’s machine.
@@ -90,8 +92,8 @@ export default function PrivacyPage() {
         <li>Encrypted backups keep a copy for up to 30 days, and then it’s gone.</li>
         <li>Accounts whose email is never confirmed are deleted after 7 days.</li>
         <li>
-          To slow down abuse, Hanker counts requests using a scrambled fragment of your IP address
-          or email, and clears each count when its time window ends.
+          To slow down abuse, Hanker counts requests using a scrambled copy of your IP address or
+          email, and deletes those counts within two days.
         </li>
       </ul>
 
