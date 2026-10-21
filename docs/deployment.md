@@ -111,9 +111,9 @@ The free plan allows three verified domains; this uses the second. These replies
 
 **Check:** reply, from Gmail, to the test message from Step A's check. In the outside account, the reply is from `Hanker <hello@hanker.dev>`. Its **Show original** (or the equivalent) shows `DKIM: PASS` for `hanker.dev` and `DMARC: PASS`, and your personal address appears nowhere in the headers.
 
-### C. Sentry: don't store IP addresses
+### C. Sentry: confirm IP addresses aren't stored
 
-Sentry → **Settings** → the organization → **Security & Privacy** → turn on **Prevent Storing of IP Addresses**. This covers both projects. **Check:** send a test event as [Sentry → Check it works](#check-it-works) describes; the event's **User** section shows no IP address.
+The privacy page says Sentry's error reports have IP addresses removed. [Sentry → One-off setup](#one-off-setup-1) step 2 turned this on; confirm it's still on before the `/privacy` page merges. In each of `hanker-api` and `hanker-web`: Settings → **Security & Privacy** → **Prevent Storing of IP Addresses** is on. **Check:** send a test event as [Sentry → Check it works](#check-it-works) describes; the event's **User** section shows no IP address.
 
 ## Environment variables
 
