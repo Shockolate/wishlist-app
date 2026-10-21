@@ -8,13 +8,12 @@ export const MAX_TAGS_PER_ITEM = 10;
 export const MAX_TAGS_PER_LIST = 50;
 
 /**
- * A tag name as stored (design §3): every run of whitespace becomes one space, the ends are
- * trimmed, one leading `#` is dropped (so "#books" and "books" are one tag, while "C#" and "##x"
- * keep theirs), and the ends are trimmed again.
+ * A tag name as stored (design §3): every run of whitespace becomes one space, and the ends are
+ * trimmed. Everything else is kept as typed, a leading `#` included (Ted, 2026-10-21), so "#books"
+ * and "books" are two tags. Cleaning a cleaned name changes nothing.
  */
 export function cleanTagName(raw: string): string {
-  const spaced = raw.replace(/\s+/gu, ' ').trim();
-  return (spaced.startsWith('#') ? spaced.slice(1) : spaced).trim();
+  return raw.replace(/\s+/gu, ' ').trim();
 }
 
 /**
@@ -27,8 +26,8 @@ export function tagKey(raw: string): string {
 
 /**
  * A tag name (design §3, D35, D41): cleaned, then 1 to 30 UTF-16 units of visible characters. The
- * clean-up runs first and the checks run on its result, so a name that is empty once cleaned (`#`,
- * or spaces) gets the one `min(1)` issue and not a second one from `visibleOnly`.
+ * clean-up runs first and the checks run on its result, so a name that is empty once cleaned (only
+ * spaces) gets the one `min(1)` issue and not a second one from `visibleOnly`.
  */
 export const TagNameSchema = z
   .string()

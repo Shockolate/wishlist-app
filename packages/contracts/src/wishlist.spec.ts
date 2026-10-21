@@ -114,7 +114,7 @@ describe('item tags on the item schemas (Plan 7a rulings 1 and 4)', () => {
   it('takes tags on a create, and leaves them out when absent', () => {
     expect(CreateItemRequestSchema.parse({ title: 'Kettle' })).not.toHaveProperty('tags');
     expect(
-      CreateItemRequestSchema.parse({ title: 'Kettle', tags: [{ name: ' #Home ' }] }).tags,
+      CreateItemRequestSchema.parse({ title: 'Kettle', tags: [{ name: '  Home ' }] }).tags,
     ).toEqual([{ name: 'Home' }]);
   });
 

@@ -23,10 +23,10 @@ describe('limits (design §3)', () => {
 
 describe('cleanTagName (design §3, Plan 7a Review Focus 2)', () => {
   it.each([
-    ['  #Kitchen  ', 'Kitchen'],
+    ['  #Kitchen  ', '#Kitchen'],
     ['Kitchen\t \ngadgets', 'Kitchen gadgets'],
-    ['# books', 'books'],
-    ['##x', '#x'],
+    ['# books', '# books'],
+    ['##x', '##x'],
     ['C#', 'C#'],
   ])('turns %j into %j', (input, cleaned) => {
     expect(cleanTagName(input)).toBe(cleaned);
@@ -35,26 +35,38 @@ describe('cleanTagName (design §3, Plan 7a Review Focus 2)', () => {
 
 describe('tagKey', () => {
   it('is the cleaned name in lower case, so respellings share a key', () => {
-    expect(tagKey('  #KITCHEN ')).toBe('kitchen');
-    expect(tagKey('  #KITCHEN ')).toBe(tagKey('kitchen'));
+    expect(tagKey('  KITCHEN ')).toBe('kitchen');
     expect(tagKey('Kitchen\tgadgets')).toBe(tagKey('kitchen  GADGETS'));
+  });
+
+  it('keeps a leading # in the key, so "#books" and "books" are two tags', () => {
+    expect(tagKey(' #Books')).toBe('#books');
+    expect(tagKey('#books')).not.toBe(tagKey('books'));
+  });
+
+  it('gives a cleaned name the same key again', () => {
+    expect(tagKey(cleanTagName('  ##Kitchen  '))).toBe(tagKey('  ##Kitchen  '));
   });
 });
 
 describe('TagNameSchema (design §3)', () => {
   it('cleans before it validates', () => {
-    expect(TagNameSchema.parse(' #Kitchen gadgets ')).toBe('Kitchen gadgets');
+    expect(TagNameSchema.parse(' #Kitchen  gadgets ')).toBe('#Kitchen gadgets');
   });
 
-  it.each(['🎄 Christmas', '\u{1F469}\u200D\u{1F373}', 'می\u200Cخواهم', 'a'.repeat(30)])(
-    'keeps %j',
-    (input) => {
-      expect(TagNameSchema.parse(input)).toBe(input);
-    },
-  );
+  it.each([
+    '#',
+    '#books',
+    '🎄 Christmas',
+    '\u{1F469}\u200D\u{1F373}',
+    'می\u200Cخواهم',
+    'a'.repeat(30),
+  ])('keeps %j', (input) => {
+    expect(TagNameSchema.parse(input)).toBe(input);
+  });
 
   it.each([
-    ['#', 'empty once cleaned'],
+    ['', 'empty'],
     ['   ', 'only whitespace'],
     ['a'.repeat(31), 'too long'],
     ['a\u202Eb', 'a bidirectional override'],
@@ -81,14 +93,14 @@ describe('TagSchema and the tag requests', () => {
   it.each([CreateTagRequestSchema, RenameTagRequestSchema])(
     'clean a name in a request',
     (schema) => {
-      expect(schema.parse({ name: ' #Books ' })).toEqual({ name: 'Books' });
+      expect(schema.parse({ name: ' #Books ' })).toEqual({ name: '#Books' });
     },
   );
 });
 
 describe('ItemTagsSchema (design §3)', () => {
   it('accepts a tag by id and a tag by name', () => {
-    expect(ItemTagsSchema.parse([{ id: ID }, { name: ' #Books ' }])).toEqual([
+    expect(ItemTagsSchema.parse([{ id: ID }, { name: ' Books ' }])).toEqual([
       { id: ID },
       { name: 'Books' },
     ]);
