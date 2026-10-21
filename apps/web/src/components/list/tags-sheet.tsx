@@ -10,7 +10,7 @@ import { useListStatus } from './list-status';
 import { AllTagsPane } from './tags-sheet-list';
 import { TagPane } from './tags-sheet-tag';
 
-type View = { kind: 'all'; from?: string } | { kind: 'tag'; id: string };
+type View = { kind: 'all' } | { kind: 'tag'; id: string };
 
 /**
  * The owner's Tags sheet (Plan 7b ruling 1, design §4, Ted's mockups 2a–2c), opened by the Tags
@@ -55,19 +55,25 @@ function Panes({ items, tags }: { items: readonly Item[]; tags: readonly Tag[] }
   const [view, setView] = useState<View>({ kind: 'all' });
   const title = useRef<HTMLHeadingElement>(null);
   const rows = useRef(new Map<string, HTMLButtonElement>());
+  // The tag whose pane Back just left, so its row takes focus on all tags.
+  const backFrom = useRef<string | null>(null);
   const counts = new Map<string, number>();
   for (const item of items) {
     for (const id of item.tagIds ?? []) counts.set(id, (counts.get(id) ?? 0) + 1);
   }
-  // A tag deleted meanwhile (a refetch, another device) leaves its pane for all tags.
+  // A tag deleted meanwhile (a refetch, another device) leaves its pane for all tags. A tag just
+  // made may not be in `tags` yet: TanStack hands the cache change to React a timer after
+  // createTag resolves, so all tags stays shown until it is.
   const tag = view.kind === 'tag' ? tags.find((each) => each.id === view.id) : undefined;
   const pane = tag ? `tag:${tag.id}` : 'all';
 
-  // Whichever pane shows puts focus on its title; back on all tags, on the tag just left.
+  // Focus moves when the pane shown changes, not when `view` does, so it moves once, to the pane
+  // that's there: its title, or back on all tags, the row of the tag just left.
   useEffect(() => {
-    const from = view.kind === 'all' && view.from ? rows.current.get(view.from) : undefined;
+    const from = backFrom.current === null ? undefined : rows.current.get(backFrom.current);
+    backFrom.current = null;
     (from ?? title.current)?.focus();
-  }, [pane, view]);
+  }, [pane]);
 
   const close = (
     <SheetClose asChild>
@@ -91,7 +97,10 @@ function Panes({ items, tags }: { items: readonly Item[]; tags: readonly Tag[] }
           count={counts.get(tag.id) ?? 0}
           title={title}
           close={close}
-          onBack={() => setView({ kind: 'all', from: tag.id })}
+          onBack={() => {
+            backFrom.current = tag.id;
+            setView({ kind: 'all' });
+          }}
           onDeleted={() => setView({ kind: 'all' })}
         />
       ) : (

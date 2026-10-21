@@ -1,7 +1,7 @@
 'use client';
 
 import type { Item, Tag } from '@wishlist/contracts';
-import { useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { flushSync } from 'react-dom';
 import {
   AlertDialog,
@@ -76,6 +76,27 @@ export function TagPane({
     announce(on ? `Tagged “${item.title}”.` : `Untagged “${item.title}”.`);
   };
 
+  // A rename's answer reaches the cache, and so `tag.name`, a timer after mutateAsync resolves
+  // (TanStack notifies on a setTimeout). The field waits for it, so the title that takes focus
+  // already reads the new name. It waits for any change of name, not one in particular, so a
+  // refetch that lands first can't leave it waiting.
+  const shownName = useRef(tag.name);
+  const nameChange = useRef<{ from: string; done: () => void } | null>(null);
+  useEffect(() => {
+    shownName.current = tag.name;
+    const waiting = nameChange.current;
+    if (waiting && waiting.from !== tag.name) {
+      nameChange.current = null;
+      waiting.done();
+    }
+  }, [tag.name]);
+  const untilShown = (name: string) =>
+    shownName.current === name
+      ? Promise.resolve()
+      : new Promise<void>((done) => {
+          nameChange.current = { from: shownName.current, done };
+        });
+
   // The title or Rename replaces the field; render it now so it can take focus.
   const stopRenaming = (focus: () => HTMLElement | null) => {
     flushSync(() => setRenaming(false));
@@ -88,7 +109,8 @@ export function TagPane({
       return undefined;
     }
     try {
-      await rename.mutateAsync({ id: tag.id, name });
+      const renamed = await rename.mutateAsync({ id: tag.id, name });
+      await untilShown(renamed.name);
       stopRenaming(() => title.current);
       return undefined;
     } catch (error) {

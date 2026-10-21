@@ -41,6 +41,34 @@ const tagRow = (page: Page, name?: string) =>
     name: name === undefined ? /, \d+ items?$/ : new RegExp(`^${name}, \\d+ items?$`),
   });
 
+/**
+ * Starts recording each heading that takes focus, with its text at that moment, and returns a
+ * function that hands over (and clears) what was recorded. A heading focused before its new name
+ * renders would show up here with the old one, which `toBeFocused` can't see.
+ */
+async function recordHeadingFocus(page: Page): Promise<() => Promise<string[]>> {
+  // e2e has no DOM lib, so the page's globals are typed by hand.
+  await page.evaluate(() => {
+    const scope = globalThis as unknown as {
+      headingFocus: string[];
+      document: {
+        addEventListener: (
+          type: 'focusin',
+          listener: (event: { target: { tagName: string; textContent: string } }) => void,
+        ) => void;
+      };
+    };
+    scope.headingFocus = [];
+    scope.document.addEventListener('focusin', ({ target }) => {
+      if (/^H[1-6]$/.test(target.tagName)) scope.headingFocus.push(target.textContent);
+    });
+  });
+  return () =>
+    page.evaluate(() =>
+      (globalThis as unknown as { headingFocus: string[] }).headingFocus.splice(0),
+    );
+}
+
 /** How many items carry each tag, as the API has it: what's saved, not what the page shows. */
 async function savedTagCounts(request: APIRequestContext): Promise<Record<string, number>> {
   const list = (await (await request.get('/api/wishlist')).json()) as WishlistResponse;
@@ -292,6 +320,7 @@ test('tags many items from the Tags sheet, then renames and deletes the tag (rul
   // An empty tag stays in the owner's sheet (design §2).
   await createTagViaApi(page.request, base, 'Garden');
   await page.goto('/list');
+  const focusedHeadings = await recordHeadingFocus(page);
   await tagsButton(page).click();
   const sheet = tagsSheet(page);
   await expect(sheet.getByRole('heading', { name: 'Tags' })).toBeFocused();
@@ -309,8 +338,11 @@ test('tags many items from the Tags sheet, then renames and deletes the tag (rul
   // Batch tagging.
   await sheet.getByRole('button', { name: 'New tag' }).click();
   await sheet.getByLabel('Tag name').fill('Kitchen');
+  await focusedHeadings();
   await sheet.getByRole('button', { name: 'Add tag' }).click();
   await expect(sheet.getByRole('heading', { name: 'Kitchen' })).toBeFocused();
+  // Focus moves once, straight to the new tag: not by way of the "Tags" heading.
+  expect(await focusedHeadings()).toEqual(['Kitchen']);
   await expect(sheet.getByText('0 items')).toBeVisible();
   // Every item, in list order.
   await expect(sheet.getByRole('checkbox')).toHaveCount(4);
@@ -335,6 +367,16 @@ test('tags many items from the Tags sheet, then renames and deletes the tag (rul
   await expect(tagRow(page, 'Kitchen')).toBeFocused();
   await expect(tagRow(page, 'Kitchen')).toHaveAccessibleName('Kitchen, 3 items');
   await expect.poll(() => savedTagCounts(page.request)).toEqual({ Garden: 0, Kitchen: 3 });
+
+  // A new tag with a name the list has opens that tag (the API answers 200 with it).
+  await sheet.getByRole('button', { name: 'New tag' }).click();
+  await sheet.getByLabel('Tag name').fill('kitchen');
+  await sheet.getByRole('button', { name: 'Add tag' }).click();
+  await expect(sheet.getByRole('heading', { name: 'Kitchen' })).toBeFocused();
+  await expect(sheet.getByText('3 items')).toBeVisible();
+  await sheet.getByRole('button', { name: 'All tags' }).click();
+  await expect(tagRow(page)).toHaveText([/Garden\s*0 items/, /Kitchen\s*3 items/]);
+  expect(await savedTagCounts(page.request)).toEqual({ Garden: 0, Kitchen: 3 });
   let share = await shareChips(page, browser, base);
   // Gifters never see the empty tag.
   await expect(share.chips).toHaveText([/Kitchen/]);
@@ -347,14 +389,19 @@ test('tags many items from the Tags sheet, then renames and deletes the tag (rul
   await expect(sheet.getByLabel('Tag name')).toBeFocused();
   await expect(sheet.getByLabel('Tag name')).toHaveValue('Kitchen');
   await sheet.getByLabel('Tag name').fill('Cooking');
+  await focusedHeadings();
   await sheet.getByRole('button', { name: 'Save' }).click();
   await expect(sheet.getByRole('heading', { name: 'Cooking' })).toBeFocused();
+  // The title takes focus once it reads the new name, so that's the name a screen reader hears.
+  expect(await focusedHeadings()).toEqual(['Cooking']);
   share = await shareChips(page, browser, base);
   await expect(share.chips).toHaveText([/Cooking/]);
   await share.context.close();
 
   // A rename onto another tag's name is refused on the field, and the old name stays.
   await sheet.getByRole('button', { name: 'All tags' }).click();
+  // Alphabetical, not the order the tags were made in: Cooking was made after Garden.
+  await expect(tagRow(page)).toHaveText([/Cooking\s*3 items/, /Garden\s*0 items/]);
   await tagRow(page, 'Garden').click();
   await sheet.getByRole('button', { name: 'Rename' }).click();
   await sheet.getByLabel('Tag name').fill('cooking');

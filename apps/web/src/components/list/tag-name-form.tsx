@@ -121,7 +121,11 @@ export function TagNameForm({
           Not disabled while it waits: a disabled button drops focus, and the editor's status line
           would then take it for an error, outside the sheet. inFlight stops a second request.
         */}
-        <Button type="submit" aria-disabled={pending || undefined}>
+        <Button
+          type="submit"
+          aria-disabled={pending || undefined}
+          className="aria-disabled:opacity-60"
+        >
           {pending ? pendingLabel : submitLabel}
         </Button>
       </div>
