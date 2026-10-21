@@ -2,6 +2,7 @@
 
 [![Deploy](https://github.com/Shockolate/wishlist-app/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/Shockolate/wishlist-app/actions/workflows/deploy.yml)
 [![License: MIT](https://img.shields.io/github/license/Shockolate/wishlist-app)](LICENSE)
+[![Better Stack Badge](https://incidents.betterstack.com/status-badges/v1/monitor/31a6h.svg)](https://incidents.betterstack.com/?utm_source=status_badge)
 
 A wishlist app for family and friends, running at **https://hanker.dev**. You keep one list of things you'd love, then share a secret link. Anyone with the link can claim an item, so nobody buys the same gift twice, and you never see who is getting what.
 
