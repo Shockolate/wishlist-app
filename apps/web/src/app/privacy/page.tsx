@@ -20,8 +20,8 @@ export default function PrivacyPage() {
       <h2>If you make a list</h2>
       <p>
         Hanker keeps your email address, your display name, your password as a one-way hash (never
-        the password itself), and your list: its title, items, links, prices, photo addresses and
-        notes. When you paste a shop link, Hanker’s server visits that page to fill in the title,
+        the password itself), and your list: its title, items, links, prices, photo addresses, notes
+        and tags. When you paste a shop link, Hanker’s server visits that page to fill in the title,
         price and photo, so the shop sees a visit from Hanker, not from you.
       </p>
 

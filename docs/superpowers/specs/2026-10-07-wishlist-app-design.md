@@ -5,7 +5,7 @@
 - **Author:** Ted Armstrong (with Claude)
 - **Repo:** `github.com/Shockolate/wishlist-app` (public; not yet created)
 - **Product name:** **Hanker**, at `hanker.dev` (decided 2026-10-09, D26). Internal identifiers keep the domain noun `wishlist`.
-- **Amended by:** [item tags and share-page filters](2026-10-21-item-tags-and-filters-design.md) (2026-10-21; D58 on). Plan 7a amends §2, §4 and §5 for the tags API.
+- **Amended by:** [item tags and share-page filters](2026-10-21-item-tags-and-filters-design.md) (2026-10-21; D58 on). Plan 7a amends §2, §4 and §5 for the tags API, and Plan 7b §7 for the web.
 
 ## 1. Intent
 
@@ -525,9 +525,9 @@ These are the initial values. They're configurable, and every limited endpoint r
 | `/` | Server | Landing page. Redirects to `/list` when signed in |
 | `/privacy`, `/terms` | Server, static | Plain-language legal pages (Plan 6, D54). Indexable |
 | `/signup`, `/login`, `/verify-email`, `/reset-password`, `/reset-password/confirm` | Client forms | Call `/api/auth/*` directly, so the `Set-Cookie` lands from the API response |
-| `/list` | Server-rendered first load + client editor (TanStack Query) | Reorder and delete show at once; a failed change refetches the list (D37) |
+| `/list` | Server-rendered first load + client editor (TanStack Query) | Reorder, delete and tag ticks show at once; a failed change refetches the list (D37) |
 | `/settings` | Client | Display name; list name; share link (copy, and rotate after a confirmation); change password; delete account (confirmation dialog). The spoiler toggle, with its confirmation, arrives in Plan 4b (D33, D39) |
-| `/s/[shareToken]` | Server Component | Readable before JavaScript loads. Claim controls hydrate afterwards |
+| `/s/[shareToken]` | Server Component | Readable before JavaScript loads. Claim controls and the filter row hydrate afterwards |
 | `/c/[manageToken]` | Server Component + client form | Manage one claim |
 
 **How the web app calls the API:**
@@ -579,6 +579,37 @@ The editor is layout A from the Plan 3b mockups: compact rows, edited in place (
 - **Sharing from `/list`:** Copy share link, and Share where the Web Share API exists. Both appear once the list has an item.
 - **Server state:** the server render seeds the TanStack Query cache. Every list change runs in one mutation queue, in order, and none is retried. Reorder and delete update the cache at once; adding and saving wait for the API. Any failed change refetches the list, which is the rollback, since restoring a snapshot would also undo the changes queued after it.
 - **Photos** render as `<img alt="">` with `referrerPolicy="no-referrer"`, and fall back to a placeholder if they don't load.
+
+### Share filters and tags (Plan 7b)
+
+These follow the tags design ([§3, §4](2026-10-21-item-tags-and-filters-design.md)) and the Plan 7b mockups. The share page and the editor were the only screens touched; cards and editor rows show no tags.
+
+- **The filter row** is one client island, `ShareFilterList`, wrapping both the gifter's and the owner's view of `/s`, so it sits outside `ShareClaimsProvider` and its filters survive the `router.refresh()` after a claim (D62).
+  - The row renders only after hydration, so the page stays readable without JavaScript. It scrolls sideways inside itself, and the page never does.
+  - It is a `role="group"` labelled "Filter the list": the price pill first, then one chip per tag that at least one item carries, ordered by item count (descending), ties by name.
+  - Chips are `aria-pressed` toggles named like "Kitchen gadgets, 4 items". Active pills are espresso (`--foreground`) with sand text; terracotta never marks a filter.
+  - Tags combine with AND and price bands with OR. Each chip shows how many items would be shown with it on, given the other selections, so counts move as you filter. A chip that would show nothing is dimmed and disabled, not removed.
+  - Below the row, "N of M items" (a polite live region) and **Clear filters** appear once anything is on. If nothing matches, the list area says so, with a Clear filters button.
+  - **Filtered-out cards get `hidden` and stay mounted,** so a card's own state, such as an open claim strip, survives filtering. Claimed items still show and still count.
+  - A refresh that takes a tag, or the list's currency, away drops the filter on it: with no chip left to undo it, it would hide cards for good.
+- **The price filter** reads the number out of `priceText` in the browser, with `parsePrice` from `packages/contracts` (D61). A price is readable when it is a currency prefix, one number and nothing else (`$24.99`, `CA$20.00`, `¥1,200`; not `about £30`, `$20–30`, `30`). The list's currency is the prefix with the most readable prices, and the pill appears only for `$`, `US$`, `CA$`, `A$`, `NZ$`, `£` and `€`, since fixed bands mislead on a yen or rupee list. The bands are Under 25, 25–50, 50–100 and 100+, each including its lower bound.
+  - While a band is on, an item without a readable price in the list's currency is hidden.
+  - The pill reads "Any price" until a band is chosen, then the joined label: neighbouring bands merge ("$25–100", "Under $50"), the rest are joined with " · ".
+  - The pill opens a hand-rolled disclosure, since no popover is installed: an "Any price" button and four native checkboxes, each with its count. Each band's count is that band on its own with the selected tags, not the union with the bands already on, so ticking it shows what ticking it would add.
+  - It stays open while bands are ticked. Escape and the pill close it and return focus to the pill. An outside click or Tab closes it and leaves focus where it went.
+  - Sentences built from these numbers live in `lib/share-copy.ts`, the logic in `lib/share-filters.ts`.
+- **The tag field** is the item form's **Tags** field, after Note, shared by the add and edit forms: removable chips and a combobox with a listbox of suggestions.
+  - Suggestions are every tag on the owner's own list, empty ones included and nobody else's, with prefix matches before contains matches, up to 6.
+  - Enter or a comma adds the highlighted suggestion or the typed text. Pasted or phone-typed commas split the text into several tags. Keys an input method is composing are ignored.
+  - Text typed but not yet added is added on save, and invalid text blocks the save. An 11th tag is refused in the field and never sent.
+  - Tags are tracked by id, and a name that matches an existing tag's key becomes that tag. A chip whose tag was deleted meanwhile disappears from the field and from the body.
+  - The edit form sends `tags` only when the field changed, so saving without touching it never undoes a tick made in the Tags sheet. The add form sends `tags` only when it isn't empty.
+- **The Tags sheet** is a bottom sheet on the claim sheet's primitive, opened by a **Tags** button beside the share actions, shown once the list has an item (D63).
+  - Pane one lists every tag, alphabetical, empty tags included, with its item count, and **New tag**. Pane two is one tag: its name, **Rename** and **Delete** (after a confirmation that gives the count), and every item with a checkbox. Entering a name the list already has opens that tag.
+  - Ticks and unticks save at once and are optimistic; create and rename wait for the API. Because each tick saves, the browser's Back leaving `/list` loses nothing.
+  - The sheet is modal, so it has its own status line inside it for the editor's messages.
+- **Editor state.** Every tag change is a mutation in `lib/list-mutations.ts`, in the one scope, so changes reach the API in order. A failed change marks the list stale and it is refetched when the queue drains. So does an item write that succeeds while other changes are queued, since its answer would otherwise undo a queued tick. `hideCachedClaims()` leaves tags alone: they aren't claim data.
+- **Copy.** `TAG_NAME_TAKEN`, `TAG_LIMIT_REACHED` and `ITEM_TAG_LIMIT_REACHED` are in `lib/messages.ts`; the delete confirmation and item counts are in `lib/tag-copy.ts`.
 
 ### Reordering
 
@@ -838,3 +869,6 @@ As of 2026-10-07 on the development machine:
 | D58 | Tags are rows in `tags` and `item_tags`, referenced by id ([design](2026-10-21-item-tags-and-filters-design.md), Ted, 2026-10-21) | A `text[]` on `items` |
 | D59 | Tag names are shown as typed, a leading `#` included, matched case-insensitively after whitespace is collapsed, and limited to 30 characters, 10 per item and 50 per list (Ted, 2026-10-21) | Hashtag-style slugs; dropping a leading `#` so "#books" joins "books" (the first design, changed before merge) |
 | D60 | Item saves send existing tags by id and new ones by name, and a stale id is dropped (Ted, 2026-10-21) | Names only, which recreates deleted tags |
+| D61 | The share page's price filter reads the number out of `priceText` in the browser, for dollar-scale currencies only (`$`, `US$`, `CA$`, `A$`, `NZ$`, `£`, `€`) (Ted, 2026-10-21) | A stored numeric price (the display string is unchanged, so the "prices are display strings" non-goal holds); bands for every currency, which would put nearly all of a yen list in "100+" |
+| D62 | The filter row has charcoal active pills, tags that combine with AND, price bands with OR, and live counts (Ted, 2026-10-21) | Terracotta active pills, which would read as an action |
+| D63 | The Tags view is a tag-first bottom sheet: pick a tag, then tick its items (Ted, 2026-10-21) | Per-item batch selection, picking items first and then their tags |
