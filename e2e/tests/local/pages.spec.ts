@@ -10,6 +10,8 @@ for (const path of [
   '/reset-password',
   '/reset-password/confirm',
   '/no-such-page',
+  '/privacy',
+  '/terms',
 ]) {
   test(`${path}: no detectable WCAG 2.2 AA violations, and it fits a phone`, async ({ page }) => {
     await page.setViewportSize(DESKTOP);
