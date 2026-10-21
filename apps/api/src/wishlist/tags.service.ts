@@ -63,8 +63,8 @@ export class TagsService {
   }
 
   /**
-   * Renames the tag. Only a different tag with the same key is a conflict, so changing just the
-   * case of its own name is allowed and updates `name_key` too.
+   * Renames the tag, which updates the name shown. Only a different tag with the same key is a
+   * conflict, so changing just the case of its own name is allowed; its `name_key` stays the same.
    */
   async rename(ownerId: string, tagId: string, name: string): Promise<Tag> {
     if (!IdSchema.safeParse(tagId).success) throw tagNotFound();

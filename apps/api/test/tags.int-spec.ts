@@ -129,7 +129,7 @@ describe('PATCH /wishlist/tags/:id', () => {
     expect(list.tags).toEqual([{ id, name: 'Cooking' }]);
   });
 
-  it('allows a case-only rename of the tag itself, and updates its key', async () => {
+  it('allows a case-only rename of the tag itself, and keeps its key', async () => {
     const cookie = await owner();
     const id = await seedTag(db, ADA.email, 'kitchen');
     const res = await renameTag(cookie, id, { name: 'Kitchen' });
