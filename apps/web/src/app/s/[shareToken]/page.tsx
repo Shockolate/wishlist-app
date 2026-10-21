@@ -2,15 +2,16 @@ import type { Metadata } from 'next';
 import { SharePage } from '@/components/share/share-page';
 import { SiteHeader } from '@/components/site-header';
 import { loadSharedList } from '@/lib/shared-list.server';
+import { shareMetadata } from '@/lib/site-metadata';
 
 interface Props {
   params: Promise<{ shareToken: string }>;
 }
 
-/** The list's own title, never the token (Global Constraints). */
+/** The list's own title and one fixed line, never the token (Global Constraints). */
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const list = await loadSharedList((await params).shareToken);
-  return { title: list.title };
+  return shareMetadata(list.title);
 }
 
 /** `/s/[shareToken]` (spec §7): the page a share link opens. */
