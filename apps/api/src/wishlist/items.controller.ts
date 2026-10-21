@@ -16,7 +16,7 @@ import {
   ReorderItemsRequestSchema,
   UpdateItemRequestSchema,
   type CreateItemRequest,
-  type Item,
+  type ItemWriteResponse,
   type ReorderItemsRequest,
   type UpdateItemRequest,
 } from '@wishlist/contracts';
@@ -39,7 +39,7 @@ export class ItemsController {
   create(
     @CurrentAuth() auth: AuthContext,
     @Body(new ZodValidationPipe(CreateItemRequestSchema)) body: CreateItemRequest,
-  ): Promise<Item> {
+  ): Promise<ItemWriteResponse> {
     return this.items.create(auth.user.id, body);
   }
 
@@ -49,7 +49,7 @@ export class ItemsController {
     @CurrentAuth() auth: AuthContext,
     @Param('id') id: string,
     @Body(new ZodValidationPipe(UpdateItemRequestSchema)) body: UpdateItemRequest,
-  ): Promise<Item> {
+  ): Promise<ItemWriteResponse> {
     return this.items.update(auth.user.id, id, body);
   }
 

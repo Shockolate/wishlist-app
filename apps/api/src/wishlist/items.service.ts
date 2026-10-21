@@ -3,16 +3,18 @@ import {
   MAX_ITEMS,
   type CreateItemRequest,
   type Item,
+  type ItemWriteResponse,
   type UpdateItemRequest,
 } from '@wishlist/contracts';
 import { and, count, eq, max, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { CLOCK, type Clock } from '../core/clock.js';
 import { newId } from '../core/ids.js';
-import { DB, type Database } from '../db/database.module.js';
+import { DB, type Database, type Transaction } from '../db/database.module.js';
 import { items } from '../db/schema.js';
 import { ITEM_COLUMNS } from './item-columns.js';
 import { lockOwnWishlist } from './own-wishlist.js';
+import { itemTags, resolveTagRefs, setItemTags } from './tag-queries.js';
 import { itemNotFound, listFull, orderConflict } from './wishlist-errors.js';
 
 const ItemIdSchema = z.uuid();
@@ -25,8 +27,11 @@ export class ItemsService {
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
-  /** Appends the item to the end of the list (spec §2). The 201st is 422 LIST_FULL. */
-  async create(ownerId: string, input: CreateItemRequest): Promise<Item> {
+  /**
+   * Appends the item to the end of the list (spec §2). The 201st is 422 LIST_FULL. Its tags are
+   * saved in the same transaction (design §6), so a refused tag leaves no item behind.
+   */
+  async create(ownerId: string, input: CreateItemRequest): Promise<ItemWriteResponse> {
     return this.db.transaction(async (tx) => {
       const wishlistId = await lockOwnWishlist(tx, ownerId);
       const [list] = await tx
@@ -52,22 +57,36 @@ export class ItemsService {
         })
         .returning(ITEM_COLUMNS);
       if (!item) throw new Error('item insert returned no row');
-      return item;
+      const tagIds = await resolveTagRefs(tx, wishlistId, input.tags ?? [], now);
+      await setItemTags(tx, item.id, tagIds);
+      return withTags(tx, item);
     });
   }
 
-  /** Changes only the fields sent. Null or blank clears an optional one (Plan 3a rule 1). */
-  async update(ownerId: string, itemId: string, input: UpdateItemRequest): Promise<Item> {
+  /**
+   * Changes only the fields sent. Null or blank clears an optional one (Plan 3a rule 1). `tags`
+   * replaces the item's whole tag set, `[]` clears it, and leaving it out changes nothing (design
+   * §6). Either way the response carries the item's current tags.
+   */
+  async update(
+    ownerId: string,
+    itemId: string,
+    input: UpdateItemRequest,
+  ): Promise<ItemWriteResponse> {
     if (!ItemIdSchema.safeParse(itemId).success) throw itemNotFound();
     return this.db.transaction(async (tx) => {
       const wishlistId = await lockOwnWishlist(tx, ownerId);
+      const now = this.clock.now();
       const [item] = await tx
         .update(items)
-        .set({ ...sentFields(input), updatedAt: this.clock.now() })
+        .set({ ...sentFields(input), updatedAt: now })
         .where(and(eq(items.id, itemId), eq(items.wishlistId, wishlistId)))
         .returning(ITEM_COLUMNS);
       if (!item) throw itemNotFound();
-      return item;
+      if (input.tags !== undefined) {
+        await setItemTags(tx, item.id, await resolveTagRefs(tx, wishlistId, input.tags, now));
+      }
+      return withTags(tx, item);
     });
   }
 
@@ -112,6 +131,12 @@ export class ItemsService {
         .where(eq(items.wishlistId, wishlistId));
     });
   }
+}
+
+/** The item as a write answers (Plan 7a ruling 1): its tag IDs and the tags they name. */
+async function withTags(tx: Transaction, item: Item): Promise<ItemWriteResponse> {
+  const tags = await itemTags(tx, item.id);
+  return { ...item, tagIds: tags.map((tag) => tag.id), tags };
 }
 
 /** The columns a PATCH may write. An id, a position or a list is never one of them. */
