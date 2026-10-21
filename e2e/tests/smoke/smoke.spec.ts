@@ -50,3 +50,15 @@ test('an unknown share page is a 404 that search engines skip (spec §6.7)', asy
     page.getByRole('heading', { level: 1, name: 'This list’s link doesn’t work.' }),
   ).toBeVisible();
 });
+
+test('security.txt is served as text (RFC 9116)', async ({ request }) => {
+  const res = await request.get('/.well-known/security.txt');
+  expect(res.status()).toBe(200);
+  expect(res.headers()['content-type']).toMatch(/^text\/plain/);
+  expect(await res.text()).toContain('Contact: mailto:hello@hanker.dev');
+});
+
+test('pages send Permissions-Policy', async ({ request }) => {
+  const res = await request.get('/');
+  expect(res.headers()['permissions-policy']).toContain('camera=()');
+});
