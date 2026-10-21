@@ -54,6 +54,16 @@ describe('errorMessage (spec §7, §9)', () => {
   });
 });
 
+describe('tag error copy (Plan 7b)', () => {
+  it.each([
+    [ErrorCode.TAG_NAME_TAKEN, 'You already have a tag called that.'],
+    [ErrorCode.TAG_LIMIT_REACHED, 'Your list has 50 tags, the most it can hold.'],
+    [ErrorCode.ITEM_TAG_LIMIT_REACHED, 'An item can have at most 10 tags.'],
+  ])('says %s in the table’s words', (code, message) => {
+    expect(errorMessage(apiError(code, { status: 422 }))).toBe(message);
+  });
+});
+
 describe('fieldErrors', () => {
   it('turns a VALIDATION_FAILED problem into messages by field', () => {
     const error = apiError(ErrorCode.VALIDATION_FAILED, {
