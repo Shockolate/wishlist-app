@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Browser, type Page } from '@playwright/test';
-import type { Tag } from '@wishlist/contracts';
+import type { Tag, WishlistResponse } from '@wishlist/contracts';
 import { expectAccessible } from '../../support/a11y.js';
 import { addItemViaApi, verifiedOwner } from '../../support/owner.js';
 import { guest, shareTokenOf } from '../../support/share.js';
@@ -29,7 +29,27 @@ async function shareChips(page: Page, browser: Browser, base: string) {
   const chips = gifter
     .getByRole('group', { name: 'Filter the list' })
     .getByRole('button', { name: /, \d+ items?$/ });
-  return { context, chips };
+  return { context, chips, gifter };
+}
+
+/** The Tags sheet: one dialog, whichever pane it shows. */
+const tagsSheet = (page: Page) => page.getByRole('dialog');
+const tagsButton = (page: Page) => page.getByRole('button', { name: 'Tags', exact: true });
+/** A tag's row in the sheet's all-tags pane, or every row. */
+const tagRow = (page: Page, name?: string) =>
+  tagsSheet(page).getByRole('button', {
+    name: name === undefined ? /, \d+ items?$/ : new RegExp(`^${name}, \\d+ items?$`),
+  });
+
+/** How many items carry each tag, as the API has it: what's saved, not what the page shows. */
+async function savedTagCounts(request: APIRequestContext): Promise<Record<string, number>> {
+  const list = (await (await request.get('/api/wishlist')).json()) as WishlistResponse;
+  return Object.fromEntries(
+    (list.tags ?? []).map((tag) => [
+      tag.name,
+      list.items.filter((item) => item.tagIds?.includes(tag.id)).length,
+    ]),
+  );
 }
 
 test('tags a new item in the add form (design §4)', async ({ page, browser, baseURL }) => {
@@ -257,4 +277,184 @@ test('keys an input method is composing with never add or pick a tag (review I1)
   await tagBox(page).press('ArrowDown');
   await tagBox(page).press('Enter');
   await expect(page.getByRole('button', { name: 'Remove きっちん' })).toBeVisible();
+});
+
+test('tags many items from the Tags sheet, then renames and deletes the tag (ruling 1)', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const base = baseURL ?? '';
+  await verifiedOwner(page, base, 'tags-sheet');
+  for (const title of ['Dutch oven', 'Trail shoes', 'Zester', 'Cookbook']) {
+    await addItemViaApi(page.request, base, { title });
+  }
+  // An empty tag stays in the owner's sheet (design §2).
+  await createTagViaApi(page.request, base, 'Garden');
+  await page.goto('/list');
+  await tagsButton(page).click();
+  const sheet = tagsSheet(page);
+  await expect(sheet.getByRole('heading', { name: 'Tags' })).toBeFocused();
+  await expect(sheet.getByText('Tap a tag to choose its items.')).toBeVisible();
+  await expect(tagRow(page)).toHaveText([/Garden\s*0 items/]);
+  await expectAccessible(page);
+
+  // Escape in the name field cancels the field, not the sheet.
+  await sheet.getByRole('button', { name: 'New tag' }).click();
+  await expect(sheet.getByLabel('Tag name')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(sheet.getByLabel('Tag name')).toHaveCount(0);
+  await expect(sheet.getByRole('button', { name: 'New tag' })).toBeFocused();
+
+  // Batch tagging.
+  await sheet.getByRole('button', { name: 'New tag' }).click();
+  await sheet.getByLabel('Tag name').fill('Kitchen');
+  await sheet.getByRole('button', { name: 'Add tag' }).click();
+  await expect(sheet.getByRole('heading', { name: 'Kitchen' })).toBeFocused();
+  await expect(sheet.getByText('0 items')).toBeVisible();
+  // Every item, in list order.
+  await expect(sheet.getByRole('checkbox')).toHaveCount(4);
+  await expect(sheet.getByRole('listitem')).toHaveText([
+    'Dutch oven',
+    'Trail shoes',
+    'Zester',
+    'Cookbook',
+  ]);
+  await expectAccessible(page);
+  for (const title of ['Dutch oven', 'Zester', 'Cookbook']) {
+    await sheet.getByRole('checkbox', { name: title }).check();
+    await expect(status(page, `Tagged “${title}”.`)).toBeVisible();
+  }
+  await sheet.getByRole('checkbox', { name: 'Trail shoes' }).check();
+  await sheet.getByRole('checkbox', { name: 'Trail shoes' }).uncheck();
+  await expect(status(page, 'Untagged “Trail shoes”.')).toBeVisible();
+  await expect(sheet.getByText('3 items')).toBeVisible();
+  await sheet.getByRole('button', { name: 'All tags' }).click();
+  // Alphabetical, and focus comes back to the tag that was open.
+  await expect(tagRow(page)).toHaveText([/Garden\s*0 items/, /Kitchen\s*3 items/]);
+  await expect(tagRow(page, 'Kitchen')).toBeFocused();
+  await expect(tagRow(page, 'Kitchen')).toHaveAccessibleName('Kitchen, 3 items');
+  await expect.poll(() => savedTagCounts(page.request)).toEqual({ Garden: 0, Kitchen: 3 });
+  let share = await shareChips(page, browser, base);
+  // Gifters never see the empty tag.
+  await expect(share.chips).toHaveText([/Kitchen/]);
+  await expect(share.chips.first()).toHaveAccessibleName('Kitchen, 3 items');
+  await share.context.close();
+
+  // Rename.
+  await tagRow(page, 'Kitchen').click();
+  await sheet.getByRole('button', { name: 'Rename' }).click();
+  await expect(sheet.getByLabel('Tag name')).toBeFocused();
+  await expect(sheet.getByLabel('Tag name')).toHaveValue('Kitchen');
+  await sheet.getByLabel('Tag name').fill('Cooking');
+  await sheet.getByRole('button', { name: 'Save' }).click();
+  await expect(sheet.getByRole('heading', { name: 'Cooking' })).toBeFocused();
+  share = await shareChips(page, browser, base);
+  await expect(share.chips).toHaveText([/Cooking/]);
+  await share.context.close();
+
+  // A rename onto another tag's name is refused on the field, and the old name stays.
+  await sheet.getByRole('button', { name: 'All tags' }).click();
+  await tagRow(page, 'Garden').click();
+  await sheet.getByRole('button', { name: 'Rename' }).click();
+  await sheet.getByLabel('Tag name').fill('cooking');
+  await sheet.getByRole('button', { name: 'Save' }).click();
+  await expect(sheet.getByText('You already have a tag called that.')).toBeVisible();
+  await expect(sheet.getByLabel('Tag name')).toHaveAttribute('aria-invalid', 'true');
+  await expect(sheet.getByLabel('Tag name')).toBeFocused();
+  await sheet.getByRole('button', { name: 'Cancel' }).click();
+  await expect(sheet.getByRole('heading', { name: 'Garden' })).toBeVisible();
+  await expect(sheet.getByRole('button', { name: 'Rename' })).toBeFocused();
+  expect(await savedTagCounts(page.request)).toEqual({ Cooking: 3, Garden: 0 });
+
+  // Delete.
+  await sheet.getByRole('button', { name: 'All tags' }).click();
+  await tagRow(page, 'Cooking').click();
+  await sheet.getByRole('button', { name: 'Delete' }).click();
+  const confirm = page.getByRole('alertdialog', { name: 'Remove “Cooking” from 3 items?' });
+  await expect(confirm).toBeVisible();
+  await expect(confirm).toContainText('The items stay on your list.');
+  await expectAccessible(page);
+  await confirm.getByRole('button', { name: 'Delete tag' }).click();
+  await expect(status(page, 'Deleted “Cooking”.')).toBeVisible();
+  await expect(sheet.getByRole('heading', { name: 'Tags' })).toBeFocused();
+  await expect(tagRow(page)).toHaveText([/Garden\s*0 items/]);
+  await expect.poll(() => savedTagCounts(page.request)).toEqual({ Garden: 0 });
+  share = await shareChips(page, browser, base);
+  await expect(
+    share.gifter
+      .getByRole('list', { name: /items, most wanted first$/ })
+      .getByRole('heading', { level: 2 }),
+  ).toHaveText(['Dutch oven', 'Trail shoes', 'Zester', 'Cookbook']);
+  await expect(share.chips).toHaveCount(0);
+  await share.context.close();
+});
+
+test('a tag deleted in the Tags sheet leaves the open item form, and saving keeps it gone (RF3)', async ({
+  page,
+  baseURL,
+}) => {
+  const base = baseURL ?? '';
+  await verifiedOwner(page, base, 'tags-sheet-rf3');
+  const kettle = await addItemViaApi(page.request, base, {
+    title: 'Kettle',
+    tags: [{ name: 'Christmas' }, { name: 'Kitchen' }],
+  });
+  await page.goto('/list');
+  await titleButton(page, 'Kettle').click();
+  await expect(page.getByRole('button', { name: 'Remove Christmas' })).toBeVisible();
+
+  await tagsButton(page).click();
+  await tagRow(page, 'Christmas').click();
+  await tagsSheet(page).getByRole('button', { name: 'Delete' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Delete tag' }).click();
+  await expect(status(page, 'Deleted “Christmas”.')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(tagsSheet(page)).toHaveCount(0);
+
+  await expect(page.getByRole('button', { name: 'Remove Christmas' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Remove Kitchen' })).toBeVisible();
+  await page.getByLabel('Title').fill('Stovetop kettle');
+  const patch = page.waitForRequest(
+    (request) => request.method() === 'PATCH' && request.url().endsWith(`/items/${kettle.id}`),
+  );
+  await page.getByRole('button', { name: 'Save' }).click();
+  expect(Object.keys((await patch).postDataJSON() as Record<string, unknown>)).not.toContain(
+    'tags',
+  );
+  await expect(status(page, 'Saved “Stovetop kettle”.')).toBeVisible();
+  await expect.poll(() => savedTagCounts(page.request)).toEqual({ Kitchen: 1 });
+});
+
+test('the Tags sheet opens, ticks and closes from the keyboard alone (RF4)', async ({
+  page,
+  baseURL,
+}) => {
+  const base = baseURL ?? '';
+  await verifiedOwner(page, base, 'tags-sheet-keys');
+  await addItemViaApi(page.request, base, { title: 'Kettle' });
+  await createTagViaApi(page.request, base, 'Kitchen');
+  await page.goto('/list');
+  await tagsButton(page).focus();
+  await page.keyboard.press('Enter');
+  const sheet = tagsSheet(page);
+  await expect(sheet.getByRole('heading', { name: 'Tags' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(sheet.getByRole('button', { name: 'Close' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(tagRow(page, 'Kitchen')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(sheet.getByRole('heading', { name: 'Kitchen' })).toBeFocused();
+  // Past Rename and Delete to the first item.
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  await expect(sheet.getByRole('checkbox', { name: 'Kettle' })).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(sheet.getByRole('checkbox', { name: 'Kettle' })).toBeChecked();
+  await expect(status(page, 'Tagged “Kettle”.')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toHaveCount(0);
+  await expect(tagsButton(page)).toBeFocused();
+  await expect.poll(() => savedTagCounts(page.request)).toEqual({ Kitchen: 1 });
 });

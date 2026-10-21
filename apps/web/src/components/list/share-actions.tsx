@@ -1,12 +1,24 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { useCanShare } from '@/lib/use-can-share';
 import { CopyIcon, ShareIcon } from './icons';
 import { useListStatus } from './list-status';
 
-/** Copy share link, and Share where the Web Share API exists (Plan 3b rule 9). */
-export function ShareActions({ title, shareUrl }: { title: string; shareUrl: string }) {
+/**
+ * Copy share link, and Share where the Web Share API exists (Plan 3b rule 9). `children` sit in the
+ * same row, after them: the editor's Tags button (Plan 7b ruling 1).
+ */
+export function ShareActions({
+  title,
+  shareUrl,
+  children,
+}: {
+  title: string;
+  shareUrl: string;
+  children?: ReactNode;
+}) {
   const { announce } = useListStatus();
   const canShare = useCanShare();
 
@@ -41,6 +53,7 @@ export function ShareActions({ title, shareUrl }: { title: string; shareUrl: str
           Share
         </Button>
       ) : null}
+      {children}
       <p className="basis-full text-[13px] text-muted-foreground">
         Anyone with the link can see your list.
       </p>

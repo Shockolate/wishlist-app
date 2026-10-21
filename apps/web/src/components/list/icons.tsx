@@ -97,3 +97,14 @@ export const EyeOffIcon = () => (
     <path d="M3 3l14 14M8.2 5.3A8 8 0 0 1 10 5c4.5 0 7.5 5 7.5 5a14 14 0 0 1-2 2.6M5.6 7A13 13 0 0 0 2.5 10s3 5 7.5 5a7.6 7.6 0 0 0 3.3-.8M8.6 8.6a2 2 0 0 0 2.8 2.8" />
   </Icon>
 );
+export const TagIcon = () => (
+  <Icon>
+    <path d="M3.5 4.5v5.1a1 1 0 0 0 .3.7l6.2 6.2a1 1 0 0 0 1.4 0l5.1-5.1a1 1 0 0 0 0-1.4L10.3 3.8a1 1 0 0 0-.7-.3H4.5a1 1 0 0 0-1 1z" />
+    <circle cx="7" cy="7" r="1" />
+  </Icon>
+);
+export const ArrowLeftIcon = () => (
+  <Icon>
+    <path d="M16 10H4M8.5 5.5 4 10l4.5 4.5" />
+  </Icon>
+);

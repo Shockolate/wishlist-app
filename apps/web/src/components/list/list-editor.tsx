@@ -11,6 +11,7 @@ import { AddItem } from './add-item';
 import { ItemList } from './item-list';
 import { ListStatusLine, ListStatusProvider } from './list-status';
 import { ShareActions } from './share-actions';
+import { TagsSheet } from './tags-sheet';
 
 /** The owner's list (spec §7 Owner editor, D37). The server render seeds the cache. */
 export function ListEditor({ initial }: { initial: WishlistResponse }) {
@@ -60,7 +61,11 @@ function Editor({ initial }: { initial: WishlistResponse }) {
           .
         </p>
       ) : null}
-      {hasItems ? <ShareActions title={list.title} shareUrl={list.shareUrl} /> : null}
+      {hasItems ? (
+        <ShareActions title={list.title} shareUrl={list.shareUrl}>
+          <TagsSheet items={list.items} tags={list.tags ?? []} />
+        </ShareActions>
+      ) : null}
       <AddItem />
       <ListStatusLine />
       {hasItems ? <ItemList items={list.items} /> : <EmptyList />}
