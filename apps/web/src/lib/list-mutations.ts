@@ -5,6 +5,7 @@ import {
   TagSchema,
   type CreateItemRequest,
   type Item,
+  type ItemWriteResponse,
   type Tag,
   type UpdateItemRequest,
   type WishlistResponse,
@@ -82,12 +83,18 @@ export function listMutations(client: QueryClient, api: ApiClient) {
   };
   // An item write's answer carries the tags it names, which the list may not hold yet (a tag made
   // by the write). The item itself is stored without them: it's an `Item`, and `tagIds` name them.
+  //
+  // The answer also carries the item's tags as of the save, which can predate a tick, an untick or
+  // a tag delete queued behind it. Those are already in the cache; the answer would undo them. So
+  // while anything is still queued the list is marked stale, and refetched once the queue drains.
   const putItem = (
-    answer: Item & { tags?: Tag[] },
+    answer: ItemWriteResponse,
     place: (list: WishlistResponse, item: Item) => WishlistResponse,
   ) => {
     const { tags, ...item } = answer;
     change((list) => place(mergeTags(list, tags ?? []), item));
+    // This mutation still counts itself in isMutating.
+    if (client.isMutating() > 1) stale = true;
   };
   const onError = (error: unknown) => {
     if (refetchesAfter(error)) stale = true;
@@ -99,7 +106,7 @@ export function listMutations(client: QueryClient, api: ApiClient) {
     void client.invalidateQueries({ queryKey: WISHLIST_KEY });
   };
 
-  const create: MutationOptions<Item, unknown, CreateItemRequest> = {
+  const create: MutationOptions<ItemWriteResponse, unknown, CreateItemRequest> = {
     scope: LIST_SCOPE,
     mutationFn: (body) => api.post('/wishlist/items', body, ItemWriteResponseSchema),
     // A refetch already in flight would answer from before this add, and land after it.
@@ -108,7 +115,7 @@ export function listMutations(client: QueryClient, api: ApiClient) {
     onError,
     onSettled,
   };
-  const update: MutationOptions<Item, unknown, ItemEdit> = {
+  const update: MutationOptions<ItemWriteResponse, unknown, ItemEdit> = {
     scope: LIST_SCOPE,
     mutationFn: ({ id, body }) => api.patch(`/wishlist/items/${id}`, body, ItemWriteResponseSchema),
     // As for create: a refetch from before the save mustn't land after it and revert the edit.

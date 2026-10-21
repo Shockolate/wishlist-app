@@ -460,19 +460,79 @@ describe('the list’s mutation queue (spec §7, Plan 3b rules 2–4)', () => {
       expect(t.sent[1]).toMatchObject({ method: 'GET', path: '/api/wishlist' });
     });
 
-    it('sends a tick queued behind a save second', async () => {
-      const t = setupWith([tag(1)], item(1));
+    it('sends a tick queued behind a save second, and refetches once the queue drains', async () => {
+      const t = setupWith([tag(1), tag(2)], item(1, { tagIds: [tag(1).id] }));
+      t.watch();
       const editing = t.run(t.mutations.update, { id: item(1).id, body: { title: 'Kettle' } });
-      const ticking = t.run(t.mutations.tick, { tagId: tag(1).id, itemId: item(1).id });
+      const ticking = t.run(t.mutations.tick, { tagId: tag(2).id, itemId: item(1).id });
       // The tick shows at once, but its request waits for the save's.
-      await vi.waitFor(() => expect(t.cached()?.items[0]?.tagIds).toEqual([tag(1).id]));
+      await vi.waitFor(() => expect(t.cached()?.items[0]?.tagIds).toEqual([tag(1).id, tag(2).id]));
       expect(t.sent.map((r) => r.method)).toEqual(['PATCH']);
-      t.answer(0, json(200, item(1, { title: 'Kettle' })));
+      // The save's answer predates the tick.
+      t.answer(
+        0,
+        json(200, { ...item(1, { title: 'Kettle', tagIds: [tag(1).id] }), tags: [tag(1)] }),
+      );
       await editing;
       await vi.waitFor(() => expect(t.sent).toHaveLength(2));
       expect(t.sent[1]?.method).toBe('PUT');
       t.answer(1, noContent());
       await ticking;
+      // The cache is stale, so the list is refetched, and the server's copy is what stays.
+      await vi.waitFor(() => expect(t.sent).toHaveLength(3));
+      expect(t.sent[2]).toMatchObject({ method: 'GET', path: '/api/wishlist' });
+      t.answer(
+        2,
+        json(200, {
+          ...t.serverList(item(1, { title: 'Kettle', tagIds: [tag(1).id, tag(2).id] })),
+          tags: [tag(1), tag(2)],
+        }),
+      );
+      await vi.waitFor(() => expect(t.invalidated()).toBe(false));
+      expect(t.cached()?.items[0]?.tagIds).toEqual([tag(1).id, tag(2).id]);
+      await t.settle();
+      expect(t.sent).toHaveLength(3);
+    });
+
+    it('does not bring a deleted tag back from a save it was queued behind', async () => {
+      const t = setupWith([tag(1)], item(1, { tagIds: [tag(1).id] }));
+      t.watch();
+      const editing = t.run(t.mutations.update, { id: item(1).id, body: { title: 'Kettle' } });
+      const deleting = t.run(t.mutations.deleteTag, tag(1).id);
+      await vi.waitFor(() => expect(t.cached()?.tags).toEqual([]));
+      t.answer(
+        0,
+        json(200, { ...item(1, { title: 'Kettle', tagIds: [tag(1).id] }), tags: [tag(1)] }),
+      );
+      await editing;
+      await vi.waitFor(() => expect(t.sent).toHaveLength(2));
+      expect(t.sent[1]?.method).toBe('DELETE');
+      t.answer(1, noContent());
+      await deleting;
+      await vi.waitFor(() => expect(t.sent).toHaveLength(3));
+      expect(t.sent[2]).toMatchObject({ method: 'GET', path: '/api/wishlist' });
+      t.answer(
+        2,
+        json(200, { ...t.serverList(item(1, { title: 'Kettle', tagIds: [] })), tags: [] }),
+      );
+      await vi.waitFor(() => expect(t.invalidated()).toBe(false));
+      expect(t.cached()?.tags).toEqual([]);
+      expect(t.cached()?.items[0]?.tagIds).toEqual([]);
+    });
+
+    it('does not refetch after a save with nothing queued behind it', async () => {
+      const t = setupWith([tag(1)], item(1, { tagIds: [tag(1).id] }));
+      t.watch();
+      const editing = t.run(t.mutations.update, { id: item(1).id, body: { title: 'Kettle' } });
+      await vi.waitFor(() => expect(t.sent).toHaveLength(1));
+      t.answer(
+        0,
+        json(200, { ...item(1, { title: 'Kettle', tagIds: [tag(1).id] }), tags: [tag(1)] }),
+      );
+      await editing;
+      await t.settle();
+      expect(t.sent).toHaveLength(1);
+      expect(t.invalidated()).toBe(false);
     });
 
     it('removes a deleted tag from the list and its items before the request runs', async () => {
