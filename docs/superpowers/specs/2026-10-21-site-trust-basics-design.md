@@ -74,7 +74,7 @@ The content, as agreed. The builder writes the final wording within it:
 - **Owners:** Hanker stores your email, display name, a hashed password (never the password itself) and your list. When you paste a shop link, Hanker's server fetches that page to fill in the title, price and photo.
 - **Gifters:** Hanker stores the name you type and how many you're getting. Your claim link is kept in your browser's storage. Anyone else with the share link sees your name next to the item, so nobody doubles up. The owner sees it only if they've turned that on (main spec §2).
 - **What Hanker never does:** no ads, no analytics, no tracking, no selling data.
-- **Cookies and storage:** one session cookie to keep you logged in, and the claim links in browser storage. Hanker shows no cookie banner because it needs none.
+- **Cookies and storage:** one session cookie to keep you logged in, and the claim links and the name a gifter last claimed with in browser storage. Hanker shows no cookie banner because it needs none.
 - **Services that handle data:**
   - Vercel (hosting)
   - Neon (database)
@@ -88,7 +88,7 @@ The content, as agreed. The builder writes the final wording within it:
   - Deleting your account removes it, your list and its claims right away.
   - Encrypted backups keep a copy for up to 30 days.
   - Unverified accounts are deleted after 7 days.
-  - Rate limiting stores only a hashed fragment of an IP address or email, cleared when its window ends.
+  - Rate limiting stores only a hash of an IP address or email, deleted within two days by the daily cleanup (amended after the final review to match `cleanup.service.ts`).
 - **Age:** Hanker is for people 13 and older, owners and gifters alike. If you think a child under 13 has given Hanker information, email hello@hanker.dev and it will be deleted.
 - **Changes:** the "Last updated" date changes when the page does.
 

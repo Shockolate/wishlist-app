@@ -468,7 +468,7 @@ Re-check them if the code changed after that date.
 
 ### Task 9: Merge gate and go-live checkpoint (Ted)
 
-- [ ] **Step 1: Before the stack merges,** Ted completes `docs/deployment.md` → Contact email → A and B, and their checks pass. Then he does C if Task 6 found it off. Layers 3, 5 and 6 publish `hello@hanker.dev`, and none merges before then.
+- [ ] **Step 1: Before the stack merges,** Ted completes `docs/deployment.md` → Contact email → A and B, and their checks pass. Then he does C, confirming Sentry doesn't store IP addresses, since Task 6 couldn't read the setting and `/privacy` relies on it. Layers 3, 5 and 6 publish `hello@hanker.dev`, and none merges before then.
 - [ ] **Step 2: After the deploy:**
   - **Favicon:** the tag shows in a light and a dark browser tab, and on an iPhone, Share → Add to Home Screen shows the cream-backed tag.
   - **Link previews:** paste `https://hanker.dev` into LinkedIn's Post Inspector (https://www.linkedin.com/post-inspector/). It shows the type-only image and "Hanker". Text yourself `https://hanker.dev` and one of your share links. The share link's preview shows your list title and "Pick a gift so nobody doubles up."
