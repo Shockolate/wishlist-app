@@ -229,3 +229,32 @@ test('a tag typed without Enter is added when the item is saved, unless it’s r
   await expect(chips.first()).toHaveAccessibleName('Kitchen, 1 item');
   await context.close();
 });
+
+test('keys an input method is composing with never add or pick a tag (review I1)', async ({
+  page,
+  baseURL,
+}) => {
+  const base = baseURL ?? '';
+  await verifiedOwner(page, base, 'tags-ime');
+  await addItemViaApi(page.request, base, { title: 'Kettle' });
+  await createTagViaApi(page.request, base, 'きっちん');
+  await page.goto('/list');
+  await titleButton(page, 'Kettle').click();
+
+  // Mid-conversion, as a Japanese IME has it: the box holds unconfirmed text and a suggestion.
+  await tagBox(page).fill('きっ');
+  const suggestions = page.getByRole('listbox', { name: 'Tag suggestions' });
+  await expect(suggestions.getByRole('option')).toHaveText(['きっちん']);
+  // ↑/↓ choose a conversion candidate, not a suggestion; Enter confirms it, not a tag.
+  await tagBox(page).dispatchEvent('keydown', { key: 'ArrowDown', isComposing: true });
+  await expect(suggestions.getByRole('option', { selected: true })).toHaveCount(0);
+  await expect(tagBox(page)).not.toHaveAttribute('aria-activedescendant', /.+/);
+  await tagBox(page).dispatchEvent('keydown', { key: 'Enter', isComposing: true });
+  await expect(removeButtons(page)).toHaveCount(0);
+  await expect(tagBox(page)).toHaveValue('きっ');
+
+  // Once composition ends, the same keys work as usual.
+  await tagBox(page).press('ArrowDown');
+  await tagBox(page).press('Enter');
+  await expect(page.getByRole('button', { name: 'Remove きっちん' })).toBeVisible();
+});

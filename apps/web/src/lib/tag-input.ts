@@ -61,15 +61,26 @@ export function addTypedTag(
 }
 
 /**
- * What saving does with text left in the tag box (controller ruling on Task 5): adds it exactly as
- * Enter would, or gives the error that holds the save back. A blank box changes nothing.
+ * Adds typed text as Enter or a save would (controller rulings on Task 5): each comma-separated
+ * part in order, through `addTypedTag`, so no tag is made holding a comma. Blank parts are skipped.
+ * It stops at the first part refused: `tags` keeps the parts added before it, `left` is the text
+ * from that part on, and `error` says why. A suggestion is added with `addTypedTag` instead, since
+ * an existing tag's own name may hold a comma.
  */
-export function addPendingTag(
+export function addPendingTags(
   chosen: readonly ItemTagRef[],
   typed: string,
   all: readonly Tag[],
-): { tags: ItemTagRef[] } | { error: string } {
-  return typed.trim() === '' ? { tags: [...chosen] } : addTypedTag(chosen, typed, all);
+): { tags: ItemTagRef[]; left: string; error?: string } {
+  let tags = [...chosen];
+  const parts = typed.split(',');
+  for (const [index, part] of parts.entries()) {
+    if (part.trim() === '') continue;
+    const result = addTypedTag(tags, part, all);
+    if ('error' in result) return { tags, left: parts.slice(index).join(','), error: result.error };
+    tags = result.tags;
+  }
+  return { tags, left: '' };
 }
 
 /** The chosen tags without any `{ id }` the list no longer holds: a tag deleted meanwhile (ruling 6). */

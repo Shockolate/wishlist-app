@@ -71,9 +71,9 @@ export function ItemEditForm({
   const save = form.handleSubmit(async (values) => {
     try {
       const tags = liveTags(values.tags ?? [], listTags);
-      // Read now, not from this render's closure: adding the typed tag on submit may have just
-      // dirtied the field.
-      const body = itemBody({ ...values, tags }, Boolean(form.formState.dirtyFields.tags));
+      // Read from the form's control state now, not this render: adding the typed tag on submit
+      // may have just dirtied the field.
+      const body = itemBody({ ...values, tags }, form.getFieldState('tags').isDirty);
       const saved = await update.mutateAsync({ id: item.id, body });
       announce(`Saved “${saved.title}”.`);
       onDone();

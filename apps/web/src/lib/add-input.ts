@@ -39,7 +39,10 @@ export interface ItemFormValues {
   priceText: string;
   note: string;
   quantity: number;
-  /** The item's whole tag set. The forms send it only when it changed (Plan 7b ruling 5). */
+  /**
+   * The item's whole tag set. The edit form sends it only when it changed, and the add form only
+   * when it isn't empty (Plan 7b ruling 5).
+   */
   tags: ItemTagRef[];
 }
 

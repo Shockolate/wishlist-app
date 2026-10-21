@@ -14,7 +14,7 @@ import {
 import { Controller } from 'react-hook-form';
 import { Field, type FieldControlProps } from '@/components/ui/field';
 import { WISHLIST_KEY } from '@/lib/list-cache';
-import { addPendingTag, addTypedTag, liveTags, shownTags, suggestTags } from '@/lib/tag-input';
+import { addPendingTags, addTypedTag, liveTags, shownTags, suggestTags } from '@/lib/tag-input';
 import { cn } from '@/lib/utils';
 import { CloseIcon } from './icons';
 import type { ItemForm } from './item-fields';
@@ -117,43 +117,42 @@ function TagCombobox({
     setActive(-1);
   };
 
-  /** Adds each name in turn; returns what's left unadded when one is refused, else ''. */
-  const addNames = (names: readonly string[]): string => {
-    let tags: ItemTagRef[] = live;
-    for (const [index, name] of names.entries()) {
-      if (name.trim() === '') continue;
-      const result = addTypedTag(tags, name, all);
-      if ('error' in result) {
-        setError(result.error);
-        if (tags !== live) onChange(tags);
-        return names.slice(index).join(',');
-      }
-      tags = result.tags;
-    }
+  /** The chosen tags as `tags`, through the field's onChange so it's dirty, unless nothing changed. */
+  const keep = (tags: readonly ItemTagRef[]) => {
     // A tag it already has changes nothing, and so shouldn't mark the field dirty.
-    if (tags.length !== live.length) onChange(tags);
-    return '';
+    if (tags.length !== live.length) onChange([...tags]);
   };
 
-  const pick = (name: string) => {
-    setText(addNames([name]) === '' ? '' : text);
+  /**
+   * Adds typed text, comma by comma, as Enter would. Returns what's left of it: '' once it's all
+   * added, else the text from the part refused on, with the reason on the field.
+   */
+  const commit = (typed: string): string => {
+    const result = addPendingTags(live, typed, all);
+    keep(result.tags);
+    if (result.error !== undefined) setError(result.error);
+    return result.left;
+  };
+
+  /** Adds a suggestion whole: an existing tag's name may hold a comma. */
+  const pickSuggestion = (tag: Tag) => {
+    const result = addTypedTag(live, tag.name, all);
+    if ('error' in result) setError(result.error);
+    else {
+      keep(result.tags);
+      setText('');
+    }
     close();
   };
 
   useImperativeHandle(handle, () => ({
     addTyped: () => {
-      const result = addPendingTag(live, text, all);
-      if ('error' in result) {
-        setError(result.error);
-        close();
-        input.current?.focus();
-        return false;
-      }
-      // Through the field's onChange, so the field is dirty and the edit form sends `tags`.
-      if (result.tags.length !== live.length) onChange(result.tags);
-      setText('');
+      const left = commit(text);
+      setText(left);
       close();
-      return true;
+      if (left === '') return true;
+      input.current?.focus();
+      return false;
     },
   }));
 
@@ -163,13 +162,16 @@ function TagCombobox({
     // A comma from a phone's keyboard, or in pasted text, arrives here rather than as a key press.
     const parts = raw.split(',');
     const rest = parts.pop() ?? '';
-    const left = addNames(parts);
+    const left = commit(parts.join(','));
     const next = left === '' ? rest : `${left},${rest}`;
     setText(next);
     setOpen(left === '' && next.trim() !== '');
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    // While an input method composes (Japanese, Chinese, Korean), ↑/↓ choose its candidates and
+    // Enter confirms one: none of them is meant for the field. 229 is what Safari sends instead.
+    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
     const last = offered.length - 1;
     switch (event.key) {
       case 'ArrowDown':
@@ -189,9 +191,12 @@ function TagCombobox({
         // Enter in an empty box sends the form, as in every other field.
         if (!choice && text === '' && event.key === 'Enter') return;
         event.preventDefault();
-        if (choice) pick(choice.name);
+        if (choice) pickSuggestion(choice);
         else if (text.trim() === '') setText('');
-        else pick(text);
+        else {
+          setText(commit(text));
+          close();
+        }
         return;
       }
       case 'Escape':
@@ -289,7 +294,7 @@ function TagCombobox({
                   aria-selected={index === highlighted}
                   onMouseDown={(event) => event.preventDefault()}
                   onMouseEnter={() => setActive(index)}
-                  onClick={() => pick(tag.name)}
+                  onClick={() => pickSuggestion(tag)}
                   className={cn(
                     'cursor-pointer px-3.5 py-2.5 text-[17px] [overflow-wrap:anywhere]',
                     index === highlighted && 'bg-foreground text-background',

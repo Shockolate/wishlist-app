@@ -1,7 +1,7 @@
 import type { ItemTagRef, Tag } from '@wishlist/contracts';
 import { describe, expect, it } from 'vitest';
 import {
-  addPendingTag,
+  addPendingTags,
   addTypedTag,
   itemBody,
   liveTags,
@@ -105,29 +105,43 @@ describe('addTypedTag (ruling 7)', () => {
   });
 });
 
-describe('addPendingTag (controller ruling: a typed tag is added on save)', () => {
+describe('addPendingTags (controller rulings: typed text is added on save, comma by comma)', () => {
   const kitchen = tag('Kitchen');
   const all = [kitchen];
   const chosen: ItemTagRef[] = [{ name: 'Garden' }];
+  const long = 'x'.repeat(31);
 
-  it('leaves the tags as they are when nothing, or only spaces, was typed', () => {
-    expect(addPendingTag(chosen, '', all)).toEqual({ tags: chosen });
-    expect(addPendingTag(chosen, '   ', all)).toEqual({ tags: chosen });
+  it('leaves the tags as they are when nothing, or only spaces and commas, was typed', () => {
+    expect(addPendingTags(chosen, '', all)).toEqual({ tags: chosen, left: '' });
+    expect(addPendingTags(chosen, '   ', all)).toEqual({ tags: chosen, left: '' });
+    expect(addPendingTags(chosen, ' , ,', all)).toEqual({ tags: chosen, left: '' });
   });
 
   it('adds what was typed exactly as Enter would', () => {
-    expect(addPendingTag(chosen, ' kitchen ', all)).toEqual({
+    expect(addPendingTags(chosen, ' kitchen ', all)).toEqual({
       tags: [{ name: 'Garden' }, { id: kitchen.id }],
+      left: '',
     });
-    expect(addPendingTag(chosen, 'garden', all)).toEqual({ tags: chosen });
+    expect(addPendingTags(chosen, 'garden', all)).toEqual({ tags: chosen, left: '' });
   });
 
-  it('gives the error Enter would, so the save is held back', () => {
-    expect(addPendingTag(chosen, 'x'.repeat(31), all)).toEqual({
+  it('adds each comma-separated part in order, never one tag holding a comma', () => {
+    expect(addPendingTags([], 'Books, kitchen,Garden tools', all)).toEqual({
+      tags: [{ name: 'Books' }, { id: kitchen.id }, { name: 'Garden tools' }],
+      left: '',
+    });
+  });
+
+  it('stops at the first refused part, keeping the earlier ones and the text from there on', () => {
+    expect(addPendingTags(chosen, `Books,${long}, Kitchen`, all)).toEqual({
+      tags: [{ name: 'Garden' }, { name: 'Books' }],
+      left: `${long}, Kitchen`,
       error: 'Use 30 characters or fewer.',
     });
     const ten: ItemTagRef[] = Array.from({ length: 10 }, (_, i) => ({ name: `Tag ${String(i)}` }));
-    expect(addPendingTag(ten, 'Kitchen', all)).toEqual({
+    expect(addPendingTags(ten, 'Kitchen', all)).toEqual({
+      tags: ten,
+      left: 'Kitchen',
       error: 'An item can have at most 10 tags.',
     });
   });
