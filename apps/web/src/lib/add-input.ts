@@ -39,6 +39,8 @@ export interface ItemFormValues {
   priceText: string;
   note: string;
   quantity: number;
+  /** The form sends no tags until Plan 7b adds its tag field; this keeps the schema's input type in step. */
+  tags?: undefined;
 }
 
 /** A new item's form, from what unfurl found, else the title hint; the link is always kept. */
