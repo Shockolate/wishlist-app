@@ -1,4 +1,4 @@
-import { MAX_TAGS_PER_LIST, tagKey, type ItemTagRef, type Tag } from '@wishlist/contracts';
+import { MAX_TAGS_PER_LIST, type ItemTagRef, type Tag } from '@wishlist/contracts';
 import { and, asc, eq, exists } from 'drizzle-orm';
 import { newId } from '../core/ids.js';
 import type { Transaction } from '../db/database.module.js';
@@ -49,6 +49,16 @@ export async function readTagIdsByItem(
 }
 
 /**
+ * The `name_key` of a name that `TagNameSchema` has already cleaned, which is every name in a
+ * parsed request. Raw input uses `tagKey` from the contracts instead. Cleaning again would not be
+ * harmless: `cleanTagName` drops only one leading `#`, so "##Kitchen" (cleaned to "#Kitchen")
+ * would be keyed "kitchen" and join the wrong tag (design §3).
+ */
+export function keyOfCleanName(name: string): string {
+  return name.toLowerCase();
+}
+
+/**
  * Turns an item's `tags` into tag IDs on this list (design §6), in first-seen order, each once.
  * An `id` that isn't on the list is dropped without a word: the tag was deleted in another tab, or
  * was never this owner's, and a save from a stale form must not fail or bring it back. A `name`
@@ -78,7 +88,7 @@ export async function resolveTagRefs(
       if (onList.has(id)) resolved.add(id);
       continue;
     }
-    const key = tagKey(ref.name);
+    const key = keyOfCleanName(ref.name);
     let id = idByKey.get(key);
     if (id === undefined) {
       if (onList.size >= MAX_TAGS_PER_LIST) throw tagLimitReached();

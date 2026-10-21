@@ -122,6 +122,48 @@ describe('tags on POST /wishlist/items (design §6)', () => {
     expect(await count('tags')).toBe(1);
   });
 
+  it('keys a name by its cleaned spelling once: "##Kitchen" is not "Kitchen"', async () => {
+    const cookie = await owner();
+    const kitchenId = await seedTag(db, ADA.email, 'Kitchen');
+    const item = written(
+      await create(cookie, { title: 'Kettle', tags: [{ name: '##Kitchen' }] }),
+      201,
+    );
+    expect(item.tags).toEqual([{ id: expect.any(String) as string, name: '#Kitchen' }]);
+    expect(item.tagIds).not.toContain(kitchenId);
+    const rows = await db.pool.query<{ name: string; name_key: string }>(
+      'select name, name_key from tags order by name_key',
+    );
+    expect(rows.rows).toEqual([
+      { name: '#Kitchen', name_key: '#kitchen' },
+      { name: 'Kitchen', name_key: 'kitchen' },
+    ]);
+  });
+
+  it('stores a new tag in its cleaned spelling', async () => {
+    const cookie = await owner();
+    const item = written(
+      await create(cookie, { title: 'Kettle', tags: [{ name: ' #Gifts ' }] }),
+      201,
+    );
+    expect(item.tags).toEqual([{ id: expect.any(String) as string, name: 'Gifts' }]);
+    const rows = await db.pool.query<{ name: string; name_key: string }>(
+      'select name, name_key from tags',
+    );
+    expect(rows.rows).toEqual([{ name: 'Gifts', name_key: 'gifts' }]);
+  });
+
+  it('accepts an upper-case id for a tag on the list', async () => {
+    const cookie = await owner();
+    const kitchenId = await seedTag(db, ADA.email, 'Kitchen');
+    const item = written(
+      await create(cookie, { title: 'Kettle', tags: [{ id: kitchenId.toUpperCase() }] }),
+      201,
+    );
+    expect(item.tags).toEqual([{ id: kitchenId, name: 'Kitchen' }]);
+    expect(await count('tags')).toBe(1);
+  });
+
   it("drops an id from another user's list and leaves that list unchanged", async () => {
     const cookie = await owner();
     await owner(BOB);
