@@ -73,7 +73,7 @@ These are explicit so they don't creep in:
   | `position` | Set by the server |
 
 - A list holds at most **200 items**.
-- A tag belongs to one list. A list holds at most **50 tags**. A name is shown as typed after clean-up (trimmed, whitespace runs collapsed, one leading `#` dropped), is 1–30 visible characters, and is matched case-insensitively. A tag can exist with no items, and gifters are never sent one. Deleting a tag takes it off every item and never deletes items (D58, D59).
+- A tag belongs to one list. A list holds at most **50 tags**. A name is shown as typed after clean-up (trimmed, whitespace runs collapsed; a leading `#` is kept, so "#books" and "books" are two tags), is 1–30 visible characters, and is matched case-insensitively. A tag can exist with no items, and gifters are never sent one. Deleting a tag takes it off every item and never deletes items (D58, D59).
 - New items are appended at the end of the list.
 - The owner can edit any field, delete an item, and reorder the list.
 - Deleting an item **hard-deletes** it and cascades to its claims.
@@ -836,5 +836,5 @@ As of 2026-10-07 on the development machine:
 | D56 | Link previews use one static image in `public/`, with `metadataBase` fixed to `https://hanker.dev` and no `og:url` anywhere (Plan 6) | Build-time image generation; a per-page `og:url`, which on token pages would carry the token |
 | D57 | `hello@hanker.dev` is received through Cloudflare Email Routing and answered through Resend SMTP from Gmail, with its own sending-only key (Ted, 2026-10-21) | Forward-only, which exposes Ted's personal address in replies; sending as `hello@mail.hanker.dev` |
 | D58 | Tags are rows in `tags` and `item_tags`, referenced by id ([design](2026-10-21-item-tags-and-filters-design.md), Ted, 2026-10-21) | A `text[]` on `items` |
-| D59 | Tag names are shown as typed, matched case-insensitively with one leading `#` dropped, and limited to 30 characters, 10 per item and 50 per list (Ted, 2026-10-21) | Hashtag-style slugs |
+| D59 | Tag names are shown as typed, a leading `#` included, matched case-insensitively after whitespace is collapsed, and limited to 30 characters, 10 per item and 50 per list (Ted, 2026-10-21) | Hashtag-style slugs; dropping a leading `#` so "#books" joins "books" (the first design, changed before merge) |
 | D60 | Item saves send existing tags by id and new ones by name, and a stale id is dropped (Ted, 2026-10-21) | Names only, which recreates deleted tags |

@@ -74,7 +74,7 @@ const storedTag = async (id: string) =>
 describe('POST /wishlist/tags (design §6, ruling 6)', () => {
   it('makes a tag from the cleaned name with 201, and answers 200 with the stored tag for the same key', async () => {
     const cookie = await owner();
-    const made = await createTag(cookie, { name: ' #Kitchen ' });
+    const made = await createTag(cookie, { name: '  Kitchen ' });
     expect(made.status).toBe(201);
     expect(made.headers['cache-control']).toBe('no-store');
     const tag = TagSchema.parse(made.body);
@@ -87,10 +87,10 @@ describe('POST /wishlist/tags (design §6, ruling 6)', () => {
     expect((await storedTag(tag.id))?.name).toBe('Kitchen');
   });
 
-  it('keys a name that starts with a second # as itself, so "##Kitchen" is a new tag (ruling 5)', async () => {
+  it('keeps a leading # in the name and the key, so "#Kitchen" is a new tag', async () => {
     const cookie = await owner();
     const kitchen = TagSchema.parse((await createTag(cookie, { name: 'Kitchen' })).body);
-    const res = await createTag(cookie, { name: '##Kitchen' });
+    const res = await createTag(cookie, { name: '#Kitchen' });
     expect(res.status).toBe(201);
     const made = TagSchema.parse(res.body);
     expect(made.id).not.toBe(kitchen.id);
@@ -111,7 +111,7 @@ describe('POST /wishlist/tags (design §6, ruling 6)', () => {
 
   it('refuses a body the schema refuses with 400 VALIDATION_FAILED', async () => {
     const cookie = await owner();
-    const res = await createTag(cookie, { name: '  # ' });
+    const res = await createTag(cookie, { name: '   ' });
     expect([res.status, codeOf(res)]).toEqual([400, ErrorCode.VALIDATION_FAILED]);
   });
 });
