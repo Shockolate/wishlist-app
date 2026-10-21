@@ -74,14 +74,46 @@ printf '%s' '{"generate":{"note":"GitHub Actions smoke tests (wishlist-app)"}}' 
 
 `hanker.dev` is registered at Cloudflare, and DNS stays there (spec §10).
 
-| Record                                                                                                                                | Points at                                                                                         | Proxy                                                                        |
-| ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `hanker.dev` and `www.hanker.dev`                                                                                                     | The records Vercel → `wishlist-web` → Settings → Domains shows. `www` redirects to the apex (308) | **DNS only (grey cloud).** Proxying breaks Vercel's certificates and caching |
-| Resend's records for `mail.hanker.dev`: MX and SPF `TXT` on `send.mail.hanker.dev`, DKIM `TXT` on `resend._domainkey.mail.hanker.dev` | The records Resend → Domains shows                                                                | DNS only                                                                     |
-| `_dmarc.hanker.dev` (`TXT`)                                                                                                           | `v=DMARC1; p=none;`. Monitor first, then tighten                                                  | DNS only                                                                     |
+| Record                                                                                                                                                                | Points at                                                                                         | Proxy                                                                        |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `hanker.dev` and `www.hanker.dev`                                                                                                                                     | The records Vercel → `wishlist-web` → Settings → Domains shows. `www` redirects to the apex (308) | **DNS only (grey cloud).** Proxying breaks Vercel's certificates and caching |
+| Resend's records for `mail.hanker.dev`: MX and SPF `TXT` on `send.mail.hanker.dev`, DKIM `TXT` on `resend._domainkey.mail.hanker.dev`                                 | The records Resend → Domains shows                                                                | DNS only                                                                     |
+| `_dmarc.hanker.dev` (`TXT`)                                                                                                                                           | `v=DMARC1; p=none;`. Monitor first, then tighten                                                  | DNS only                                                                     |
+| `hanker.dev` MX and SPF `TXT` (Email Routing); Resend's records for `hanker.dev`: MX and SPF `TXT` on `send.hanker.dev`, DKIM `TXT` on `resend._domainkey.hanker.dev` | The records Cloudflare → Email Routing and Resend → Domains show                                  | DNS only                                                                     |
 
 - **Turnstile:** Cloudflare → Turnstile → widget "Hanker", hostname `hanker.dev`, mode Managed. The site key is the `TURNSTILE_SITE_KEY` repo variable. The secret key stays offline until sign-up opens.
 - **The canonical origin:** `APP_ORIGIN` and the `APP_PRODUCTION_ORIGIN` repo variable are both `https://hanker.dev`. State-changing calls from any other origin, including the `*.vercel.app` production alias, get `403 FORBIDDEN_ORIGIN`.
+
+## Contact email
+
+`hello@hanker.dev` is the address on the footer, the privacy and terms pages and `security.txt` (D57). Mail to it is forwarded to Ted's inbox by Cloudflare Email Routing, and Ted replies as `hello@hanker.dev` from Gmail through Resend's SMTP server, so his personal address never shows. Nothing showing the address may merge before Steps A and B pass their checks.
+
+### A. Receive: Cloudflare Email Routing
+
+1. Cloudflare dashboard → the `hanker.dev` zone → **Email** → **Email Routing** → **Get started** (or **Enable Email Routing**).
+2. **Destination addresses** → **Add destination address** → your personal address. Open the verification email Cloudflare sends and click its link. The address shows **Verified**.
+3. **Routing rules** → **Custom addresses** → **Create address**. Custom address `hello`, action **Send to an email**, destination the address from step 2. **Save**.
+4. When Cloudflare offers to add its DNS records, choose **Add records and enable**. It adds MX records and an SPF `TXT` record at the apex `hanker.dev`. The apex had neither before, so nothing is replaced.
+5. In **DNS** → **Records**, confirm Resend's existing records on `send.mail.hanker.dev` and `resend._domainkey.mail.hanker.dev`, and `_dmarc.hanker.dev`, are unchanged.
+
+**Check:** from an account that isn't yours (or a phone's other mail app), send a message to `hello@hanker.dev`. It arrives in your inbox. Then trigger a password reset for your own Hanker account at https://hanker.dev/reset-password: the email from `no-reply@mail.hanker.dev` still arrives.
+
+### B. Reply as hello@: Resend SMTP and Gmail
+
+The free plan allows three verified domains; this uses the second. These replies share the free plan's 100-a-day cap with Hanker's own emails.
+
+1. Resend → **Domains** → **Add domain** → `hanker.dev`, in the same region as `mail.hanker.dev`.
+2. Add each record Resend shows (MX and SPF `TXT` on `send.hanker.dev`, DKIM `TXT` on `resend._domainkey.hanker.dev`) in Cloudflare → **DNS** → **Records**, **DNS only**. They sit next to Email Routing's apex records; don't edit those. Back in Resend, **Verify DNS Records**. The domain shows **Verified**.
+3. Resend → **API Keys** → **Create API Key**. Name `gmail-send-as`, permission **Sending access**, domain `hanker.dev`. Copy the key straight into step 5; don't save it anywhere else. It is not the production key, so revoking it never touches the app.
+4. Look up the current SMTP host, port and username in Resend's SMTP documentation (at the time of writing: host `smtp.resend.com`, port `465` with SSL, username `resend`).
+5. Gmail → gear → **See all settings** → **Accounts and Import** → **Send mail as** → **Add another email address**. Name `Hanker`, address `hello@hanker.dev`, **Next step**. Enter the SMTP server, port and username from step 4 and the key from step 3 as the password, choose **Secured connection using SSL**, **Add Account**. Gmail sends a confirmation to `hello@hanker.dev`; it arrives through Step A. Click its link.
+6. Still under **Send mail as**, choose **Reply from the same address the message was sent to**.
+
+**Check:** reply, from Gmail, to the test message from Step A's check. In the outside account, the reply is from `Hanker <hello@hanker.dev>`. Its **Show original** (or the equivalent) shows `DKIM: PASS` for `hanker.dev` and `DMARC: PASS`, and your personal address appears nowhere in the headers.
+
+### C. Sentry: confirm IP addresses aren't stored
+
+The privacy page says Sentry's error reports have IP addresses removed. [Sentry → One-off setup](#one-off-setup-1) step 2 turned this on; confirm it's still on before the `/privacy` page merges. In each of `hanker-api` and `hanker-web`: Settings → **Security & Privacy** → **Prevent Storing of IP Addresses** is on. **Check:** send a test event as [Sentry → Check it works](#check-it-works) describes; the event's **User** section shows no IP address.
 
 ## Environment variables
 
