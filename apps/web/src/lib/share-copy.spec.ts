@@ -9,7 +9,9 @@ import {
   mineOf,
   ownerSeesLine,
   ownStripText,
+  shownLine,
   stepperHint,
+  tagChipLabel,
   takenLine,
   yourClaimLine,
   type ItemClaims,
@@ -124,5 +126,18 @@ describe('manage page copy', () => {
     expect(manageHint(1, 1)).toBe('Up to 2: 1 more is free');
     expect(manageHint(2, 1)).toBe('Up to 3: 2 more are free');
     expect(manageHint(0, 2)).toBe('Up to 2');
+  });
+});
+
+describe('filter row copy', () => {
+  it('names a chip with its count', () => {
+    expect(tagChipLabel('Garden', 1)).toBe('Garden, 1 item');
+    expect(tagChipLabel('Kitchen gadgets', 4)).toBe('Kitchen gadgets, 4 items');
+    expect(tagChipLabel('Books', 0)).toBe('Books, 0 items');
+  });
+
+  it('says how many items are shown', () => {
+    expect(shownLine(3, 26)).toBe('3 of 26 items');
+    expect(shownLine(1, 1)).toBe('1 of 1 items');
   });
 });
