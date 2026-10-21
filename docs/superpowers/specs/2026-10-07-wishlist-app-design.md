@@ -5,6 +5,7 @@
 - **Author:** Ted Armstrong (with Claude)
 - **Repo:** `github.com/Shockolate/wishlist-app` (public; not yet created)
 - **Product name:** **Hanker**, at `hanker.dev` (decided 2026-10-09, D26). Internal identifiers keep the domain noun `wishlist`.
+- **Amended by:** [item tags and share-page filters](2026-10-21-item-tags-and-filters-design.md) (2026-10-21; D58 on). Plan 7a amends §2, §4 and §5 for the tags API.
 
 ## 1. Intent
 
@@ -67,10 +68,12 @@ These are explicit so they don't creep in:
   | `imageUrl` | Optional, https only |
   | `priceText` | Optional, at most 50 visible characters (D36) |
   | `note` | Optional, at most 1000 characters. This is the owner's comment to gifters |
+  | `tags` | 0–10 per item, by the tag rule in the [tags design](2026-10-21-item-tags-and-filters-design.md) §3 |
   | `quantity` | 1–99 |
   | `position` | Set by the server |
 
 - A list holds at most **200 items**.
+- A tag belongs to one list. A list holds at most **50 tags**. A name is shown as typed after clean-up (trimmed, whitespace runs collapsed, one leading `#` dropped), is 1–30 visible characters, and is matched case-insensitively. A tag can exist with no items, and gifters are never sent one. Deleting a tag takes it off every item and never deletes items (D58, D59).
 - New items are appended at the end of the list.
 - The owner can edit any field, delete an item, and reorder the list.
 - Deleting an item **hard-deletes** it and cascades to its claims.
@@ -245,6 +248,22 @@ claims (
 );
 CREATE INDEX ON claims (item_id);
 
+tags (
+  id            uuid PRIMARY KEY,
+  wishlist_id   uuid NOT NULL REFERENCES wishlists,
+  name          text NOT NULL,                       -- as shown
+  name_key      text NOT NULL,                       -- cleaned, lowercased
+  created_at, updated_at,
+  UNIQUE (wishlist_id, name_key)
+);
+
+item_tags (
+  item_id   uuid NOT NULL REFERENCES items,
+  tag_id    uuid NOT NULL REFERENCES tags,
+  PRIMARY KEY (item_id, tag_id)
+);
+CREATE INDEX ON item_tags (tag_id);
+
 rate_limits (
   key            text NOT NULL,
   window_start   timestamptz NOT NULL,
@@ -268,6 +287,8 @@ rate_limits (
 - **Reorder uses a plain integer `position`, rewritten in full by the reorder endpoint (§5).** Rejected: fractional indexing, which solves write amplification this app doesn't have (at most 200 items) and adds key growth and rebalancing.
 - **Rate limits live in Postgres** as fixed-window counters, written with an upsert. Rejected: Redis or Upstash, which would be a second stateful free-tier service to keep alive.
 - **There's no `kind` column on items.** "Idea versus link" is `url IS NULL`.
+- **Tags are rows, not a `text[]` on `items` (D58).** A rename is one row, a tag can exist with no items, and `UNIQUE (wishlist_id, name_key)` makes case-insensitive identity the database's job. The API computes `name_key` (`tagKey()` in `packages/contracts`).
+- **`item_tags` doesn't tie a tag's list to its item's.** The API guarantees both are on the session's list, because it looks both up through that list under the list lock. A composite foreign key isn't needed.
 
 ## 5. API
 
@@ -303,28 +324,35 @@ These require a session and a verified email. The list is always derived from th
 | `PATCH /wishlist` | `{title?, showClaimsToOwner?}` | Updated wishlist |
 | `POST /wishlist/share-token/rotate` | none | `{shareUrl}` |
 | `POST /wishlist/unfurl` | `{url}` | `{title?, imageUrl?, priceText?, failureReason?}`, always `200`. A prefill only; nothing is saved |
-| `POST /wishlist/items` | item fields | `201` with the item, appended at the end. `422 LIST_FULL` at 200 items |
-| `PATCH /wishlist/items/:id` | partial item fields | Updated item |
+| `POST /wishlist/items` | item fields, `tags?` | `201` with the item and its tags, appended at the end. `422 LIST_FULL` at 200 items, `422 TAG_LIMIT_REACHED` if its new tags would pass 50 (nothing is saved) |
+| `PATCH /wishlist/items/:id` | partial item fields, `tags?` | Updated item and its tags. `422 TAG_LIMIT_REACHED` as above |
 | `DELETE /wishlist/items/:id` | none | `204` |
 | `PUT /wishlist/items/order` | `{itemIds: uuid[]}` | `204`, or `409 ORDER_CONFLICT` if the IDs aren't exactly the list's current item set |
+| `POST /wishlist/tags` | `{name}` | `201 {id, name}`. If the list already has that name by key, `200` with the tag as stored. `422 TAG_LIMIT_REACHED` at 50 tags |
+| `PATCH /wishlist/tags/:id` | `{name}` | `200 {id, name}`, or `409 TAG_NAME_TAKEN` if a different tag has that key. Changing only the case of its own name is allowed |
+| `DELETE /wishlist/tags/:id` | none | `204`. Removes the tag from every item; the items stay |
+| `PUT /wishlist/tags/:id/items/:itemId` | none | `204`, and a no-op if the tag is already on the item. `422 ITEM_TAG_LIMIT_REACHED` when the item already has 10 other tags |
+| `DELETE /wishlist/tags/:id/items/:itemId` | none | `204`, also when the tag wasn't on the item |
 
-An item ID that belongs to another user's list returns `404`, the same as one that doesn't exist.
+An item or tag ID that belongs to another user's list, or isn't a UUID, returns `404`, the same as one that doesn't exist.
 
 - **`showClaimsToOwner` arrives with claims, in Plan 4a (D33, D39).** `PATCH /wishlist` takes at least one of `title` and `showClaimsToOwner`, and answers `{title, shareUrl, showClaimsToOwner}`. `GET /wishlist` returns `showClaimsToOwner`, and each item carries `remaining` and `claims[]` only when it's on (§5.1). These are fields added to existing responses, so the contracts declare them optional (§10, expand/contract).
-- **List changes are serialized per list (Plan 3a).** Every change to a list or its items first locks the owner's `wishlists` row `FOR UPDATE`. Inside that lock a create takes the next position and enforces the 200-item cap, and a reorder compares the submitted IDs with the current set before rewriting positions `0…n−1`. The lock order is users → wishlists → items, the order an account deletion's cascade takes.
+- **Tags arrive in Plan 7a (D58–D60).** `GET /wishlist` returns `tags: [{id, name}]`, every tag on the list including empty ones, and each item carries `tagIds`. `GET /shared` returns `tags` with only the tags at least one item carries, and each item carries `tagIds`. Both are read in the same `REPEATABLE READ, READ ONLY` transaction as the items. `POST` and `PATCH` of an item accept `tags?: Array<{id} | {name}>` (at most 10 entries) and answer with the item's `tagIds` and its `tags`. These are fields added to existing responses and requests, so the contracts declare them optional (§10, expand/contract). `GET /claims` omits `tagIds`: the manage page doesn't use them.
+- **Item writes name tags by id or by name (D60).** An entry with an `id` is a tag the owner already has; an entry with a `name` joins the list's tag with the same key, or makes it. An entry with both is refused. Inside the list lock, an `id` that isn't one of this list's tags (deleted meanwhile, or from another list) is dropped, not an error, and entries that resolve to the same tag collapse to one. On `PATCH`, `tags` replaces the item's whole set, `[]` clears it, and leaving `tags` out changes nothing. A write that fails, such as a `TAG_LIMIT_REACHED`, saves nothing.
+- **List changes are serialized per list (Plan 3a).** Every change to a list or its items first locks the owner's `wishlists` row `FOR UPDATE`. Inside that lock a create takes the next position and enforces the 200-item cap, and a reorder compares the submitted IDs with the current set before rewriting positions `0…n−1`. The lock order is users → wishlists → items, the order an account deletion's cascade takes. Every tag write, and every item write that carries `tags`, takes the same lock first. A tag write never locks an `items` row, so it keeps that order.
 
 ### Public endpoints (capability tokens)
 
 | Method & path | Body | Result |
 |---|---|---|
-| `GET /shared/:shareToken` | none | `{title, ownerDisplayName, viewerIsOwner, ownerSeesClaims, items[]}`, or `404 SHARE_LINK_NOT_FOUND` |
+| `GET /shared/:shareToken` | none | `{title, ownerDisplayName, viewerIsOwner, ownerSeesClaims, tags[], items[]}`, or `404 SHARE_LINK_NOT_FOUND` |
 | `POST /shared/:shareToken/items/:itemId/claims` | `{claimerName, quantity, manageToken?}` (quantity 1–99, default 1) | `201 {claim, manageToken, manageUrl}`, `409 CLAIM_EXCEEDS_REMAINING {remaining}`, `409 MANAGE_TOKEN_IN_USE`, `403 OWNER_CANNOT_CLAIM`, `404 SHARE_LINK_NOT_FOUND` (the link), or `404 NOT_FOUND` (the item) |
 | `GET /claims/:manageToken` | none | `{claim, item, wishlistTitle, ownerDisplayName, remaining, shareUrl, ownerSeesClaims}`, or `404 NOT_FOUND` |
 | `PATCH /claims/:manageToken` | `{claimerName?, quantity?}`, at least one | Updated claim, `409 CLAIM_EXCEEDS_REMAINING {remaining}`, or `404 NOT_FOUND` |
 | `DELETE /claims/:manageToken` | none | `204`, or `404 NOT_FOUND` |
 
 - `shareUrl` in the claim response is the wishlist's **current** share URL, so it stays correct after a rotation. The manage token itself is the authorization.
-- Each item in the `GET /shared` response has: `id, title, url, imageUrl, priceText, note, quantity`, and `remaining` and `claims[] {id, claimerName, quantity}` when the viewer may see them (§5.1). The `item` in `GET /claims` has the same fields, without `claims[]`.
+- Each item in the `GET /shared` response has: `id, title, url, imageUrl, priceText, note, quantity, tagIds`, and `remaining` and `claims[] {id, claimerName, quantity}` when the viewer may see them (§5.1). The `item` in `GET /claims` has the same fields, without `claims[]` and `tagIds`.
 - Claims are only ever changed by **manage token**. A claim ID grants nothing.
 - `ownerSeesClaims` is the list's `showClaimsToOwner`, sent to every viewer so the pages can say which way it's set (D40). It's a setting, not claim data.
 - `manageUrl` is `APP_ORIGIN/c/<manageToken>`, built by the API next to `shareUrl` so both links come from one place. The token is stored only as its SHA-256 (§4).
@@ -807,3 +835,6 @@ As of 2026-10-07 on the development machine:
 | D55 | Hanker is for people 13 and older, gifters included (Ted, 2026-10-21) | Limiting the rule to account holders, which leaves gifters' names uncovered |
 | D56 | Link previews use one static image in `public/`, with `metadataBase` fixed to `https://hanker.dev` and no `og:url` anywhere (Plan 6) | Build-time image generation; a per-page `og:url`, which on token pages would carry the token |
 | D57 | `hello@hanker.dev` is received through Cloudflare Email Routing and answered through Resend SMTP from Gmail, with its own sending-only key (Ted, 2026-10-21) | Forward-only, which exposes Ted's personal address in replies; sending as `hello@mail.hanker.dev` |
+| D58 | Tags are rows in `tags` and `item_tags`, referenced by id ([design](2026-10-21-item-tags-and-filters-design.md), Ted, 2026-10-21) | A `text[]` on `items` |
+| D59 | Tag names are shown as typed, matched case-insensitively with one leading `#` dropped, and limited to 30 characters, 10 per item and 50 per list (Ted, 2026-10-21) | Hashtag-style slugs |
+| D60 | Item saves send existing tags by id and new ones by name, and a stale id is dropped (Ted, 2026-10-21) | Names only, which recreates deleted tags |
