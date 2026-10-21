@@ -88,4 +88,17 @@ describe('next.config', () => {
       ]);
     }
   });
+  it('turns off the browser features Hanker never uses, but not clipboard or share (Plan 6)', async () => {
+    const rules = (await (await loadConfig('https://api.example.test')).headers?.()) ?? [];
+    const rule = rules.find((r) => r.source === '/:path*');
+    expect(rule?.headers).toContainEqual({
+      key: 'Permissions-Policy',
+      value:
+        'camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), hid=(), midi=(), display-capture=(), accelerometer=(), gyroscope=(), magnetometer=(), browsing-topics=()',
+    });
+    const value = rule?.headers.find((h) => h.key === 'Permissions-Policy')?.value ?? '';
+    for (const kept of ['clipboard-write', 'clipboard-read', 'web-share']) {
+      expect(value).not.toContain(kept);
+    }
+  });
 });
