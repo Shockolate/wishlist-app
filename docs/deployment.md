@@ -78,11 +78,66 @@ printf '%s' '{"generate":{"note":"GitHub Actions smoke tests (wishlist-app)"}}' 
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `hanker.dev` and `www.hanker.dev`                                                                                                                                     | The records Vercel → `wishlist-web` → Settings → Domains shows. `www` redirects to the apex (308) | **DNS only (grey cloud).** Proxying breaks Vercel's certificates and caching |
 | Resend's records for `mail.hanker.dev`: MX and SPF `TXT` on `send.mail.hanker.dev`, DKIM `TXT` on `resend._domainkey.mail.hanker.dev`                                 | The records Resend → Domains shows                                                                | DNS only                                                                     |
+| `hanker.dev` `CAA` (`0 issue "letsencrypt.org"`). Cloudflare adds hidden records for its own CAs ([DNSSEC and CAA](#dnssec-and-caa))                                  | Not an address: it limits which CAs may issue certificates                                        | Not proxiable                                                                |
 | `_dmarc.hanker.dev` (`TXT`)                                                                                                                                           | `v=DMARC1; p=none;`. Monitor first, then tighten                                                  | DNS only                                                                     |
 | `hanker.dev` MX and SPF `TXT` (Email Routing); Resend's records for `hanker.dev`: MX and SPF `TXT` on `send.hanker.dev`, DKIM `TXT` on `resend._domainkey.hanker.dev` | The records Cloudflare → Email Routing and Resend → Domains show                                  | DNS only                                                                     |
 
 - **Turnstile:** Cloudflare → Turnstile → widget "Hanker", hostname `hanker.dev`, mode Managed. The site key is the `TURNSTILE_SITE_KEY` repo variable. The secret key stays offline until sign-up opens.
 - **The canonical origin:** `APP_ORIGIN` and the `APP_PRODUCTION_ORIGIN` repo variable are both `https://hanker.dev`. State-changing calls from any other origin, including the `*.vercel.app` production alias, get `403 FORBIDDEN_ORIGIN`.
+
+### DNSSEC and CAA
+
+internet.nl's website test (2026-10-21) flagged both as missing.
+
+- **DNSSEC** stops a resolver from accepting forged answers for `hanker.dev`.
+- **CAA** limits which certificate authorities may issue certificates for it.
+
+A mistake in either can take the site offline. Do A, wait for its check to pass, then do B.
+
+**A. DNSSEC**
+
+1. Cloudflare → **Domain Registration** → **Manage domains** → `hanker.dev` → **Manage** → **Configuration** → **Enable DNSSEC**. Cloudflare is both the registrar and the DNS host, so it signs the zone and sends the DS record to the `.dev` registry itself. There's nothing to copy.
+2. Wait. Cloudflare says publishing the DS record can take one to two days.
+
+**Check:**
+
+1. Cloudflare → `hanker.dev` → **DNS** → **Settings** → **DNSSEC** shows a confirmed status.
+2. `dig +short DS hanker.dev` returns a record.
+3. https://dnsviz.net/d/hanker.dev/dnssec/ shows no errors.
+4. https://hanker.dev loads, and a password-reset email still arrives.
+
+Turn DNSSEC off only with the same **Configuration** → **Disable DNSSEC**. Before moving DNS away from Cloudflare, turn it off and wait until `dig +short DS hanker.dev` returns nothing. A DS record left pointing at Cloudflare's keys makes the domain unresolvable for every validating resolver.
+
+**B. CAA**
+
+Vercel issues the certificates for `hanker.dev` and `www.hanker.dev` from Let's Encrypt, over HTTP-01.
+
+1. Cloudflare → `hanker.dev` → **DNS** → **Records** → **Add record**:
+   - **Type** CAA
+   - **Name** `@`
+   - **Flags** `0`
+   - **Tag** `issue` (the dashboard may call it "Only allow specific hostnames")
+   - **CA domain name** `letsencrypt.org`
+
+   **Save**.
+
+2. Don't add an `issuewild` record. Universal SSL is on for the zone, so once any CAA record exists, Cloudflare adds its own `issue` and `issuewild` records. These cover Let's Encrypt, Google Trust Services, SSL.com and Sectigo, and Cloudflare may change the list. They show only in `dig`, not in the dashboard. That's expected: the zone still goes from allowing every public CA to allowing those four.
+
+`www.hanker.dev` is a CNAME to Vercel. A CA checking CAA for it follows the CNAME, so Vercel's own policy may apply there. Vercel says that's expected, and you can't add CAA at that name.
+
+**Check:**
+
+1. `dig +short CAA hanker.dev` includes `0 issue "letsencrypt.org"`.
+2. https://letsdebug.net reports no problems for `hanker.dev` and for `www.hanker.dev`, both with method HTTP-01.
+3. Vercel → `wishlist-web` → **Settings** → **Domains** shows both domains as valid.
+
+The real proof is the next automatic renewal. If Vercel then reports a certificate error, delete the CAA record first and investigate afterwards.
+
+**Not done, on purpose** (from the same internet.nl run, and securityheaders.com's A+):
+
+- **IPv6:** Vercel doesn't support IPv6, so there's no `AAAA` record to add.
+- **`security.txt` `Encryption` and signature:** both optional in RFC 9116. They would add a PGP key to guard, and a re-signing every time `Expires` is renewed. The first Contact, GitHub's private advisory form, is already a private channel.
+- **CSP `style-src 'unsafe-inline'` and `img-src https:`:** see spec §6.9. React and `next/font` set style attributes, which a nonce can't cover. Item photos load from the shops' own domains.
 
 ## Contact email
 
