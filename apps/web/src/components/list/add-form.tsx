@@ -8,9 +8,11 @@ import { useForm, useWatch } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import type { ItemFormValues } from '@/lib/add-input';
 import { formErrorMap } from '@/lib/form-errors';
+import { itemBody, liveTags } from '@/lib/tag-input';
 import { ItemFields, showFieldErrors } from './item-fields';
 import { ItemPhoto } from './item-photo';
 import { useListStatus } from './list-status';
+import { useListTags } from './tag-field';
 import { useListMutations } from './use-list-mutations';
 
 /** A new item, checked before it's added. It opens prefilled, or empty but for the link (rule 6). */
@@ -25,6 +27,7 @@ export function AddForm({
 }) {
   const { fail } = useListStatus();
   const create = useMutation(useListMutations().create);
+  const listTags = useListTags();
   const form = useForm({
     resolver: zodResolver(CreateItemRequestSchema, { error: formErrorMap }),
     defaultValues: initial,
@@ -38,7 +41,9 @@ export function AddForm({
 
   const onSubmit = form.handleSubmit(async (values) => {
     try {
-      onAdded(await create.mutateAsync(values));
+      // Tags go only when there are some (Plan 7b ruling 5), less any deleted meanwhile (ruling 6).
+      const tags = liveTags(values.tags ?? [], listTags);
+      onAdded(await create.mutateAsync(itemBody({ ...values, tags }, tags.length > 0)));
     } catch (error) {
       if (!showFieldErrors(form, error)) fail(error);
     }

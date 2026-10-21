@@ -19,14 +19,18 @@ import { Button } from '@/components/ui/button';
 import { formValuesOf } from '@/lib/add-input';
 import { formErrorMap } from '@/lib/form-errors';
 import { hasCode } from '@/lib/messages';
+import { itemBody, liveTags } from '@/lib/tag-input';
 import { TrashIcon } from './icons';
 import { ItemFields, showFieldErrors } from './item-fields';
 import { useListStatus } from './list-status';
+import { useListTags } from './tag-field';
 import { useListMutations } from './use-list-mutations';
 
 /**
- * One item's form, opened in place (D37). Save sends all six fields, so a cleared field becomes
- * null (Plan 3b rule 7). Delete asks first.
+ * One item's form, opened in place (D37). Save sends all six other fields, so a cleared field
+ * becomes null (Plan 3b rule 7). It sends `tags` only when the tag field changed (Plan 7b ruling
+ * 5): a tick or untick made elsewhere while the form was open then survives the save. Delete asks
+ * first.
  */
 export function ItemEditForm({
   item,
@@ -43,11 +47,13 @@ export function ItemEditForm({
 }) {
   const { announce, fail } = useListStatus();
   const update = useMutation(useListMutations().update);
+  const listTags = useListTags();
   const form = useForm({
     resolver: zodResolver(CreateItemRequestSchema, { error: formErrorMap }),
     defaultValues: formValuesOf(item),
   });
-  const { isDirty } = form.formState;
+  // Read during render, so react-hook-form tracks which fields changed for the save.
+  const { isDirty, dirtyFields } = form.formState;
   const { setFocus } = form;
   // Set when Delete is confirmed, so closing the dialog moves focus on instead of back to Delete.
   const deleting = useRef(false);
@@ -64,7 +70,9 @@ export function ItemEditForm({
 
   const onSubmit = form.handleSubmit(async (values) => {
     try {
-      const saved = await update.mutateAsync({ id: item.id, body: values });
+      const tags = liveTags(values.tags ?? [], listTags);
+      const body = itemBody({ ...values, tags }, Boolean(dirtyFields.tags));
+      const saved = await update.mutateAsync({ id: item.id, body });
       announce(`Saved “${saved.title}”.`);
       onDone();
     } catch (error) {

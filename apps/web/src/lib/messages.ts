@@ -18,6 +18,9 @@ export const TURNSTILE_BLOCKED =
 /** The widget loaded, then failed. */
 export const TURNSTILE_FAILED = 'The check didn’t work. Reload the page to try again.';
 
+/** An item's 11th tag: the API's answer, and the tag field's refusal before sending (Plan 7b ruling 7). */
+export const ITEM_TAG_LIMIT = 'An item can have at most 10 tags.';
+
 /** What a person sees for each error code: the one table (spec §7, Plan 2b rule 23). */
 export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   [ErrorCode.INVALID_CREDENTIALS]: "That email and password don't match.",
@@ -40,7 +43,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   [ErrorCode.SHARE_LINK_NOT_FOUND]: 'This list’s link doesn’t work any more.',
   [ErrorCode.TAG_NAME_TAKEN]: 'You already have a tag called that.',
   [ErrorCode.TAG_LIMIT_REACHED]: 'Your list has 50 tags, the most it can hold.',
-  [ErrorCode.ITEM_TAG_LIMIT_REACHED]: 'An item can have at most 10 tags.',
+  [ErrorCode.ITEM_TAG_LIMIT_REACHED]: ITEM_TAG_LIMIT,
 };
 
 const FALLBACK = 'Something went wrong on our side. Try again in a moment.';
