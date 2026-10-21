@@ -485,7 +485,7 @@ These are the initial values. They're configurable, and every limited endpoint r
   - `frame-ancestors 'none'`
   - On every page, `https://challenges.cloudflare.com` is added to `script-src`, and `frame-src` allows it, for Turnstile (amended 2026-10-10, Ted). A CSP belongs to the document, and client-side navigation keeps the first page's policy, so a per-page allowance broke the widget after in-app navigation onto an auth page. With `'strict-dynamic'`, CSP3 browsers ignore the `script-src` host, so the effective widening is `frame-src` to that one origin.
   - Not `upgrade-insecure-requests`: it breaks `http://localhost` E2E, and `.dev` is HSTS-preloaded.
-- **Other headers:** `X-Content-Type-Options: nosniff`, and HSTS (Vercel's default).
+- **Other headers:** `X-Content-Type-Options: nosniff`, and HSTS (Vercel's default). `Permissions-Policy` turns off camera, microphone, geolocation and the other features Hanker never uses, leaving clipboard and Web Share on (Plan 6).
 - **Retailer images:** rendered as plain `<img loading="lazy" referrerpolicy="no-referrer">`, **not** `next/image`. Configuring `next/image` to accept images from any host would turn the image-optimization quota into an open image proxy.
 
 ## 7. Web app
@@ -495,6 +495,7 @@ These are the initial values. They're configurable, and every limited endpoint r
 | Route | Rendering | Notes |
 |---|---|---|
 | `/` | Server | Landing page. Redirects to `/list` when signed in |
+| `/privacy`, `/terms` | Server, static | Plain-language legal pages (Plan 6, D54). Indexable |
 | `/signup`, `/login`, `/verify-email`, `/reset-password`, `/reset-password/confirm` | Client forms | Call `/api/auth/*` directly, so the `Set-Cookie` lands from the API response |
 | `/list` | Server-rendered first load + client editor (TanStack Query) | Reorder and delete show at once; a failed change refetches the list (D37) |
 | `/settings` | Client | Display name; list name; share link (copy, and rotate after a confirmation); change password; delete account (confirmation dialog). The spoiler toggle, with its confirmation, arrives in Plan 4b (D33, D39) |
@@ -802,3 +803,7 @@ As of 2026-10-07 on the development machine:
 | D51 | Browser reports go straight to Sentry, with its ingest origin in `connect-src` (Ted, 2026-10-19) | A tunnel route on `hanker.dev`, which dodges blockers but adds a public endpoint that must refuse to relay anything else |
 | D52 | The servers translate stack traces at runtime from the maps they already deploy; only the browser's maps are uploaded, by a `sourcemaps` job holding `SENTRY_AUTH_TOKEN`, from an artifact of map data the policy allows a secret job to download (Ted, 2026-10-19) | Serving the maps and letting Sentry fetch them, which Sentry calls unreliable and which fails for a tab still on the previous deploy |
 | D53 | The restore drill repeats quarterly, and after any change to the backup path (Ted, 2026-10-19) | Monthly, which mostly re-proves what the heartbeat shows; twice a year, long enough to lose track of the key or passphrase |
+| D54 | A footer on every page (source, privacy, terms, `hello@hanker.dev`), and short privacy and terms pages that name Ted Armstrong; Ted is US-based, so no postal address, imprint or cookie banner ([design](2026-10-21-site-trust-basics-design.md), Ted, 2026-10-21) | Ted's name in the footer; a sitemap |
+| D55 | Hanker is for people 13 and older, gifters included (Ted, 2026-10-21) | Limiting the rule to account holders, which leaves gifters' names uncovered |
+| D56 | Link previews use one static image in `public/`, with `metadataBase` fixed to `https://hanker.dev` and no `og:url` anywhere (Plan 6) | Build-time image generation; a per-page `og:url`, which on token pages would carry the token |
+| D57 | `hello@hanker.dev` is received through Cloudflare Email Routing and answered through Resend SMTP from Gmail, with its own sending-only key (Ted, 2026-10-21) | Forward-only, which exposes Ted's personal address in replies; sending as `hello@mail.hanker.dev` |
