@@ -166,7 +166,7 @@ All require a session and a verified email, derive the list from the session, an
 
 ## 7. Web structure
 
-- **Share page:** the filter row and the filtered list are one client island, so filtering never touches the server render or the claim flow. The owner's own view doesn't render `ShareClaimsProvider` (`share-page.tsx`), so the island must sit outside that provider, or wrap both branches, for the owner to get the same row. The cards (`ItemCardBody`) are unchanged. Filtering logic (combination, counts, band joining, the list's currency) is pure functions in `apps/web/src/lib/`, unit-tested; any copy built from counts goes in `lib/share-copy.ts`.
+- **Share page:** the filter row and the filtered list are one client island, so filtering never touches the server render or the claim flow. The owner's own view doesn't render `ShareClaimsProvider` (`share-page.tsx`), so the island is rendered in both branches (as the provider's children for a gifter, bare for the owner) and the owner gets the same row. The cards (`ItemCardBody`) are unchanged. Filtering logic (combination, counts, band joining, the list's currency) is pure functions in `apps/web/src/lib/`, unit-tested; any copy built from counts goes in `lib/share-copy.ts`.
 - **Editor:** every tag change (tick, untick, create, rename, delete, and item saves carrying tags) is a mutation in `lib/list-mutations.ts`, run through `useListMutations()` in the one scope, so changes reach the API in order. Ticks update the cache at once (like reorder and delete); a failure marks the list stale and it's refetched when the queue drains, as today.
 - **Hiding cached claims** (`hideCachedClaims()`) must keep working with the new fields; tags aren't claim data and aren't stripped.
 

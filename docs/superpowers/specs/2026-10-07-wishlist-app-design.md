@@ -584,7 +584,7 @@ The editor is layout A from the Plan 3b mockups: compact rows, edited in place (
 
 These follow the tags design ([§3, §4](2026-10-21-item-tags-and-filters-design.md)) and the Plan 7b mockups. The share page and the editor were the only screens touched; cards and editor rows show no tags.
 
-- **The filter row** is one client island, `ShareFilterList`, wrapping both the gifter's and the owner's view of `/s`, so it sits outside `ShareClaimsProvider` and its filters survive the `router.refresh()` after a claim (D62).
+- **The filter row** is one client island, `ShareFilterList`, rendered in both the gifter's view (inside `ShareClaimsProvider`) and the owner's view of `/s`. Its filter state lives in the island, so it survives the `router.refresh()` after a claim (D62).
   - The row renders only after hydration, so the page stays readable without JavaScript. It scrolls sideways inside itself, and the page never does.
   - It is a `role="group"` labelled "Filter the list": the price pill first, then one chip per tag that at least one item carries, ordered by item count (descending), ties by name.
   - Chips are `aria-pressed` toggles named like "Kitchen gadgets, 4 items". Active pills are espresso (`--foreground`) with sand text; terracotta never marks a filter.
@@ -594,18 +594,18 @@ These follow the tags design ([§3, §4](2026-10-21-item-tags-and-filters-design
   - A refresh that takes a tag, or the list's currency, away drops the filter on it: with no chip left to undo it, it would hide cards for good.
 - **The price filter** reads the number out of `priceText` in the browser, with `parsePrice` from `packages/contracts` (D61). A price is readable when it is a currency prefix, one number and nothing else (`$24.99`, `CA$20.00`, `¥1,200`; not `about £30`, `$20–30`, `30`). The list's currency is the prefix with the most readable prices, and the pill appears only for `$`, `US$`, `CA$`, `A$`, `NZ$`, `£` and `€`, since fixed bands mislead on a yen or rupee list. The bands are Under 25, 25–50, 50–100 and 100+, each including its lower bound.
   - While a band is on, an item without a readable price in the list's currency is hidden.
-  - The pill reads "Any price" until a band is chosen, then the joined label: neighbouring bands merge ("$25–100", "Under $50"), the rest are joined with " · ".
+  - The pill reads "Any price" until a band is chosen, then the joined label: neighbouring bands merge ("$25–100", "Under $50"), the rest are joined with " · ". All four bands read "Any listed price".
   - The pill opens a hand-rolled disclosure, since no popover is installed: an "Any price" button and four native checkboxes, each with its count. Each band's count is that band on its own with the selected tags, not the union with the bands already on, so ticking it shows what ticking it would add.
   - It stays open while bands are ticked. Escape and the pill close it and return focus to the pill. An outside click or Tab closes it and leaves focus where it went.
   - Sentences built from these numbers live in `lib/share-copy.ts`, the logic in `lib/share-filters.ts`.
 - **The tag field** is the item form's **Tags** field, after Note, shared by the add and edit forms: removable chips and a combobox with a listbox of suggestions.
-  - Suggestions are every tag on the owner's own list, empty ones included and nobody else's, with prefix matches before contains matches, up to 6.
+  - Suggestions are every tag on the owner's own list, empty ones included and nobody else's, with prefix matches before contains matches, up to 6. Tags already on the item are left out.
   - Enter or a comma adds the highlighted suggestion or the typed text. Pasted or phone-typed commas split the text into several tags. Keys an input method is composing are ignored.
   - Text typed but not yet added is added on save, and invalid text blocks the save. An 11th tag is refused in the field and never sent.
   - Tags are tracked by id, and a name that matches an existing tag's key becomes that tag. A chip whose tag was deleted meanwhile disappears from the field and from the body.
   - The edit form sends `tags` only when the field changed, so saving without touching it never undoes a tick made in the Tags sheet. The add form sends `tags` only when it isn't empty.
 - **The Tags sheet** is a bottom sheet on the claim sheet's primitive, opened by a **Tags** button beside the share actions, shown once the list has an item (D63).
-  - Pane one lists every tag, alphabetical, empty tags included, with its item count, and **New tag**. Pane two is one tag: its name, **Rename** and **Delete** (after a confirmation that gives the count), and every item with a checkbox. Entering a name the list already has opens that tag.
+  - Pane one lists every tag, alphabetical, empty tags included, with its item count, and **New tag**. Pane two is one tag: its name, **Rename** and **Delete** (after a confirmation that gives the count when the tag is on at least one item, and otherwise just asks "Delete “<name>”?"), and every item with a checkbox. Entering a name the list already has in **New tag** opens that tag; renaming to a taken name is refused with "You already have a tag called that."
   - Ticks and unticks save at once and are optimistic; create and rename wait for the API. Because each tick saves, the browser's Back leaving `/list` loses nothing.
   - The sheet is modal, so it has its own status line inside it for the editor's messages.
 - **Editor state.** Every tag change is a mutation in `lib/list-mutations.ts`, in the one scope, so changes reach the API in order. A failed change marks the list stale and it is refetched when the queue drains. So does an item write that succeeds while other changes are queued, since its answer would otherwise undo a queued tick. `hideCachedClaims()` leaves tags alone: they aren't claim data.
