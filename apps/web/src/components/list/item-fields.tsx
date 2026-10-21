@@ -1,6 +1,7 @@
 'use client';
 
 import type { CreateItemRequestSchema } from '@wishlist/contracts';
+import type { Ref } from 'react';
 import { Controller, type UseFormReturn } from 'react-hook-form';
 import type { z } from 'zod';
 import { Field } from '@/components/ui/field';
@@ -8,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { fieldErrors } from '@/lib/messages';
 import { QuantityStepper } from './quantity-stepper';
-import { TagField } from './tag-field';
+import { TagField, type TagBox } from './tag-field';
 
 /** The add and edit forms share one schema (Plan 3b rule 7). */
 export type ItemForm = UseFormReturn<
@@ -32,7 +33,16 @@ export function showFieldErrors(form: ItemForm, error: unknown): boolean {
 }
 
 /** Title, link, price, how many, photo link, note and tags. No maxLength: the schema explains limits. */
-export function ItemFields({ form, idPrefix }: { form: ItemForm; idPrefix: string }) {
+export function ItemFields({
+  form,
+  idPrefix,
+  tagBox,
+}: {
+  form: ItemForm;
+  idPrefix: string;
+  /** The tag field's handle, for adding what's typed in it before a save. */
+  tagBox?: Ref<TagBox>;
+}) {
   const {
     register,
     control,
@@ -86,7 +96,7 @@ export function ItemFields({ form, idPrefix }: { form: ItemForm; idPrefix: strin
       >
         {(props) => <Textarea {...props} {...register('note')} rows={3} />}
       </Field>
-      <TagField form={form} id={`${idPrefix}-tags`} />
+      <TagField form={form} id={`${idPrefix}-tags`} handle={tagBox} />
     </div>
   );
 }

@@ -2,16 +2,33 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import type { ItemTagRef, Tag, WishlistResponse } from '@wishlist/contracts';
-import { useCallback, useRef, useState, useSyncExternalStore, type KeyboardEvent } from 'react';
+import {
+  useCallback,
+  useImperativeHandle,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent,
+  type Ref,
+} from 'react';
 import { Controller } from 'react-hook-form';
 import { Field, type FieldControlProps } from '@/components/ui/field';
 import { WISHLIST_KEY } from '@/lib/list-cache';
-import { addTypedTag, liveTags, shownTags, suggestTags } from '@/lib/tag-input';
+import { addPendingTag, addTypedTag, liveTags, shownTags, suggestTags } from '@/lib/tag-input';
 import { cn } from '@/lib/utils';
 import { CloseIcon } from './icons';
 import type { ItemForm } from './item-fields';
 
 const NO_TAGS: readonly Tag[] = [];
+
+/** What a form asks of the tag field before it saves. */
+export interface TagBox {
+  /**
+   * Adds the text left in the box, as Enter would. False when it's refused: the error is on the
+   * field, focus is in the box, and the save should wait.
+   */
+  addTyped: () => boolean;
+}
 
 /**
  * Every tag on the owner's own list, empty ones included, from the editor's cache (Ledger ruling
@@ -29,7 +46,15 @@ export function useListTags(): readonly Tag[] {
 }
 
 /** The item form's Tags field (design §4): chips, then a combobox that suggests the list's tags. */
-export function TagField({ form, id }: { form: ItemForm; id: string }) {
+export function TagField({
+  form,
+  id,
+  handle,
+}: {
+  form: ItemForm;
+  id: string;
+  handle?: Ref<TagBox> | undefined;
+}) {
   const all = useListTags();
   return (
     <Controller
@@ -38,6 +63,7 @@ export function TagField({ form, id }: { form: ItemForm; id: string }) {
       render={({ field, fieldState }) => (
         <TagCombobox
           id={id}
+          handle={handle}
           all={all}
           value={field.value ?? []}
           onChange={field.onChange}
@@ -52,6 +78,7 @@ export function TagField({ form, id }: { form: ItemForm; id: string }) {
 
 function TagCombobox({
   id,
+  handle,
   all,
   value,
   onChange,
@@ -60,6 +87,7 @@ function TagCombobox({
   fieldError,
 }: {
   id: string;
+  handle: Ref<TagBox> | undefined;
   all: readonly Tag[];
   value: readonly ItemTagRef[];
   onChange: (tags: ItemTagRef[]) => void;
@@ -111,6 +139,23 @@ function TagCombobox({
     setText(addNames([name]) === '' ? '' : text);
     close();
   };
+
+  useImperativeHandle(handle, () => ({
+    addTyped: () => {
+      const result = addPendingTag(live, text, all);
+      if ('error' in result) {
+        setError(result.error);
+        close();
+        input.current?.focus();
+        return false;
+      }
+      // Through the field's onChange, so the field is dirty and the edit form sends `tags`.
+      if (result.tags.length !== live.length) onChange(result.tags);
+      setText('');
+      close();
+      return true;
+    },
+  }));
 
   const onType = (raw: string) => {
     setError(undefined);

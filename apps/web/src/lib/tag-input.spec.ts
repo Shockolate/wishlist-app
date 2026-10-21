@@ -1,6 +1,13 @@
 import type { ItemTagRef, Tag } from '@wishlist/contracts';
 import { describe, expect, it } from 'vitest';
-import { addTypedTag, itemBody, liveTags, shownTags, suggestTags } from './tag-input';
+import {
+  addPendingTag,
+  addTypedTag,
+  itemBody,
+  liveTags,
+  shownTags,
+  suggestTags,
+} from './tag-input';
 
 let next = 0;
 const tag = (name: string): Tag => ({
@@ -95,6 +102,34 @@ describe('addTypedTag (ruling 7)', () => {
     });
     // A tag it already has is still a no-op, not an error.
     expect(addTypedTag(ten, 'tag 3', all)).toEqual({ tags: ten });
+  });
+});
+
+describe('addPendingTag (controller ruling: a typed tag is added on save)', () => {
+  const kitchen = tag('Kitchen');
+  const all = [kitchen];
+  const chosen: ItemTagRef[] = [{ name: 'Garden' }];
+
+  it('leaves the tags as they are when nothing, or only spaces, was typed', () => {
+    expect(addPendingTag(chosen, '', all)).toEqual({ tags: chosen });
+    expect(addPendingTag(chosen, '   ', all)).toEqual({ tags: chosen });
+  });
+
+  it('adds what was typed exactly as Enter would', () => {
+    expect(addPendingTag(chosen, ' kitchen ', all)).toEqual({
+      tags: [{ name: 'Garden' }, { id: kitchen.id }],
+    });
+    expect(addPendingTag(chosen, 'garden', all)).toEqual({ tags: chosen });
+  });
+
+  it('gives the error Enter would, so the save is held back', () => {
+    expect(addPendingTag(chosen, 'x'.repeat(31), all)).toEqual({
+      error: 'Use 30 characters or fewer.',
+    });
+    const ten: ItemTagRef[] = Array.from({ length: 10 }, (_, i) => ({ name: `Tag ${String(i)}` }));
+    expect(addPendingTag(ten, 'Kitchen', all)).toEqual({
+      error: 'An item can have at most 10 tags.',
+    });
   });
 });
 

@@ -60,6 +60,18 @@ export function addTypedTag(
   return { tags: [...chosen, existing ? { id: existing.id } : { name: parsed.data }] };
 }
 
+/**
+ * What saving does with text left in the tag box (controller ruling on Task 5): adds it exactly as
+ * Enter would, or gives the error that holds the save back. A blank box changes nothing.
+ */
+export function addPendingTag(
+  chosen: readonly ItemTagRef[],
+  typed: string,
+  all: readonly Tag[],
+): { tags: ItemTagRef[] } | { error: string } {
+  return typed.trim() === '' ? { tags: [...chosen] } : addTypedTag(chosen, typed, all);
+}
+
 /** The chosen tags without any `{ id }` the list no longer holds: a tag deleted meanwhile (ruling 6). */
 export function liveTags(chosen: readonly ItemTagRef[], all: readonly Tag[]): ItemTagRef[] {
   return chosen.filter((ref) => keyOf(ref, all) !== undefined);

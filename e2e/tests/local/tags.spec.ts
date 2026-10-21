@@ -160,7 +160,11 @@ test('a tick made while the form is open survives saving it (RF3)', async ({
   const base = baseURL ?? '';
   await verifiedOwner(page, base, 'tags-rf3');
   await addItemViaApi(page.request, base, { title: 'Socks' });
-  const kettle = await addItemViaApi(page.request, base, { title: 'Kettle' });
+  // It already carries a tag, so the untouched field isn't empty.
+  const kettle = await addItemViaApi(page.request, base, {
+    title: 'Kettle',
+    tags: [{ name: 'Christmas' }],
+  });
   const kitchen = await createTagViaApi(page.request, base, 'Kitchen');
   await page.goto('/list');
   await titleButton(page, 'Kettle').click();
@@ -181,6 +185,44 @@ test('a tick made while the form is open survives saving it (RF3)', async ({
   expect(body).toMatchObject({ title: 'Stovetop kettle' });
   expect(Object.keys(body)).not.toContain('tags');
   await expect(status(page, 'Saved “Stovetop kettle”.')).toBeVisible();
+
+  const { context, chips } = await shareChips(page, browser, base);
+  await expect(chips).toHaveText([/Christmas/, /Kitchen/]);
+  await expect(chips.nth(1)).toHaveAccessibleName('Kitchen, 1 item');
+  await context.close();
+});
+
+test('a tag typed without Enter is added when the item is saved, unless it’s refused', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const base = baseURL ?? '';
+  await verifiedOwner(page, base, 'tags-typed');
+  const kettle = await addItemViaApi(page.request, base, { title: 'Kettle' });
+  let patches = 0;
+  page.on('request', (request) => {
+    if (request.method() === 'PATCH' && request.url().endsWith(`/items/${kettle.id}`)) patches++;
+  });
+  await page.goto('/list');
+  await titleButton(page, 'Kettle').click();
+
+  // A name the field refuses holds the save back, with the reason on the field.
+  await tagBox(page).fill('x'.repeat(31));
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByText('Use 30 characters or fewer.')).toBeVisible();
+  await expect(tagBox(page)).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Save' })).toBeVisible();
+  expect(patches).toBe(0);
+
+  await tagBox(page).fill('Kitchen');
+  const patch = page.waitForRequest(
+    (request) => request.method() === 'PATCH' && request.url().endsWith(`/items/${kettle.id}`),
+  );
+  await page.getByRole('button', { name: 'Save' }).click();
+  // Adding it changed the field, so the edit form sends the tags (ruling 5).
+  expect((await patch).postDataJSON()).toMatchObject({ tags: [{ name: 'Kitchen' }] });
+  await expect(status(page, 'Saved “Kettle”.')).toBeVisible();
 
   const { context, chips } = await shareChips(page, browser, base);
   await expect(chips).toHaveText([/Kitchen/]);

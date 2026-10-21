@@ -3,7 +3,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { CreateItemRequestSchema, ErrorCode, type Item } from '@wishlist/contracts';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type FormEvent } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   AlertDialog,
@@ -23,7 +23,7 @@ import { itemBody, liveTags } from '@/lib/tag-input';
 import { TrashIcon } from './icons';
 import { ItemFields, showFieldErrors } from './item-fields';
 import { useListStatus } from './list-status';
-import { useListTags } from './tag-field';
+import { useListTags, type TagBox } from './tag-field';
 import { useListMutations } from './use-list-mutations';
 
 /**
@@ -48,12 +48,12 @@ export function ItemEditForm({
   const { announce, fail } = useListStatus();
   const update = useMutation(useListMutations().update);
   const listTags = useListTags();
+  const tagBox = useRef<TagBox>(null);
   const form = useForm({
     resolver: zodResolver(CreateItemRequestSchema, { error: formErrorMap }),
     defaultValues: formValuesOf(item),
   });
-  // Read during render, so react-hook-form tracks which fields changed for the save.
-  const { isDirty, dirtyFields } = form.formState;
+  const { isDirty } = form.formState;
   const { setFocus } = form;
   // Set when Delete is confirmed, so closing the dialog moves focus on instead of back to Delete.
   const deleting = useRef(false);
@@ -68,10 +68,12 @@ export function ItemEditForm({
     setFocus('title');
   }, [setFocus]);
 
-  const onSubmit = form.handleSubmit(async (values) => {
+  const save = form.handleSubmit(async (values) => {
     try {
       const tags = liveTags(values.tags ?? [], listTags);
-      const body = itemBody({ ...values, tags }, Boolean(dirtyFields.tags));
+      // Read now, not from this render's closure: adding the typed tag on submit may have just
+      // dirtied the field.
+      const body = itemBody({ ...values, tags }, Boolean(form.formState.dirtyFields.tags));
       const saved = await update.mutateAsync({ id: item.id, body });
       announce(`Saved “${saved.title}”.`);
       onDone();
@@ -83,6 +85,16 @@ export function ItemEditForm({
     }
   });
 
+  // Text left in the tag box is added first, as Enter would add it; a name it refuses holds the
+  // save back, with the reason on the field.
+  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
+    if (tagBox.current?.addTyped() === false) {
+      event.preventDefault();
+      return;
+    }
+    void save(event);
+  };
+
   return (
     <form
       onSubmit={onSubmit}
@@ -90,7 +102,7 @@ export function ItemEditForm({
       aria-label={`Edit ${item.title}`}
       className="flex flex-col gap-3.5 px-3.5 pt-1.5 pb-4"
     >
-      <ItemFields form={form} idPrefix={`edit-${item.id}`} />
+      <ItemFields form={form} idPrefix={`edit-${item.id}`} tagBox={tagBox} />
       <div className="flex flex-wrap items-center gap-2">
         <AlertDialog>
           <AlertDialogTrigger asChild>
