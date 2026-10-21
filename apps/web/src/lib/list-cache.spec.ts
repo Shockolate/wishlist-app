@@ -170,7 +170,7 @@ describe('tags in the cache (Plan 7b rulings 4, 8)', () => {
     expect(removeTag(list(item(1)), tag(1).id)).toEqual(list(item(1)));
   });
 
-  it('keeps the tags and each item’s tagIds when the owner opts out of claims (ruling 8)', () => {
+  it('keeps the tags and each item’s tagIds when the owner opts out of claims (Plan 7b ruling 8)', () => {
     const before: WishlistResponse = {
       ...withTags(
         [tag(1)],

@@ -31,8 +31,8 @@ export interface TagBox {
 }
 
 /**
- * Every tag on the owner's own list, empty ones included, from the editor's cache (Ledger ruling
- * 6). It reads the cache rather than adding a second `useQuery` on the key: an observer's options
+ * Every tag on the owner's own list, empty ones included, from the editor's cache (spec §7, the tag
+ * field). It reads the cache rather than adding a second `useQuery` on the key: an observer's options
  * become the query's, and this one has no fetch of its own to give.
  */
 export function useListTags(): readonly Tag[] {
@@ -102,7 +102,7 @@ function TagCombobox({
   const input = useRef<HTMLInputElement | null>(null);
   const chipRow = useRef<HTMLDivElement | null>(null);
 
-  // A chip whose tag was deleted meanwhile is neither shown nor kept (ruling 6).
+  // A chip whose tag was deleted meanwhile is neither shown nor kept (Plan 7b ruling 6).
   const live = liveTags(value, all);
   const chips = shownTags(value, all);
   const offered = suggestTags(all, text, live);

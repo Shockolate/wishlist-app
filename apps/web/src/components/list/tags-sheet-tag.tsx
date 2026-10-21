@@ -24,7 +24,7 @@ import { useListMutation, useListMutations } from './use-list-mutations';
 /**
  * The Tags sheet's one-tag pane (Ted's mockups 2b and 2c): the tag, its count, Rename and Delete,
  * then every item in list order as a checkbox. A tick, an untick and a delete show at once; a
- * rename waits for the API, which decides the name that sticks (ruling 4).
+ * rename waits for the API, which decides the name that sticks (Plan 7b ruling 4).
  */
 export function TagPane({
   tag,

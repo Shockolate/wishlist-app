@@ -21,7 +21,7 @@ function keyOf(ref: ItemTagRef, all: readonly Tag[]): string | undefined {
 }
 
 /**
- * The owner's own tags that match what's typed (values table, Ledger ruling 6): those whose key
+ * The owner's own tags that match what's typed (spec §7, the tag field): those whose key
  * starts with the typed key, then those that contain it, each alphabetical, at most 6. Tags already
  * chosen are left out. Nothing typed matches every tag, so the list can be browsed from empty.
  */
@@ -43,7 +43,7 @@ export function suggestTags(
 /**
  * The chosen tags with `typed` added: the owner's tag with the same key, as `{ id }`, or a new
  * `{ name }`, cleaned. A tag already chosen is a no-op. A name the schema refuses, or an 11th tag,
- * gives the message to show instead (ruling 7).
+ * gives the message to show instead (Plan 7b ruling 7).
  */
 export function addTypedTag(
   chosen: readonly ItemTagRef[],
@@ -61,7 +61,7 @@ export function addTypedTag(
 }
 
 /**
- * Adds typed text as Enter or a save would (controller rulings on Task 5): each comma-separated
+ * Adds typed text as Enter or a save would (spec §7, the tag field): each comma-separated
  * part in order, through `addTypedTag`, so no tag is made holding a comma. Blank parts are skipped.
  * It stops at the first part refused: `tags` keeps the parts added before it, `left` is the text
  * from that part on, and `error` says why. A suggestion is added with `addTypedTag` instead, since
@@ -83,12 +83,12 @@ export function addPendingTags(
   return { tags, left: '' };
 }
 
-/** The chosen tags without any `{ id }` the list no longer holds: a tag deleted meanwhile (ruling 6). */
+/** The chosen tags without any `{ id }` the list no longer holds: a tag deleted meanwhile (Plan 7b ruling 6). */
 export function liveTags(chosen: readonly ItemTagRef[], all: readonly Tag[]): ItemTagRef[] {
   return chosen.filter((ref) => keyOf(ref, all) !== undefined);
 }
 
-/** The chips to show: the live chosen tags with their names, by name (ruling 6). */
+/** The chips to show: the live chosen tags with their names, by name (Plan 7b ruling 6). */
 export function shownTags(
   chosen: readonly ItemTagRef[],
   all: readonly Tag[],
@@ -102,7 +102,7 @@ export function shownTags(
 }
 
 /**
- * An item write's body, with `tags` only when they changed (ruling 5). Leaving them out keeps the
+ * An item write's body, with `tags` only when they changed (Plan 7b ruling 5). Leaving them out keeps the
  * item's tags as the API has them, so a tick made elsewhere while the form was open survives.
  */
 export function itemBody<T extends { tags: ItemTagRef[] }>(

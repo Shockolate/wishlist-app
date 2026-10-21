@@ -42,7 +42,7 @@ export function AddForm({
 
   const save = form.handleSubmit(async (values) => {
     try {
-      // Tags go only when there are some (Plan 7b ruling 5), less any deleted meanwhile (ruling 6).
+      // Tags go only when there are some (Plan 7b ruling 5), less any deleted meanwhile (Plan 7b ruling 6).
       const tags = liveTags(values.tags ?? [], listTags);
       onAdded(await create.mutateAsync(itemBody({ ...values, tags }, tags.length > 0)));
     } catch (error) {

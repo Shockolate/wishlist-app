@@ -577,7 +577,7 @@ The editor is layout A from the Plan 3b mockups: compact rows, edited in place (
   - A failed or rate-limited unfurl opens the same form with the link kept, and one sentence per failure reason says why.
 - **Rows:** a drag handle, the photo (or an idea tile), the title and price, and up and down buttons. Tapping a row opens its form in place, one row at a time. Quantity is a form field, saved with the rest. Delete asks for confirmation in a dialog.
 - **Sharing from `/list`:** Copy share link, and Share where the Web Share API exists. Both appear once the list has an item.
-- **Server state:** the server render seeds the TanStack Query cache. Every list change runs in one mutation queue, in order, and none is retried. Reorder and delete update the cache at once; adding and saving wait for the API. Any failed change refetches the list, which is the rollback, since restoring a snapshot would also undo the changes queued after it.
+- **Server state:** the server render seeds the TanStack Query cache. Every list change runs in one mutation queue, in order, and none is retried. Reorder, delete, and tag ticks, unticks and deletes update the cache at once; adding and saving, and creating and renaming a tag, wait for the API. Any failed change refetches the list, which is the rollback, since restoring a snapshot would also undo the changes queued after it.
 - **Photos** render as `<img alt="">` with `referrerPolicy="no-referrer"`, and fall back to a placeholder if they don't load.
 
 ### Share filters and tags (Plan 7b)

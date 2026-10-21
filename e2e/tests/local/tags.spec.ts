@@ -118,7 +118,7 @@ test('picks a suggestion with the keyboard and removes a tag in the edit form (R
   const base = baseURL ?? '';
   await verifiedOwner(page, base, 'tags-edit');
   await addItemViaApi(page.request, base, { title: 'Kettle', tags: [{ name: 'Christmas' }] });
-  // An empty tag the owner made is still offered (Ledger ruling 6).
+  // An empty tag the owner made is still offered (spec §7, the tag field).
   await createTagViaApi(page.request, base, 'Kitchen');
   await page.goto('/list');
   await titleButton(page, 'Kettle').click();
@@ -162,7 +162,7 @@ test('picks a suggestion with the keyboard and removes a tag in the edit form (R
   await context.close();
 });
 
-test('refuses an 11th tag in the field, and Escape closes the suggestions (ruling 7)', async ({
+test('refuses an 11th tag in the field, and Escape closes the suggestions (Plan 7b ruling 7)', async ({
   page,
   baseURL,
 }) => {
@@ -268,7 +268,7 @@ test('a tag typed without Enter is added when the item is saved, unless it’s r
     (request) => request.method() === 'PATCH' && request.url().endsWith(`/items/${kettle.id}`),
   );
   await page.getByRole('button', { name: 'Save' }).click();
-  // Adding it changed the field, so the edit form sends the tags (ruling 5).
+  // Adding it changed the field, so the edit form sends the tags (Plan 7b ruling 5).
   expect((await patch).postDataJSON()).toMatchObject({ tags: [{ name: 'Kitchen' }] });
   await expect(status(page, 'Saved “Kettle”.')).toBeVisible();
 
@@ -278,7 +278,7 @@ test('a tag typed without Enter is added when the item is saved, unless it’s r
   await context.close();
 });
 
-test('keys an input method is composing with never add or pick a tag (review I1)', async ({
+test('keys an input method is composing with never add or pick a tag (spec §7, the tag field)', async ({
   page,
   baseURL,
 }) => {
@@ -307,7 +307,7 @@ test('keys an input method is composing with never add or pick a tag (review I1)
   await expect(page.getByRole('button', { name: 'Remove きっちん' })).toBeVisible();
 });
 
-test('tags many items from the Tags sheet, then renames and deletes the tag (ruling 1)', async ({
+test('tags many items from the Tags sheet, then renames and deletes the tag (Plan 7b ruling 1)', async ({
   page,
   browser,
   baseURL,

@@ -257,7 +257,7 @@ test('a list with no tags and no prices has no row', async ({ page, browser, bas
   await expect(gifter.getByRole('button', { name: /price/i })).toHaveCount(0);
 });
 
-test('Clear filters from the keyboard leaves focus on the row, not the page (fix round 1)', async ({
+test('Clear filters from the keyboard leaves focus on the row, not the page', async ({
   page,
   browser,
   baseURL,
@@ -285,7 +285,7 @@ test('Clear filters from the keyboard leaves focus on the row, not the page (fix
   await expect(chip(gifter, 'Books')).toBeFocused();
 });
 
-test('the price menu closes on a click outside without taking focus, and on the pill with it (Ruling 4)', async ({
+test('the price menu closes on a click outside without taking focus, and on the pill with it (spec §7, the price pill)', async ({
   page,
   browser,
   baseURL,
@@ -306,7 +306,7 @@ test('the price menu closes on a click outside without taking focus, and on the 
   await expect(pricePill(gifter)).toBeFocused();
 });
 
-test('unticking a band a refresh has emptied keeps focus in the menu (fix round 1)', async ({
+test('unticking a band a refresh has emptied keeps focus in the menu', async ({
   page,
   browser,
   baseURL,
