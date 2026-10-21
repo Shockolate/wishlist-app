@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { connection } from 'next/server';
 import type { ReactNode } from 'react';
+import { SiteFooter } from '@/components/site-footer';
 import { rootMetadata } from '@/lib/site-metadata';
 import { geist, instrumentSerif } from './fonts';
 import './globals.css';
@@ -12,8 +13,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   await connection();
   return (
     <html lang="en" className={`${geist.variable} ${instrumentSerif.variable}`}>
-      <body className="min-h-dvh bg-background font-sans text-foreground antialiased">
-        {children}
+      <body className="flex min-h-dvh flex-col bg-background font-sans text-foreground antialiased">
+        <div className="flex-1">{children}</div>
+        <SiteFooter />
       </body>
     </html>
   );
