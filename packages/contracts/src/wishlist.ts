@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ItemTagsSchema, TagSchema } from './tags.js';
 import { VISIBLE_ONLY_MESSAGE, visibleOnly } from './text.js';
 
 /** A list holds at most this many items (spec §2). */
@@ -85,6 +86,7 @@ export const CreateItemRequestSchema = z.object({
   priceText: PriceTextSchema.optional(),
   note: NoteSchema.optional(),
   quantity: QuantitySchema.default(1),
+  tags: ItemTagsSchema.optional(),
 });
 export type CreateItemRequest = z.infer<typeof CreateItemRequestSchema>;
 
@@ -95,6 +97,8 @@ export const UpdateItemRequestSchema = z.object({
   priceText: PriceTextSchema.optional(),
   note: NoteSchema.optional(),
   quantity: QuantitySchema.optional(),
+  /** The item's whole tag set; `[]` clears it, and leaving it out keeps it (Plan 7a ruling 4). */
+  tags: ItemTagsSchema.optional(),
 });
 export type UpdateItemRequest = z.infer<typeof UpdateItemRequestSchema>;
 
@@ -130,7 +134,8 @@ export const ITEM_CLAIM_FIELDS = {
 
 /**
  * An item as the owner sees it. Every field is present; empty ones are null (Plan 3a rule 1).
- * `remaining` and `claims` appear only once the owner opts in (spec §5.1).
+ * `remaining` and `claims` appear only once the owner opts in (spec §5.1). `tagIds` is optional for
+ * expand/contract (spec §10); the tags themselves are sent once, beside the items.
  */
 export const ItemSchema = z.object({
   id: z.uuid(),
@@ -141,15 +146,24 @@ export const ItemSchema = z.object({
   note: z.string().nullable(),
   quantity: z.number().int(),
   position: z.number().int(),
+  tagIds: z.array(z.uuid()).optional(),
   ...ITEM_CLAIM_FIELDS,
 });
 export type Item = z.infer<typeof ItemSchema>;
+
+/**
+ * An item write's response (Plan 7a ruling 1): the item with its `tagIds`, plus the tags those ids
+ * name, so the editor needs no second request for a tag it has just made.
+ */
+export const ItemWriteResponseSchema = ItemSchema.extend({ tags: z.array(TagSchema).optional() });
+export type ItemWriteResponse = z.infer<typeof ItemWriteResponseSchema>;
 
 /** `GET /wishlist` (spec §5). Fields added after Plan 3a are optional, for expand/contract (spec §10). */
 export const WishlistResponseSchema = z.object({
   title: z.string(),
   shareUrl: z.url(),
   showClaimsToOwner: z.boolean().optional(),
+  tags: z.array(TagSchema).optional(),
   items: z.array(ItemSchema),
 });
 export type WishlistResponse = z.infer<typeof WishlistResponseSchema>;

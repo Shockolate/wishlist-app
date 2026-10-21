@@ -41,6 +41,12 @@ export const ErrorCode = {
   SHARE_LINK_NOT_FOUND: 'SHARE_LINK_NOT_FOUND',
   /** 409: a claim sent a manage token that belongs to a claim on another item (D42). */
   MANAGE_TOKEN_IN_USE: 'MANAGE_TOKEN_IN_USE',
+  /** 409: only a rename returns this; creating a tag whose name exists answers 200 with that tag (design §6). */
+  TAG_NAME_TAKEN: 'TAG_NAME_TAKEN',
+  /** 422: the list already holds 50 tags (design §3). */
+  TAG_LIMIT_REACHED: 'TAG_LIMIT_REACHED',
+  /** 422: ticking a tag would give the item more than 10 tags (design §6). */
+  ITEM_TAG_LIMIT_REACHED: 'ITEM_TAG_LIMIT_REACHED',
   /** Synthesized by the web client when an error response isn't problem+json (e.g. a Vercel edge page). */
   UNEXPECTED_RESPONSE: 'UNEXPECTED_RESPONSE',
 } as const;
