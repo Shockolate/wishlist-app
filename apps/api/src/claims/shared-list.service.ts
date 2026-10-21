@@ -3,6 +3,7 @@ import { CAPABILITY_TOKEN_PATTERN, type SharedWishlistResponse } from '@wishlist
 import { eq } from 'drizzle-orm';
 import { DB, type Database } from '../db/database.module.js';
 import { users, wishlists } from '../db/schema.js';
+import { readTagIdsByItem, readTags } from '../wishlist/tag-queries.js';
 import { shareLinkNotFound } from './claims-errors.js';
 import { projectWishlist, seesClaims, type Viewer } from './projection.js';
 import { readClaims, readSharedItems, SNAPSHOT } from './queries.js';
@@ -35,7 +36,9 @@ export class SharedListService {
       const viewer: Viewer = viewerIsOwner
         ? { kind: 'owner', showClaims: list.showClaims }
         : { kind: 'guest' };
-      const rows = await readSharedItems(tx, list.id);
+      const sharedRows = await readSharedItems(tx, list.id);
+      const tagIdsByItem = await readTagIdsByItem(tx, list.id);
+      const rows = sharedRows.map((row) => ({ ...row, tagIds: tagIdsByItem.get(row.id) ?? [] }));
       // An owner who hasn't opted in never gets claim data: it isn't even read (spec §5).
       const claimRows = seesClaims(viewer) ? await readClaims(tx, list.id) : [];
       return {
@@ -43,6 +46,8 @@ export class SharedListService {
         ownerDisplayName: list.ownerDisplayName,
         viewerIsOwner,
         ownerSeesClaims: list.showClaims,
+        // Only tags some item carries: a gifter never sees an empty tag (Plan 7a).
+        tags: await readTags(tx, list.id, { usedOnly: true }),
         items: projectWishlist(rows, claimRows, viewer),
       };
     }, SNAPSHOT);

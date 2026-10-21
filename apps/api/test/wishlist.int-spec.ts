@@ -9,11 +9,11 @@ import {
   WishlistSettingsResponseSchema,
 } from '@wishlist/contracts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { ADA, logIn, signUp, signUpVerified } from './support/accounts.js';
+import { ADA, logIn, signUp, signUpVerified, type Account } from './support/accounts.js';
 import { createAuthTestApp, type AuthTestApp } from './support/auth-app.js';
 import { client, type ApiResponse } from './support/client.js';
 import { openTestDatabase } from './support/database.js';
-import { seedClaim, seedItem, shareTokenOf } from './support/lists.js';
+import { linkTag, seedClaim, seedItem, seedTag, shareTokenOf } from './support/lists.js';
 
 const db = openTestDatabase();
 let t: AuthTestApp;
@@ -31,6 +31,12 @@ beforeEach(async () => {
   await db.truncateAll();
   t.reset();
 });
+
+const BOB: Account = {
+  email: 'bob@example.com',
+  password: 'another fine passphrase 2',
+  displayName: 'Bob',
+};
 
 const codeOf = (res: ApiResponse) => ProblemSchema.parse(res.body).code;
 
@@ -69,8 +75,48 @@ describe('GET /wishlist (spec §5)', () => {
       title: "Ada's wishlist",
       shareUrl: expect.stringMatching(/^http:\/\/localhost:3000\/s\/[A-Za-z0-9_-]{22}$/) as string,
       showClaimsToOwner: false,
+      tags: [],
       items: [],
     });
+  });
+
+  it("returns every tag, in name order, and each item's tag IDs (Plan 7a)", async () => {
+    const cookie = await owner();
+    const kettle = await seedItem(db, ADA.email, 'Kettle');
+    const socks = await seedItem(db, ADA.email, 'Socks');
+    const kitchen = await seedTag(db, ADA.email, 'Kitchen');
+    const garden = await seedTag(db, ADA.email, 'Garden');
+    await linkTag(db, kettle, kitchen);
+    const res = await client(t.app, cookie).get('/wishlist');
+    expect(res.status).toBe(200);
+    const body = WishlistResponseSchema.parse(res.body);
+    expect(body.tags).toEqual([
+      { id: garden, name: 'Garden' },
+      { id: kitchen, name: 'Kitchen' },
+    ]);
+    expect(body.items.map((item) => [item.id, item.tagIds])).toEqual([
+      [kettle, [kitchen]],
+      [socks, []],
+    ]);
+  });
+
+  it("orders an item's tag IDs like the tags: by name, not by when they were added", async () => {
+    const cookie = await owner();
+    const kettle = await seedItem(db, ADA.email, 'Kettle');
+    const kitchen = await seedTag(db, ADA.email, 'Kitchen');
+    const garden = await seedTag(db, ADA.email, 'Garden');
+    await linkTag(db, kettle, kitchen);
+    await linkTag(db, kettle, garden);
+    const body = WishlistResponseSchema.parse((await client(t.app, cookie).get('/wishlist')).body);
+    expect(body.items[0]?.tagIds).toEqual([garden, kitchen]);
+  });
+
+  it("keeps tags out of another owner's list", async () => {
+    await signUpVerified(t);
+    await seedTag(db, ADA.email, 'Kitchen');
+    await signUpVerified(t, BOB);
+    const res = await client(t.app, await logIn(t, BOB)).get('/wishlist');
+    expect(WishlistResponseSchema.parse(res.body).tags).toEqual([]);
   });
 
   it('says whether the owner sees claims, and carries none until the owner opts in (spec §5.1, §8)', async () => {
@@ -82,6 +128,7 @@ describe('GET /wishlist (spec §5)', () => {
       'items',
       'shareUrl',
       'showClaimsToOwner',
+      'tags',
       'title',
     ]);
     const body = res.body as { showClaimsToOwner: boolean; items: object[] };

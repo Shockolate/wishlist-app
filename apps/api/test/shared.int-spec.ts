@@ -4,7 +4,14 @@ import { ADA, logIn, signUp, signUpVerified, type Account } from './support/acco
 import { createAuthTestApp, type AuthTestApp } from './support/auth-app.js';
 import { client, setCookies, type ApiResponse } from './support/client.js';
 import { openTestDatabase } from './support/database.js';
-import { seedClaim, seedItem, setShowClaims, shareTokenOf } from './support/lists.js';
+import {
+  linkTag,
+  seedClaim,
+  seedItem,
+  seedTag,
+  setShowClaims,
+  shareTokenOf,
+} from './support/lists.js';
 
 const db = openTestDatabase();
 let t: AuthTestApp;
@@ -55,21 +62,60 @@ describe('GET /shared/:shareToken (spec §5)', () => {
       ownerDisplayName: 'Ada',
       viewerIsOwner: false,
       ownerSeesClaims: false,
+      tags: [],
       items: [
         {
           id: kettle,
           title: 'Kettle',
           ...fields,
           quantity: 3,
+          tagIds: [],
           remaining: 1,
           claims: [
             { id: sue.id, claimerName: 'Sue', quantity: 1 },
             { id: sam.id, claimerName: 'Sam', quantity: 1 },
           ],
         },
-        { id: socks, title: 'Socks', ...fields, quantity: 1, remaining: 1, claims: [] },
+        {
+          id: socks,
+          title: 'Socks',
+          ...fields,
+          quantity: 1,
+          tagIds: [],
+          remaining: 1,
+          claims: [],
+        },
       ],
     });
+  });
+
+  it("lists the tags in use, in name order, and each item's tag IDs; a guest never sees an empty tag (Plan 7a)", async () => {
+    const { token, kettle, socks } = await adasList();
+    const kitchen = await seedTag(db, ADA.email, 'Kitchen');
+    const gifts = await seedTag(db, ADA.email, 'Gifts');
+    await seedTag(db, ADA.email, 'Garden');
+    await linkTag(db, kettle, kitchen);
+    await linkTag(db, kettle, gifts);
+    await linkTag(db, socks, gifts);
+    const body = SharedWishlistResponseSchema.parse((await shared(token)).body);
+    expect(body.tags).toEqual([
+      { id: gifts, name: 'Gifts' },
+      { id: kitchen, name: 'Kitchen' },
+    ]);
+    expect(body.items.map((item) => item.tagIds)).toEqual([[gifts, kitchen], [gifts]]);
+  });
+
+  it('gives the signed-in owner the same tags and tag IDs, with no claim data (Plan 7a)', async () => {
+    const { token, kettle } = await adasList();
+    const kitchen = await seedTag(db, ADA.email, 'Kitchen');
+    await seedTag(db, ADA.email, 'Garden');
+    await linkTag(db, kettle, kitchen);
+    const res = await shared(token, await logIn(t));
+    const body = SharedWishlistResponseSchema.parse(res.body);
+    expect([body.viewerIsOwner, body.tags]).toEqual([true, [{ id: kitchen, name: 'Kitchen' }]]);
+    expect(body.items[0]?.tagIds).toEqual([kitchen]);
+    expect(body.items[1]?.tagIds).toEqual([]);
+    expect(body.items[0]).not.toHaveProperty('claims');
   });
 
   it('sends no position, and nothing from a claim but its ID, name and quantity', async () => {
@@ -83,6 +129,7 @@ describe('GET /shared/:shareToken (spec §5)', () => {
       'priceText',
       'quantity',
       'remaining',
+      'tagIds',
       'title',
       'url',
     ]);
