@@ -473,7 +473,7 @@ Re-check them if the code changed after that date.
   - **Favicon:** the tag shows in a light and a dark browser tab, and on an iPhone, Share → Add to Home Screen shows the cream-backed tag.
   - **Link previews:** paste `https://hanker.dev` into LinkedIn's Post Inspector (https://www.linkedin.com/post-inspector/). It shows the type-only image and "Hanker". Text yourself `https://hanker.dev` and one of your share links. The share link's preview shows your list title and "Pick a gift so nobody doubles up."
   - **Headers:** `curl -sI https://hanker.dev/ | grep -i permissions-policy` shows the header, and https://securityheaders.com/?q=hanker.dev lists it.
-  - **`security.txt`:** paste `https://hanker.dev/.well-known/security.txt` into a validator such as https://securitytxt.org. It reports no errors.
+  - **`security.txt`:** run https://internet.nl's website test on `hanker.dev`. Under **Security options**, its security.txt row reports the file valid. (securitytxt.org only generates files; it has no validator.)
   - **On a phone,** "Copy share link" in `/list` and the share sheet after a claim both still work.
   - **The footer's** `hello@hanker.dev` link opens a mail draft, and a message sent from it arrives.
 - [ ] **Step 3: Mark the roadmap.** Set the roadmap row to `Done` in a small follow-up PR, as with earlier plans.
