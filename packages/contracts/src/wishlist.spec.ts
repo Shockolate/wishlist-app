@@ -201,6 +201,12 @@ describe('UnfurlRequestSchema and UnfurlResponseSchema (spec §5, §6.8)', () =>
     expect(UnfurlResponseSchema.safeParse({ failureReason: 'UNREACHABLE' }).success).toBe(true);
     expect(UnfurlResponseSchema.safeParse({ failureReason: 'SOMETHING_ELSE' }).success).toBe(false);
   });
+
+  it('knows LOOKUP_UNAVAILABLE, for a lookup service that can’t answer (retailer lookups §5.4)', () => {
+    expect(UnfurlResponseSchema.safeParse({ failureReason: 'LOOKUP_UNAVAILABLE' }).success).toBe(
+      true,
+    );
+  });
 });
 
 // Postgres refuses U+0000 in a text column, which turned it into a 500. It is invisible, so the

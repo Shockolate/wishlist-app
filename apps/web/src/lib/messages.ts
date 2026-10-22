@@ -1,4 +1,9 @@
-import { ErrorCode, type UnfurlFailureReason, type UnfurlResponse } from '@wishlist/contracts';
+import {
+  ErrorCode,
+  retailerOf,
+  type UnfurlFailureReason,
+  type UnfurlResponse,
+} from '@wishlist/contracts';
 import { ApiError, ContractMismatchError } from './api-client';
 import { shopName } from './item-display';
 
@@ -122,10 +127,23 @@ export const UNFURL_MESSAGES: Readonly<Record<UnfurlFailureReason, string>> = {
   TOO_MANY_REDIRECTS: NO_DETAILS,
   INVALID_URL: NOT_PUBLIC,
   DISALLOWED_ADDRESS: NOT_PUBLIC,
+  LOOKUP_UNAVAILABLE: 'We couldn’t get the details right now, so fill them in yourself.',
 };
+/** LOOKUP_UNAVAILABLE for an Amazon link names the shop (retailer lookups §5.4). */
+const AMAZON_UNAVAILABLE =
+  'We couldn’t get the details from Amazon right now, so fill them in yourself.';
 export const UNFURL_RATE_LIMITED =
   'You’ve added a lot of links this hour, so fill in the details yourself.';
 export const UNFURL_FAILED = 'We couldn’t read that page, so fill in the details yourself.';
+
+/** The add box's waiting panel for an Amazon link (retailer lookups §5.5): the status line. */
+export const AMAZON_WAIT = 'Getting the details from Amazon…';
+/** The panel's second line: Bright Data takes 4–22 seconds, and we give up at 30. */
+export const AMAZON_WAIT_HINT = 'Amazon can take up to half a minute.';
+/** The panel's button, which opens the form without waiting. */
+export const SKIP_LOOKUP = 'Skip, I’ll type them';
+/** Above the form after Skip. */
+export const LOOKUP_SKIPPED = 'Fill in the details yourself.';
 
 /** The sentence above a new item's form: what unfurl found, or why it found nothing. */
 export function prefillMessage(
@@ -136,6 +154,9 @@ export function prefillMessage(
     return hasCode(outcome.error, ErrorCode.RATE_LIMITED) ? UNFURL_RATE_LIMITED : UNFURL_FAILED;
   }
   const { failureReason } = outcome.response;
+  if (failureReason === 'LOOKUP_UNAVAILABLE' && retailerOf(url) === 'amazon') {
+    return AMAZON_UNAVAILABLE;
+  }
   if (failureReason) return UNFURL_MESSAGES[failureReason];
   return `Filled in from ${shopName(url) ?? 'the page'}. Check it, then add it.`;
 }
