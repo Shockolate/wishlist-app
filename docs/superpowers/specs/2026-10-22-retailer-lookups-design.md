@@ -1,7 +1,7 @@
 # Retailer Lookups (Amazon and Etsy) — Design
 
 - **Date:** 2026-10-22
-- **Status:** Approved by Ted, 2026-10-22. Etsy Personal App submitted (step E1) the same day.
+- **Status:** Approved by Ted, 2026-10-22. On the same day, the Etsy Personal App was submitted (E1) and approved (E2), and Ted read Etsy's API terms (E3). Amazon shipped as Plan 8a, and Etsy follows as Plan 8b.
 - **Author:** Ted Armstrong (with Claude)
 - **Amends:** [`2026-10-07-wishlist-app-design.md`](2026-10-07-wishlist-app-design.md). §6.8 gains retailer lookups and a failure code. D34 is narrowed (§5.8). §7's add box gains a waiting panel. The plan assigns decision numbers from D64.
 - **Origin:** Ted pasted Amazon and Etsy links into his own list on 2026-10-22, and neither filled in. He decided everything below in conversation that day.
@@ -163,7 +163,16 @@ All three helpers are today's (`apps/api/src/unfurl/metadata.ts`).
 
 **Outcomes:** a listing that isn't found or isn't active (removed, sold out, a draft) is `NO_METADATA`. A service failure is `LOOKUP_UNAVAILABLE`.
 
-**Caching:** whether Etsy's API terms allow keeping the title, photo and price on a saved item indefinitely is **unread** (§6, step E3). Etsy work doesn't start until it's been read. If the terms forbid it, Ted decides what to do before the plan continues.
+**Caching (read in E3, 2026-10-22):** Etsy's API Terms of Use say:
+
+> You will not display listing content more than six (6) hours older than the corresponding information on the Etsy Site or the Etsy Apps. You will not display any other Etsy content more than twenty-four (24) hours older than the content displayed on the Etsy Site or the Etsy Apps. Once you’ve accessed, stored, or displayed Etsy content, you will not cache or store it longer than is reasonably necessary to provide service to your Application’s users.
+
+Read strictly, this rules out keeping Etsy's title, photo and price on a saved item. **Ted's decision: prefill only.**
+- The API is called once, when the owner pastes the link, to fill in the add form.
+- What the owner saves is their own entry. Hanker never refreshes it, and never calls Etsy again for a saved item.
+- The accepted risk is that Etsy reads the terms more strictly and revokes the key. Etsy links would then go back to being typed in by hand, and the fix is to unset `ETSY_API_KEY`.
+
+The alternatives were refreshing Etsy items every 6 hours, which means a schema change and Etsy calls on page views, and not building Etsy lookups at all.
 
 ### 5.4 When a lookup can't be done (Ted's decision)
 
@@ -215,7 +224,7 @@ Both pages change in the release that turns each retailer on.
 - **`/privacy`, "Who else handles your information":**
   - Bright Data: it sees the Amazon product IDs of links owners paste, and nothing about who pasted them.
   - Etsy: it sees the listing IDs of Etsy links.
-- **`/terms`:** Etsy's required statement, verbatim: "The term 'Etsy' is a trademark of Etsy, Inc. This application uses the Etsy API but is not endorsed or certified by Etsy, Inc." *(The builder checks the exact wording against Etsy's terms.)*
+- **`/terms`:** Etsy's required statement, as the second paragraph of "Shops and gifts", verbatim from Etsy's terms (read in E3): "The term 'Etsy' is a trademark of Etsy, Inc. This Application uses Etsy's API, but is not endorsed or certified by Etsy." This replaces the draft wording. Etsy asks for the statement to be displayed "prominently", and Ted kept `/terms` knowing that (2026-10-22).
 
 ### 5.8 Spec changes
 
@@ -238,7 +247,7 @@ The Etsy registration is started first, because its review time is unknown.
 3. Describe the use case in plain terms: "A family wishlist. When an owner pastes an Etsy listing link, Hanker reads that one listing's title, first photo and price to prefill their item. Read-only public listing data, a few lookups a day, no seller data, no OAuth."
 4. Submit, and note the date. Check "Apps You've Made" for the status.
 
-**E2. When Etsy approves,** copy the **keystring** and **shared secret** from "Apps You've Made". Don't paste them anywhere yet (E4 stores them).
+**E2. When Etsy approves** (done 2026-10-22), copy the **keystring** and **shared secret** from "Apps You've Made". Don't paste them anywhere yet (E4 stores them).
 
 **E3. Read Etsy's API Terms of Use** (https://www.etsy.com/legal/api) while signed in to the developer portal, for:
 - the caching rules;
@@ -246,6 +255,8 @@ The Etsy registration is started first, because its review time is unknown.
 - the rate limits shown for the app.
 
 Tell Claude what they say. Etsy work starts only after this (§5.3).
+
+*Done 2026-10-22.* The caching rules are in §5.3, and the statement is in §5.7. The app's rate limits are 5 requests a second and 5,000 a day.
 
 **E4. Store the Etsy key in production** (when the Etsy layer is ready to turn on). This follows `docs/deployment.md`'s pattern: hidden prompts, piped straight into Vercel. Paste the keystring at the first silent prompt and the shared secret at the second:
 ```bash
