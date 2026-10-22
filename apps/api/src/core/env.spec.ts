@@ -29,6 +29,12 @@ describe('parseEnv', () => {
     expect(() => parseEnv({ ...base, BRIGHT_DATA_API_KEY: '' })).toThrow(/BRIGHT_DATA_API_KEY/);
   });
 
+  it('reads ETSY_API_KEY, which is optional (retailer lookups §5.6)', () => {
+    expect(parseEnv(base).ETSY_API_KEY).toBeUndefined();
+    expect(parseEnv({ ...base, ETSY_API_KEY: 'ks:secret' }).ETSY_API_KEY).toBe('ks:secret');
+    expect(() => parseEnv({ ...base, ETSY_API_KEY: '' })).toThrow(/ETSY_API_KEY/);
+  });
+
   it('names the offending variable when the environment is invalid', () => {
     expect(() => parseEnv({ ...base, PORT: 'not-a-port' })).toThrow(/PORT/);
   });

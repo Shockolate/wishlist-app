@@ -5,6 +5,7 @@ import type { ErrorContext, ErrorReporter } from '../observability/error-reporte
 import type { BreachedPasswordChecker } from '../security/breached-passwords.js';
 import type { CaptchaVerdict, CaptchaVerifier } from '../security/captcha.js';
 import type { AmazonLookup, LookupResult } from '../unfurl/amazon-lookup.js';
+import type { EtsyLookup } from '../unfurl/etsy-lookup.js';
 import type { MetadataFetcher } from '../unfurl/metadata-fetcher.js';
 
 /** A clock tests move by hand. */
@@ -87,6 +88,17 @@ export class FakeAmazonLookup implements AmazonLookup {
 
   lookUp(asin: string): Promise<LookupResult> {
     this.asins.push(asin);
+    return Promise.resolve(this.next);
+  }
+}
+
+/** Etsy lookup stand-in: answers `next`, records the listing IDs it was asked for. */
+export class FakeEtsyLookup implements EtsyLookup {
+  next: LookupResult = { ok: false, reason: 'NO_METADATA' };
+  readonly listingIds: string[] = [];
+
+  lookUp(listingId: string): Promise<LookupResult> {
+    this.listingIds.push(listingId);
     return Promise.resolve(this.next);
   }
 }
