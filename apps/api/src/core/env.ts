@@ -39,6 +39,8 @@ const EnvSchema = z
     CRON_SECRET: z.string().min(32).optional(),
     /** The API's Sentry project. Set only in production (spec §10); unset means no reporting. */
     SENTRY_DSN: z.url().optional(),
+    /** Unset means Amazon links take the page fetch (retailer lookups design §5.6). */
+    BRIGHT_DATA_API_KEY: z.string().min(1).optional(),
   })
   .superRefine((env, ctx) => {
     if (env.EMAIL_TRANSPORT === 'resend' && !env.RESEND_API_KEY) {

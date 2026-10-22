@@ -2,7 +2,7 @@ import { isIP, type LookupFunction } from 'node:net';
 import { pipeline, Transform, type Readable, type TransformCallback } from 'node:stream';
 import { createBrotliDecompress, createGunzip, createInflate } from 'node:zlib';
 import type { UnfurlFailureReason } from '@wishlist/contracts';
-import { Agent, request } from 'undici';
+import { Agent, request, type Dispatcher } from 'undici';
 import { PUBLIC_WEB, type AddressPolicy } from './address-policy.js';
 import { createCaresResolve, type Resolve } from './dns.js';
 
@@ -30,9 +30,12 @@ export interface PageFetcherOptions {
  * A page, or why there isn't one. `truncated` means the page went on past `maxBytes`, and `html` is
  * its start.
  */
-export type FetchedPage =
-  | { ok: true; url: URL; html: string; truncated: boolean }
-  | { ok: false; reason: UnfurlFailureReason; host?: string };
+export type FetchedPage = { ok: true; url: URL; html: string; truncated: boolean } | FetchFailed;
+
+/** Where a short link leads, or why it leads nowhere usable. */
+export type ResolvedLink = { ok: true; url: URL } | FetchFailed;
+
+export type FetchFailed = { ok: false; reason: UnfurlFailureReason; host?: string };
 
 /** A failure with a known reason. fetch() throws these internally and returns them as results. */
 class FetchFailure extends Error {
@@ -61,7 +64,7 @@ class FetchFailure extends Error {
  */
 export class PageFetcher {
   private readonly policy: AddressPolicy;
-  private readonly resolve: Resolve;
+  private readonly resolveHost: Resolve;
   private readonly timeoutMs: number;
   private readonly maxBytes: number;
   private readonly maxRawBytes: number;
@@ -69,7 +72,7 @@ export class PageFetcher {
 
   constructor(options: PageFetcherOptions = {}) {
     this.policy = options.policy ?? PUBLIC_WEB;
-    this.resolve = options.resolve ?? resolveAll;
+    this.resolveHost = options.resolve ?? resolveAll;
     this.timeoutMs = options.timeoutMs ?? 5_000;
     this.maxBytes = options.maxBytes ?? 1_048_576;
     this.maxRawBytes = options.maxRawBytes ?? 1_048_576;
@@ -77,38 +80,11 @@ export class PageFetcher {
   }
 
   async fetch(rawUrl: string): Promise<FetchedPage> {
-    let url: URL;
-    try {
-      url = new URL(rawUrl);
-    } catch {
-      return { ok: false, reason: 'INVALID_URL' };
-    }
-    // The hostnames checked during this fetch, with the addresses that passed. pinnedLookup serves
-    // only these, and the agent dies with this fetch (Plan 3a rule 10).
-    const vetted = new Map<string, string[]>();
-    const agent = new Agent({ connect: { lookup: pinnedLookup(vetted), timeout: this.timeoutMs } });
-    const signal = AbortSignal.timeout(this.timeoutMs);
-    try {
-      for (let redirects = 0; ; redirects++) {
-        // No hop starts after the deadline.
-        signal.throwIfAborted();
-        await this.vet(url, vetted, signal);
-        // undici acts on an abort only once the socket is connected, so a server that stalls TCP
-        // or the TLS handshake would outlast the deadline. untilAborted() enforces it. If it wins
-        // the race, the abandoned request rejects later, when `finally` destroys the agent, and
-        // untilAborted() has always observed that rejection.
-        const res = await untilAborted(
-          request(url, { dispatcher: agent, method: 'GET', headers: REQUEST_HEADERS, signal }),
-          signal,
-        );
-        if (res.statusCode >= 300 && res.statusCode < 400) {
-          await res.body.dump();
-          // dump() resolves on close, so a deadline that passed while draining must be TIMEOUT.
-          signal.throwIfAborted();
-          if (redirects === this.maxRedirects) throw new FetchFailure('TOO_MANY_REDIRECTS');
-          url = nextHop(res.headers.location, url);
-          continue;
-        }
+    return this.hops(
+      rawUrl,
+      undefined,
+      () => false,
+      async (res, url, signal) => {
         // Only a 200 is the page. A bot check can answer 202 with a script, and a 204 has nothing.
         if (res.statusCode !== 200) {
           await res.body.dump();
@@ -127,6 +103,80 @@ export class PageFetcher {
         const body = decoded(res.body, res.headers['content-encoding'], raw);
         const { bytes, truncated } = await readCapped(body, this.maxBytes, raw);
         return { ok: true, url, html: decodeHtml(bytes, type), truncated };
+      },
+    );
+  }
+
+  /**
+   * Follows a short link's redirects under the same rules as `fetch`, and stops at the first hop
+   * `stopAt` accepts, without requesting it (retailer lookups §5.1). A chain that ends anywhere
+   * else is NO_METADATA: its page is never read. `signal` is the caller's deadline, on top of ours.
+   */
+  async resolve(
+    rawUrl: string,
+    stopAt: (url: URL) => boolean,
+    signal?: AbortSignal,
+  ): Promise<ResolvedLink> {
+    return this.hops(
+      rawUrl,
+      signal,
+      stopAt,
+      async (res, _url, deadline) => {
+        await res.body.dump();
+        // dump() resolves on close, so a deadline that passed while draining must be TIMEOUT.
+        deadline.throwIfAborted();
+        throw new FetchFailure('NO_METADATA');
+      },
+      (url) => ({ ok: true, url }),
+    );
+  }
+
+  /**
+   * The hop loop `fetch` and `resolve` share: vet, connect to the vetted address, follow redirects
+   * by hand. `answer` handles the first response that isn't a redirect.
+   */
+  private async hops<T extends { ok: true }>(
+    rawUrl: string,
+    external: AbortSignal | undefined,
+    stopAt: (url: URL) => boolean,
+    answer: (res: Dispatcher.ResponseData, url: URL, signal: AbortSignal) => Promise<T>,
+    stopped?: (url: URL) => T,
+  ): Promise<T | FetchFailed> {
+    let url: URL;
+    try {
+      url = new URL(rawUrl);
+    } catch {
+      return { ok: false, reason: 'INVALID_URL' };
+    }
+    // The hostnames checked during this fetch, with the addresses that passed. pinnedLookup serves
+    // only these, and the agent dies with this fetch (Plan 3a rule 10).
+    const vetted = new Map<string, string[]>();
+    const agent = new Agent({ connect: { lookup: pinnedLookup(vetted), timeout: this.timeoutMs } });
+    const own = AbortSignal.timeout(this.timeoutMs);
+    const signal = external ? AbortSignal.any([own, external]) : own;
+    try {
+      for (let redirects = 0; ; redirects++) {
+        // No hop starts after the deadline.
+        signal.throwIfAborted();
+        if (stopped && stopAt(url)) return stopped(url);
+        await this.vet(url, vetted, signal);
+        // undici acts on an abort only once the socket is connected, so a server that stalls TCP
+        // or the TLS handshake would outlast the deadline. untilAborted() enforces it. If it wins
+        // the race, the abandoned request rejects later, when `finally` destroys the agent, and
+        // untilAborted() has always observed that rejection.
+        const res = await untilAborted(
+          request(url, { dispatcher: agent, method: 'GET', headers: REQUEST_HEADERS, signal }),
+          signal,
+        );
+        if (res.statusCode >= 300 && res.statusCode < 400) {
+          await res.body.dump();
+          // dump() resolves on close, so a deadline that passed while draining must be TIMEOUT.
+          signal.throwIfAborted();
+          if (redirects === this.maxRedirects) throw new FetchFailure('TOO_MANY_REDIRECTS');
+          url = nextHop(res.headers.location, url);
+          continue;
+        }
+        return await answer(res, url, signal);
       }
     } catch (error) {
       return { ok: false, reason: reasonFor(error, signal), host: url.hostname };
@@ -153,7 +203,7 @@ export class PageFetcher {
   private async lookUp(host: string, signal: AbortSignal): Promise<string[]> {
     let addresses: string[];
     try {
-      addresses = await untilAborted(this.resolve(host, signal), signal);
+      addresses = await untilAborted(this.resolveHost(host, signal), signal);
     } catch (error) {
       if (signal.aborted) throw error;
       throw new FetchFailure('DNS_FAILED');

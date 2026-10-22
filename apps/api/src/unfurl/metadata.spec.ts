@@ -1,6 +1,6 @@
 import { PriceTextSchema } from '@wishlist/contracts';
 import { describe, expect, it } from 'vitest';
-import { extractMetadata, formatPrice } from './metadata.js';
+import { extractMetadata, formatPrice, productMetadata } from './metadata.js';
 
 const SHOP = new URL('https://shop.example/products/kettle');
 
@@ -234,5 +234,43 @@ describe('a prefill is always storable (final review I1)', () => {
 
   it('keeps a character outside the BMP whole', () => {
     expect(nameOf('Kettle \\ud83e\\uded6')).toBe('Kettle \u{1FAD6}');
+  });
+});
+
+describe('productMetadata (retailer lookups §5.2)', () => {
+  const AMAZON = new URL('https://www.amazon.com/dp/B08FK7B2SC');
+  const IMAGE = 'https://m.media-amazon.com/images/I/81huEJXkxfL._AC_SL1500_.jpg';
+
+  it('cleans a lookup service’s fields as a page’s are cleaned', () => {
+    expect(
+      productMetadata(
+        {
+          title: '  Cephalofair Games:​ Frosthaven ',
+          imageUrl: IMAGE,
+          amount: 240,
+          currency: 'USD',
+        },
+        AMAZON,
+      ),
+    ).toEqual({ title: 'Cephalofair Games: Frosthaven', imageUrl: IMAGE, priceText: '$240.00' });
+  });
+
+  it('drops an http image and a missing price', () => {
+    expect(
+      productMetadata(
+        { title: 'Kettle', imageUrl: 'http://x.example/k.jpg', amount: null },
+        AMAZON,
+      ),
+    ).toEqual({ title: 'Kettle' });
+  });
+
+  it('cuts a long title to 200 characters', () => {
+    expect(productMetadata({ title: 'a'.repeat(250) }, AMAZON).title).toHaveLength(200);
+  });
+
+  it('ignores fields that aren’t strings', () => {
+    expect(productMetadata({ title: 42, imageUrl: ['https://x.example/k.jpg'] }, AMAZON)).toEqual(
+      {},
+    );
   });
 });

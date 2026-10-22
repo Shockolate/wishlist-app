@@ -23,6 +23,12 @@ describe('parseEnv', () => {
     expect(parseEnv({ ...base, PORT: '4000' }).PORT).toBe(4000);
   });
 
+  it('reads BRIGHT_DATA_API_KEY, which is optional (retailer lookups §5.6)', () => {
+    expect(parseEnv(base).BRIGHT_DATA_API_KEY).toBeUndefined();
+    expect(parseEnv({ ...base, BRIGHT_DATA_API_KEY: 'k' }).BRIGHT_DATA_API_KEY).toBe('k');
+    expect(() => parseEnv({ ...base, BRIGHT_DATA_API_KEY: '' })).toThrow(/BRIGHT_DATA_API_KEY/);
+  });
+
   it('names the offending variable when the environment is invalid', () => {
     expect(() => parseEnv({ ...base, PORT: 'not-a-port' })).toThrow(/PORT/);
   });
