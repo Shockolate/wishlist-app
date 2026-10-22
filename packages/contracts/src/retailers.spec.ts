@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { amazonProductOf, amazonProductUrl, isAmazonShortLink, retailerOf } from './retailers.js';
+import {
+  amazonProductOf,
+  amazonProductUrl,
+  etsyListingOf,
+  isAmazonShortLink,
+  isEtsyShortLink,
+  retailerOf,
+} from './retailers.js';
 
 // Ted's links from the retailer-lookups spike (design §3).
 const SPIKE_LINKS = [
@@ -75,5 +82,43 @@ describe('retailerOf', () => {
 describe('amazonProductUrl', () => {
   it('is the canonical product URL, with nothing of the pasted link', () => {
     expect(amazonProductUrl('B08FK7B2SC')).toBe('https://www.amazon.com/dp/B08FK7B2SC');
+  });
+});
+
+describe('etsyListingOf (retailer lookups §5.1)', () => {
+  it.each([
+    ['https://www.etsy.com/listing/1234567890/hand-thrown-mug?ref=hp_rv', '1234567890'],
+    ['https://etsy.com/listing/1234567890', '1234567890'],
+    ['https://www.etsy.com/uk/listing/1234567890/hand-thrown-mug', '1234567890'],
+    ['https://www.etsy.com/en-gb/listing/987654321', '987654321'],
+    ['https://WWW.ETSY.COM/listing/1234567890', '1234567890'],
+  ])('reads the listing ID of %s (Review Focus 2)', (url, listingId) => {
+    expect(etsyListingOf(url)).toEqual({ listingId });
+  });
+
+  it.each([
+    'https://etsy.com.evil.test/listing/1234567890',
+    'https://example.com/listing/1234567890',
+    'https://www.etsy.com/shop/Maker',
+    'https://www.etsy.com/search?q=listing/1234567890',
+    'https://www.etsy.com/shop/Maker/listing/1234567890',
+    'https://www.etsy.com/listing/0123456789',
+    'https://www.etsy.com/listing/1234567890123456789', // 19 digits
+    'https://m.etsy.com/listing/1234567890',
+    'not a url',
+  ])('is not an Etsy listing: %s (Review Focus 1)', (url) => {
+    expect(etsyListingOf(url)).toBeNull();
+  });
+
+  it('knows etsy.me short links', () => {
+    expect(isEtsyShortLink('https://etsy.me/3AbCdEf')).toBe(true);
+    expect(isEtsyShortLink('https://etsy.me.evil.test/3AbCdEf')).toBe(false);
+  });
+
+  it('routes Etsy listings and short links to etsy, and leaves Amazon alone', () => {
+    expect(retailerOf('https://www.etsy.com/listing/1234567890')).toBe('etsy');
+    expect(retailerOf('https://etsy.me/3AbCdEf')).toBe('etsy');
+    expect(retailerOf('https://www.etsy.com/shop/Maker')).toBeNull();
+    expect(retailerOf('https://www.amazon.com/dp/B08FK7B2SC')).toBe('amazon');
   });
 });
