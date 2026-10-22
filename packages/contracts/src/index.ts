@@ -10,3 +10,4 @@ export * from './tags.js';
 export * from './text.js';
 export * from './wishlist.js';
 export * from './redact.js';
+export * from './retailers.js';

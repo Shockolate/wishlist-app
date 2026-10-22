@@ -190,6 +190,7 @@ export const UNFURL_FAILURE_REASONS = [
   'NOT_HTML',
   'TOO_LARGE',
   'NO_METADATA',
+  'LOOKUP_UNAVAILABLE',
 ] as const;
 export const UnfurlFailureReasonSchema = z.enum(UNFURL_FAILURE_REASONS);
 export type UnfurlFailureReason = z.infer<typeof UnfurlFailureReasonSchema>;
