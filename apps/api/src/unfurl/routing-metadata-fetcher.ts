@@ -49,7 +49,8 @@ export class RoutingMetadataFetcher implements MetadataFetcher {
     }
 
     const result = await this.amazon.lookUp(asin, deadline);
-    if (result.ok) return result.metadata;
+    // `=== true`, not truthiness: Vercel's builder type-checks without strictNullChecks (see metadata-fetcher.ts).
+    if (result.ok === true) return result.metadata;
     if (result.reason !== 'LOOKUP_UNAVAILABLE') return this.failed(result.reason, host);
     if (result.misconfigured) {
       // An operator has to act: the key, the account or the dataset is wrong. No URL, no ASIN.
