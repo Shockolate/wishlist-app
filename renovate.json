@@ -4,9 +4,9 @@
     "config:recommended",
     ":semanticCommits",
     "group:monorepos",
-    "schedule:weekly",
     "helpers:pinGitHubActionDigests"
   ],
+  "schedule": ["* * * * 1"],
   "rangeStrategy": "pin",
   "minimumReleaseAge": "3 days",
   "packageRules": [
