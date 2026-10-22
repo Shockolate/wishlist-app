@@ -82,7 +82,8 @@ export function AllTagsPane({
                   onClick={() => onOpen(tag.id)}
                   className="flex min-h-13 w-full items-center justify-between gap-3 px-1 text-left text-base font-medium"
                 >
-                  <span className="[overflow-wrap:anywhere]">{tag.name}</span>
+                  {/* The space keeps the visible text within the aria-label (WCAG 2.5.3). */}
+                  <span className="[overflow-wrap:anywhere]">{tag.name}</span>{' '}
                   <span className="shrink-0 text-sm font-normal text-muted-foreground">
                     {itemCount(count)}
                   </span>

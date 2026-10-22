@@ -157,7 +157,8 @@ export function PricePanel({
         onClick={onAny}
         className={cn(ROW, bands.length === 0 && 'font-semibold')}
       >
-        <span className="flex-1">Any price</span>
+        {/* The space keeps the visible text within the aria-label (WCAG 2.5.3). */}
+        <span className="flex-1">Any price</span>{' '}
         <span className={pillCount(false)}>{anyCount}</span>
       </button>
       <ul>

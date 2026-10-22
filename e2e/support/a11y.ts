@@ -8,6 +8,20 @@ export const DESKTOP = { width: 1280, height: 800 };
 const TURNSTILE_PAGES = new Set(['/signup', '/verify-email', '/reset-password']);
 
 export async function expectAccessible(page: Page) {
+  // A control that just changed is still fading (`transition-colors`), and axe would measure the
+  // contrast of its colors halfway through. Endless animations, like a spinner, never finish, and
+  // one cancelled by its element leaving the page has nothing left to wait for.
+  await page.evaluate(() => {
+    type Running = {
+      finished: Promise<unknown>;
+      effect: { getComputedTiming(): { endTime?: number } } | null;
+    };
+    const { document } = globalThis as unknown as { document: { getAnimations(): Running[] } };
+    const ending = document
+      .getAnimations()
+      .filter((animation) => Number.isFinite(animation.effect?.getComputedTiming().endTime));
+    return Promise.all(ending.map((animation) => animation.finished.catch(() => undefined)));
+  });
   // Cloudflare's widget is a third-party iframe whose markup we can't change.
   const results = await new AxeBuilder({ page })
     .withTags(WCAG_22_AA)
