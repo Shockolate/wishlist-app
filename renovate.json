@@ -11,14 +11,16 @@
   "minimumReleaseAge": "3 days",
   "packageRules": [
     {
-      "description": "TS 7 drops the JS compiler API that Nest CLI, typescript-eslint and Next's typecheck use (spec §3)",
+      "description": "TS 7 drops the JS compiler API that Nest CLI, typescript-eslint and Next's typecheck use (spec §3). A major waits on the Dependency Dashboard for approval",
       "matchPackageNames": ["typescript"],
-      "allowedVersions": "<7.0.0"
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
     },
     {
-      "description": "eslint-config-next's plugins don't support ESLint 10 yet (spec §3)",
+      "description": "eslint-config-next's plugins don't support ESLint 10 yet (spec §3). A major waits on the Dependency Dashboard for approval",
       "matchPackageNames": ["eslint", "@eslint/js"],
-      "allowedVersions": "<10.0.0"
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
     },
     {
       "description": "The smoke jobs' Playwright image must match @playwright/test, so both move in one PR (workflow policy Rule 13)",
@@ -26,12 +28,12 @@
       "groupName": "playwright"
     },
     {
-      "description": "Node is 24, Vercel's runtime (AGENTS.md). Pinning engines would set it to the newest Node, and .nvmrc keeps the major only, so both change by hand",
+      "description": "Node is 24, Vercel's runtime (AGENTS.md). Pinning engines would set it to the newest Node, and .nvmrc keeps the major only, so both change by hand (quarterly in docs/operations.md)",
       "matchDepTypes": ["engines"],
       "enabled": false
     },
     {
-      "description": "Node is 24, Vercel's runtime (AGENTS.md). Pinning engines would set it to the newest Node, and .nvmrc keeps the major only, so both change by hand",
+      "description": "Node is 24, Vercel's runtime (AGENTS.md). Pinning engines would set it to the newest Node, and .nvmrc keeps the major only, so both change by hand (quarterly in docs/operations.md)",
       "matchManagers": ["nvm"],
       "enabled": false
     },
@@ -41,9 +43,10 @@
       "enabled": false
     },
     {
-      "description": "Production Neon runs Postgres 17, and local, test and backup images match it because pg_dump refuses newer servers (docs/deployment.md)",
+      "description": "Production Neon runs Postgres 17, and local, test and backup images match it because pg_dump refuses newer servers (docs/deployment.md). A major waits on the Dependency Dashboard for approval, to take with Neon's upgrade",
       "matchPackageNames": ["postgres"],
-      "allowedVersions": "<18"
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
     }
   ]
 }

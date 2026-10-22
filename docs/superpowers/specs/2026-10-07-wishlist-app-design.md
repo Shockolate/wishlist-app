@@ -168,8 +168,8 @@ wishlist-app/
 | Monorepo | Turborepo | Affected-only builds and tests, plus Vercel's free remote cache |
 | Runtime | Node 24 LTS (`.nvmrc`, `engines`, Vercel project setting) | The current LTS that Vercel supports |
 | Module system | ESM everywhere: `"type": "module"` in every package | NestJS 12 ships its packages as ESM only. Nest's own generator pairs ESM projects with Vitest |
-| TypeScript | Pinned to 6.0.x. **Not 7** | TS 7, the native Go port, no longer exports the JavaScript compiler API. `@nestjs/cli` (which pins `~6.0.2`), typescript-eslint (`<6.1`) and Next's build-time typecheck all depend on that API. Renovate is capped at `<7` |
-| Linting | ESLint 9.x. **Not 10** | eslint-config-next's plugins (`react`, `import`, `jsx-a11y`) declare peer support only up to ESLint 9. Renovate is capped at `<10` |
+| TypeScript | Pinned to 6.0.x. **Not 7** | TS 7, the native Go port, no longer exports the JavaScript compiler API. `@nestjs/cli` (which pins `~6.0.2`), typescript-eslint (`<6.1`) and Next's build-time typecheck all depend on that API. Renovate holds a major for approval on its Dependency Dashboard |
+| Linting | ESLint 9.x. **Not 10** | eslint-config-next's plugins (`react`, `import`, `jsx-a11y`) declare peer support only up to ESLint 9. Renovate holds a major for approval on its Dependency Dashboard |
 | Web | Next.js, latest stable, App Router | Required by the brief |
 | API | NestJS, latest stable, Express adapter | Required by the brief. Vercel deploys it with zero configuration as one Function on Fluid compute |
 | Contract | Shared Zod schemas in `packages/contracts` | One source of truth: a breaking change fails typecheck in both apps in the same PR. OpenAPI is generated *from* the schemas. Rejected: class-validator DTOs plus OpenAPI codegen, which adds a codegen step and lets generated files drift, and only pays off for external consumers |
