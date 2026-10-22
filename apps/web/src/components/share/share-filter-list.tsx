@@ -1,7 +1,7 @@
 'use client';
 
 import type { Tag } from '@wishlist/contracts';
-import { useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { shownLine, tagChipLabel } from '@/lib/share-copy';
@@ -21,19 +21,17 @@ import { PILL_HIT, pillCount, pillFace } from './filter-pill';
 import { PricePanel, PricePill, usePriceMenu } from './share-price-menu';
 import { CARD } from './share-card';
 
-const noSubscribe = () => () => {};
-const onClient = () => true;
-const onServer = () => false;
-
 const toggled = <T,>(list: readonly T[], value: T): T[] =>
   list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
 
 /**
  * The share page's cards with the filter row above them (design §4, D62): tags narrow with AND,
- * price bands widen with OR. The row appears only once this island has hydrated, so without
- * JavaScript the page is the plain list. Filtered-out cards are hidden, not unmounted (Plan 7b
- * ruling 2), so a card's own state survives, and the filters live here, above the server render,
- * so the `router.refresh()` after a claim keeps them.
+ * price bands widen with OR. The row is in the server HTML, drawn as the first client render draws
+ * it (no filters on), so the cards don't move when the island hydrates. Without JavaScript, CSS
+ * hides it: `noscript:` is `@media (scripting: none)`, a media query in the stylesheet, so no
+ * `<noscript>` markup or inline style is needed. The page is then the plain list. Filtered-out
+ * cards are hidden, not unmounted (Plan 7b ruling 2), so a card's own state survives, and the
+ * filters live here, above the server render, so the `router.refresh()` after a claim keeps them.
  */
 export function ShareFilterList({
   label,
@@ -48,7 +46,6 @@ export function ShareFilterList({
   items: readonly FilterItem[];
   cards: readonly { id: string; node: ReactNode }[];
 }) {
-  const mounted = useSyncExternalStore(noSubscribe, onClient, onServer);
   const [picked, setPicked] = useState<Filters>(NO_FILTERS);
   const { open, panelId, pillRef, panelRef, toggle } = usePriceMenu();
   const rowRef = useRef<HTMLDivElement | null>(null);
@@ -70,7 +67,7 @@ export function ShareFilterList({
   };
   const shown = new Set(items.filter((item) => matches(item, filters, currency)).map((i) => i.id));
   const active = filters.tagIds.length > 0 || filters.bands.length > 0;
-  const hasRow = mounted && (chips.length > 0 || currency !== null);
+  const hasRow = chips.length > 0 || currency !== null;
 
   // Commits the change first, so the row's buttons are enabled or disabled as it leaves them, then
   // gives focus to the row's first enabled button. Focusing before the commit could land on a chip
@@ -85,7 +82,7 @@ export function ShareFilterList({
   return (
     <>
       {hasRow ? (
-        <div className="relative mt-5">
+        <div className="relative mt-5 noscript:hidden">
           <div
             ref={rowRef}
             role="group"
@@ -145,7 +142,9 @@ export function ShareFilterList({
         </div>
       ) : null}
       {hasRow ? (
-        <div className={cn('flex flex-wrap items-center gap-x-3', active && 'mt-1')}>
+        <div
+          className={cn('flex flex-wrap items-center gap-x-3 noscript:hidden', active && 'mt-1')}
+        >
           <p role="status" className="text-[15px] text-muted-foreground">
             {active ? shownLine(shown.size, items.length) : ''}
           </p>
@@ -164,7 +163,10 @@ export function ShareFilterList({
           </Button>
         </div>
       ) : null}
-      <ol aria-label={label} className={cn('flex flex-col gap-4', hasRow ? 'mt-4' : 'mt-6')}>
+      <ol
+        aria-label={label}
+        className={cn('flex flex-col gap-4', hasRow ? 'mt-4 noscript:mt-6' : 'mt-6')}
+      >
         {cards.map(({ id, node }) => (
           <li key={id} hidden={!shown.has(id)} className={CARD}>
             {node}

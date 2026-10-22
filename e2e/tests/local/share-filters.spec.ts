@@ -1,4 +1,4 @@
-import { expect, test, type Browser, type Page } from '@playwright/test';
+import { expect, test, type Browser, type Page, type Route } from '@playwright/test';
 import type { CreateItemRequest } from '@wishlist/contracts';
 import { expectAccessible, expectNoSidewaysScroll, PHONE } from '../../support/a11y.js';
 import { addItemViaApi, verifiedOwner } from '../../support/owner.js';
@@ -198,7 +198,7 @@ test('at phone width, many long tags scroll inside the row and never the page (R
   await expectNoSidewaysScroll(gifter);
 });
 
-test('without JavaScript every card shows and there is no row (design §4, §7)', async ({
+test('without JavaScript every card shows and the row is hidden (design §4, §7)', async ({
   page,
   browser,
   baseURL,
@@ -208,8 +208,144 @@ test('without JavaScript every card shows and there is no row (design §4, §7)'
   const context = await browser.newContext({ baseURL: base, javaScriptEnabled: false });
   const reader = await context.newPage();
   await reader.goto(`/s/${token}`);
+  // The page's own scripts are off; Playwright's evaluate still runs, so the media query the row's
+  // CSS hides it with can be checked directly.
+  const scriptingNone = await reader.evaluate(() => {
+    const { matchMedia } = globalThis as unknown as {
+      matchMedia(query: string): { matches: boolean };
+    };
+    return matchMedia('(scripting: none)').matches;
+  });
+  expect(scriptingNone).toBe(true);
   await expect(shownTitles(reader)).toHaveCount(7);
-  await expect(row(reader)).toHaveCount(0);
+  // The row is in the server HTML, so check it by attribute: a role query would skip it either way.
+  const group = reader.locator('[role="group"][aria-label="Filter the list"]');
+  await expect(group).toHaveCount(1);
+  await expect(group).toBeHidden();
+});
+
+/** The browser globals `settledTop` uses; the E2E tsconfig has no DOM lib. */
+interface LayoutGlobal {
+  document: {
+    querySelectorAll(selector: string): ArrayLike<{ sheet: unknown }>;
+    fonts: { ready: Promise<unknown> };
+  };
+  requestAnimationFrame(callback: () => void): number;
+}
+
+/** Whether React has hydrated `selector`'s element: it then carries a fiber key. */
+const hydrated = (page: Page, selector: string) =>
+  page
+    .locator(selector)
+    .first()
+    .evaluate((el) => Object.keys(el).some((key) => key.startsWith('__reactFiber$')));
+
+test('the row is in the server HTML, so the cards don’t move when JavaScript loads', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const { token, context } = await setUp(
+    page,
+    browser,
+    baseURL ?? '',
+    'filters-no-shift',
+    ADAS_LIST,
+  );
+  // The app's scripts are held, so the first measurement is the server HTML with its CSS and
+  // fonts, before React runs.
+  const reader = await context.newPage();
+  const held: Route[] = [];
+  let release = false;
+  await reader.route(/\/_next\/static\/.+\.js(?:\?.*)?$/, async (route) => {
+    if (release) await route.continue();
+    else held.push(route);
+  });
+  await reader.goto(`/s/${token}`, { waitUntil: 'domcontentloaded' });
+  const firstCard = reader.locator('ol > li').first();
+  const settledTop = () =>
+    firstCard.evaluate(async (el) => {
+      const { document, requestAnimationFrame } = globalThis as unknown as LayoutGlobal;
+      const sheets = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
+      while (sheets.some((link) => link.sheet === null)) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      el.getBoundingClientRect(); // lays the page out, which starts its fonts loading
+      await document.fonts.ready;
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+      });
+      return el.getBoundingClientRect().top;
+    });
+  const before = await settledTop();
+  expect(await hydrated(reader, 'ol')).toBe(false);
+
+  release = true;
+  await Promise.all(held.map((route) => route.continue()));
+  await expect.poll(() => hydrated(reader, 'ol')).toBe(true);
+  await expect(row(reader)).toBeVisible();
+  expect(await settledTop()).toBe(before);
+
+  const html = await (await context.request.get(`/s/${token}`)).text();
+  expect(html).toContain('aria-label="Filter the list"');
+});
+
+/**
+ * Opens `/s/<token>` in `reader`, waits until the row has hydrated and the network is idle, and
+ * returns the errors logged on the way. React 19's production build reports a text or structure
+ * mismatch as an uncaught "Minified React error #418" (or a sibling), but says nothing about an
+ * attribute mismatch, so only the former can be caught here.
+ */
+async function hydrationErrors(reader: Page, token: string): Promise<string[]> {
+  const errors: string[] = [];
+  reader.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  reader.on('pageerror', (error) => errors.push(error.message));
+  await reader.goto(`/s/${token}`);
+  await expect
+    .poll(() => hydrated(reader, '[role="group"][aria-label="Filter the list"]'))
+    .toBe(true);
+  await reader.waitForLoadState('networkidle');
+  return errors;
+}
+
+test('a priced, tagged share page hydrates without a mismatch', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const { token, context } = await setUp(
+    page,
+    browser,
+    baseURL ?? '',
+    'filters-hydration',
+    ADAS_LIST,
+  );
+  expect(await hydrationErrors(await context.newPage(), token)).toEqual([]);
+});
+
+test('in a Swedish browser the chips keep the server’s order, so hydration matches', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const base = baseURL ?? '';
+  // One item each, so the two tie. Swedish sorts "ä" after "z"; English sorts it with "a".
+  const { token } = await setUp(page, browser, base, 'filters-swedish', [
+    tagged('Zinc bucket', '$20.00', 'Zebra'),
+    tagged('Apple press', '$30.00', 'Äpple'),
+  ]);
+  const html = await (await page.request.get(`/s/${token}`)).text();
+  const serverAt = (name: string) => html.indexOf(`aria-label="${name}, 1 item"`);
+  expect(serverAt('Äpple')).toBeGreaterThan(-1);
+  expect(serverAt('Äpple')).toBeLessThan(serverAt('Zebra'));
+
+  const context = await browser.newContext({ baseURL: base, locale: 'sv-SE' });
+  const reader = await context.newPage();
+  expect(await reader.evaluate(() => 'ä'.localeCompare('z'))).toBeGreaterThan(0);
+  expect(await hydrationErrors(reader, token)).toEqual([]);
+  await expect(row(reader).getByRole('button')).toHaveText([/Any price/, /Äpple/, /Zebra/]);
 });
 
 test('Ada sees the same row on her own link', async ({ page, browser, baseURL }) => {
