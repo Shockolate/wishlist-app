@@ -418,3 +418,55 @@ describe('pinnedLookup (Plan 3a rule 10)', () => {
     expect((await ask('elsewhere.test', true)).error?.code).toBe('ENOTFOUND');
   });
 });
+
+describe('PageFetcher.resolve: following a short link (retailer lookups §5.1)', () => {
+  const isPage = (url: URL) => url.pathname === '/page';
+
+  it('stops at the first hop that matches, without requesting it', async () => {
+    expect(await fetcher().resolve(at('/r2'), isPage)).toEqual({
+      ok: true,
+      url: new URL(at('/page')),
+    });
+    expect(seen.map((s) => s.url)).toEqual(['/r2', '/r1']);
+  });
+
+  it('requests nothing when the link already matches', async () => {
+    expect(await fetcher().resolve(at('/page'), isPage)).toEqual({
+      ok: true,
+      url: new URL(at('/page')),
+    });
+    expect(seen).toEqual([]);
+  });
+
+  it('finds nothing when the chain ends at a page that doesn’t match', async () => {
+    expect(await fetcher().resolve(at('/r1'), () => false)).toEqual({
+      ok: false,
+      reason: 'NO_METADATA',
+      host: 'shop.test',
+    });
+  });
+
+  it('refuses a hop to a disallowed address (Review Focus 4)', async () => {
+    expect(await fetcher().resolve(at('/to-metadata'), () => false)).toMatchObject({
+      ok: false,
+      reason: 'DISALLOWED_ADDRESS',
+    });
+  });
+
+  it('gives up after three redirects', async () => {
+    expect(await fetcher().resolve(at('/r4'), () => false)).toMatchObject({
+      ok: false,
+      reason: 'TOO_MANY_REDIRECTS',
+    });
+  });
+
+  it('is a timeout when the caller’s deadline has passed', async () => {
+    const controller = new AbortController();
+    controller.abort(new DOMException('deadline', 'TimeoutError'));
+    expect(await fetcher().resolve(at('/r1'), isPage, controller.signal)).toMatchObject({
+      ok: false,
+      reason: 'TIMEOUT',
+    });
+    expect(seen).toEqual([]);
+  });
+});
