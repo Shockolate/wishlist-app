@@ -3,14 +3,16 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { CreateItemRequestSchema, type Item } from '@wishlist/contracts';
-import { useEffect } from 'react';
+import { useEffect, useRef, type FormEvent } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import type { ItemFormValues } from '@/lib/add-input';
 import { formErrorMap } from '@/lib/form-errors';
+import { itemBody, liveTags } from '@/lib/tag-input';
 import { ItemFields, showFieldErrors } from './item-fields';
 import { ItemPhoto } from './item-photo';
 import { useListStatus } from './list-status';
+import { useListTags, type TagBox } from './tag-field';
 import { useListMutations } from './use-list-mutations';
 
 /** A new item, checked before it's added. It opens prefilled, or empty but for the link (rule 6). */
@@ -25,6 +27,8 @@ export function AddForm({
 }) {
   const { fail } = useListStatus();
   const create = useMutation(useListMutations().create);
+  const listTags = useListTags();
+  const tagBox = useRef<TagBox>(null);
   const form = useForm({
     resolver: zodResolver(CreateItemRequestSchema, { error: formErrorMap }),
     defaultValues: initial,
@@ -36,13 +40,25 @@ export function AddForm({
     setFocus('title');
   }, [setFocus]);
 
-  const onSubmit = form.handleSubmit(async (values) => {
+  const save = form.handleSubmit(async (values) => {
     try {
-      onAdded(await create.mutateAsync(values));
+      // Tags go only when there are some (Plan 7b ruling 5), less any deleted meanwhile (ruling 6).
+      const tags = liveTags(values.tags ?? [], listTags);
+      onAdded(await create.mutateAsync(itemBody({ ...values, tags }, tags.length > 0)));
     } catch (error) {
       if (!showFieldErrors(form, error)) fail(error);
     }
   });
+
+  // Text left in the tag box is added first, as Enter would add it; a name it refuses holds the
+  // save back, with the reason on the field.
+  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
+    if (tagBox.current?.addTyped() === false) {
+      event.preventDefault();
+      return;
+    }
+    void save(event);
+  };
 
   return (
     <form
@@ -67,7 +83,7 @@ export function AddForm({
           </Button>
         </div>
       ) : null}
-      <ItemFields form={form} idPrefix="add" />
+      <ItemFields form={form} idPrefix="add" tagBox={tagBox} />
       <div className="flex flex-wrap justify-end gap-2">
         <Button variant="secondary" onClick={onCancel} disabled={create.isPending}>
           Cancel

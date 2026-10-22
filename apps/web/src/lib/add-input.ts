@@ -1,4 +1,4 @@
-import type { Item, UnfurlResponse } from '@wishlist/contracts';
+import type { Item, ItemTagRef, UnfurlResponse } from '@wishlist/contracts';
 
 /** What the add box was given (spec §7 Owner editor, Plan 3b rule 5). */
 export type AddInput =
@@ -39,8 +39,11 @@ export interface ItemFormValues {
   priceText: string;
   note: string;
   quantity: number;
-  /** The form sends no tags until Plan 7b adds its tag field; this keeps the schema's input type in step. */
-  tags?: undefined;
+  /**
+   * The item's whole tag set. The edit form sends it only when it changed, and the add form only
+   * when it isn't empty (Plan 7b ruling 5).
+   */
+  tags: ItemTagRef[];
 }
 
 /** A new item's form, from what unfurl found, else the title hint; the link is always kept. */
@@ -56,6 +59,7 @@ export function prefill(
     priceText: response?.priceText ?? '',
     note: '',
     quantity: 1,
+    tags: [],
   };
 }
 
@@ -68,5 +72,6 @@ export function formValuesOf(item: Item): ItemFormValues {
     priceText: item.priceText ?? '',
     note: item.note ?? '',
     quantity: item.quantity,
+    tags: (item.tagIds ?? []).map((id) => ({ id })),
   };
 }

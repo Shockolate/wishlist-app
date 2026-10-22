@@ -71,6 +71,7 @@ describe('prefill and formValuesOf (Plan 3b rules 6 and 7)', () => {
       priceText: '$40.00',
       note: '',
       quantity: 1,
+      tags: [],
     });
     expect(
       prefill('https://shop.example/k', 'Hint', { failureReason: 'BLOCKED_BY_SITE' }),
@@ -96,6 +97,25 @@ describe('prefill and formValuesOf (Plan 3b rules 6 and 7)', () => {
       priceText: '$40',
       note: '',
       quantity: 2,
+      tags: [],
     });
+  });
+
+  it('turns an item’s tagIds into chosen tags', () => {
+    const item: Item = {
+      id: '00000000-0000-4000-8000-000000000001',
+      title: 'Kettle',
+      url: null,
+      imageUrl: null,
+      priceText: null,
+      note: null,
+      quantity: 1,
+      position: 0,
+      tagIds: ['00000000-0000-4000-8000-0000000000a1', '00000000-0000-4000-8000-0000000000a2'],
+    };
+    expect(formValuesOf(item).tags).toEqual([
+      { id: '00000000-0000-4000-8000-0000000000a1' },
+      { id: '00000000-0000-4000-8000-0000000000a2' },
+    ]);
   });
 });

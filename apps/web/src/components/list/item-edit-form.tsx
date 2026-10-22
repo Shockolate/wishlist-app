@@ -3,7 +3,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { CreateItemRequestSchema, ErrorCode, type Item } from '@wishlist/contracts';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type FormEvent } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   AlertDialog,
@@ -19,14 +19,18 @@ import { Button } from '@/components/ui/button';
 import { formValuesOf } from '@/lib/add-input';
 import { formErrorMap } from '@/lib/form-errors';
 import { hasCode } from '@/lib/messages';
+import { itemBody, liveTags } from '@/lib/tag-input';
 import { TrashIcon } from './icons';
 import { ItemFields, showFieldErrors } from './item-fields';
 import { useListStatus } from './list-status';
+import { useListTags, type TagBox } from './tag-field';
 import { useListMutations } from './use-list-mutations';
 
 /**
- * One item's form, opened in place (D37). Save sends all six fields, so a cleared field becomes
- * null (Plan 3b rule 7). Delete asks first.
+ * One item's form, opened in place (D37). Save sends all six other fields, so a cleared field
+ * becomes null (Plan 3b rule 7). It sends `tags` only when the tag field changed (Plan 7b ruling
+ * 5): a tick or untick made elsewhere while the form was open then survives the save. Delete asks
+ * first.
  */
 export function ItemEditForm({
   item,
@@ -43,6 +47,8 @@ export function ItemEditForm({
 }) {
   const { announce, fail } = useListStatus();
   const update = useMutation(useListMutations().update);
+  const listTags = useListTags();
+  const tagBox = useRef<TagBox>(null);
   const form = useForm({
     resolver: zodResolver(CreateItemRequestSchema, { error: formErrorMap }),
     defaultValues: formValuesOf(item),
@@ -62,9 +68,13 @@ export function ItemEditForm({
     setFocus('title');
   }, [setFocus]);
 
-  const onSubmit = form.handleSubmit(async (values) => {
+  const save = form.handleSubmit(async (values) => {
     try {
-      const saved = await update.mutateAsync({ id: item.id, body: values });
+      const tags = liveTags(values.tags ?? [], listTags);
+      // Read from the form's control state now, not this render: adding the typed tag on submit
+      // may have just dirtied the field.
+      const body = itemBody({ ...values, tags }, form.getFieldState('tags').isDirty);
+      const saved = await update.mutateAsync({ id: item.id, body });
       announce(`Saved “${saved.title}”.`);
       onDone();
     } catch (error) {
@@ -75,6 +85,16 @@ export function ItemEditForm({
     }
   });
 
+  // Text left in the tag box is added first, as Enter would add it; a name it refuses holds the
+  // save back, with the reason on the field.
+  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
+    if (tagBox.current?.addTyped() === false) {
+      event.preventDefault();
+      return;
+    }
+    void save(event);
+  };
+
   return (
     <form
       onSubmit={onSubmit}
@@ -82,7 +102,7 @@ export function ItemEditForm({
       aria-label={`Edit ${item.title}`}
       className="flex flex-col gap-3.5 px-3.5 pt-1.5 pb-4"
     >
-      <ItemFields form={form} idPrefix={`edit-${item.id}`} />
+      <ItemFields form={form} idPrefix={`edit-${item.id}`} tagBox={tagBox} />
       <div className="flex flex-wrap items-center gap-2">
         <AlertDialog>
           <AlertDialogTrigger asChild>
