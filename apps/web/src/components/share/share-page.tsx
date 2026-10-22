@@ -4,7 +4,8 @@ import { CardStatus } from './card-status';
 import { GifterFooter } from './gifter-footer';
 import { OwnerNote } from './owner-note';
 import { ShareClaimsProvider } from './share-claims';
-import { ShareCard } from './share-card';
+import { ItemCardBody } from './share-card';
+import { ShareFilterList } from './share-filter-list';
 
 const H1 = 'font-display text-[clamp(2.5rem,6vw,4rem)] leading-none [overflow-wrap:anywhere]';
 
@@ -27,34 +28,37 @@ export function SharePage({
           ? 'Your list is empty. What you add shows here.'
           : `${owner} hasn’t added anything yet.`}
       </p>
-    ) : list.viewerIsOwner ? (
-      <ol aria-label="Your items, most wanted first" className="mt-6 flex flex-col gap-4">
-        {list.items.map((item) => (
-          <ShareCard
-            key={item.id}
-            item={item}
-            footer={
-              <CardStatus
-                status={{
-                  wants,
-                  quantity: item.quantity,
-                  ...(item.claims ? { claims: item.claims } : {}),
-                }}
-              />
-            }
-          />
-        ))}
-      </ol>
     ) : (
-      <ol aria-label={`${owner}’s items, most wanted first`} className="mt-6 flex flex-col gap-4">
-        {list.items.map((item) => (
-          <ShareCard
-            key={item.id}
-            item={item}
-            footer={<GifterFooter item={item} ownerName={owner} />}
-          />
-        ))}
-      </ol>
+      <ShareFilterList
+        label={
+          list.viewerIsOwner
+            ? 'Your items, most wanted first'
+            : `${owner}’s items, most wanted first`
+        }
+        tags={list.tags ?? []}
+        items={list.items.map(({ id, tagIds, priceText }) => ({ id, tagIds, priceText }))}
+        cards={list.items.map((item) => ({
+          id: item.id,
+          node: (
+            <ItemCardBody
+              item={item}
+              footer={
+                list.viewerIsOwner ? (
+                  <CardStatus
+                    status={{
+                      wants,
+                      quantity: item.quantity,
+                      ...(item.claims ? { claims: item.claims } : {}),
+                    }}
+                  />
+                ) : (
+                  <GifterFooter item={item} ownerName={owner} />
+                )
+              }
+            />
+          ),
+        }))}
+      />
     );
   return (
     <>

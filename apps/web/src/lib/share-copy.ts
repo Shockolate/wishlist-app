@@ -98,3 +98,13 @@ export function manageHint(remaining: number, current: number): string {
   const most = `Up to ${remaining + current}`;
   return remaining > 0 ? `${most}: ${remaining} more ${isAre(remaining)} free` : most;
 }
+
+/** A tag chip's accessible name: "Garden, 1 item", "Kitchen gadgets, 4 items". */
+export function tagChipLabel(name: string, count: number): string {
+  return `${name}, ${count} ${count === 1 ? 'item' : 'items'}`;
+}
+
+/** The filter row's live line: how many of the list's items the filters leave showing. */
+export function shownLine(shown: number, total: number): string {
+  return `${shown} of ${total} items`;
+}
