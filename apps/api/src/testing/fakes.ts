@@ -4,6 +4,7 @@ import type { EmailMessage, EmailSender } from '../email/email-sender.js';
 import type { ErrorContext, ErrorReporter } from '../observability/error-reporter.js';
 import type { BreachedPasswordChecker } from '../security/breached-passwords.js';
 import type { CaptchaVerdict, CaptchaVerifier } from '../security/captcha.js';
+import type { AmazonLookup, LookupResult } from '../unfurl/amazon-lookup.js';
 import type { MetadataFetcher } from '../unfurl/metadata-fetcher.js';
 
 /** A clock tests move by hand. */
@@ -75,6 +76,17 @@ export class FakeMetadataFetcher implements MetadataFetcher {
 
   fetch(url: string): Promise<UnfurlResponse> {
     this.urls.push(url);
+    return Promise.resolve(this.next);
+  }
+}
+
+/** Amazon lookup stand-in: answers `next`, records the ASINs it was asked for. */
+export class FakeAmazonLookup implements AmazonLookup {
+  next: LookupResult = { ok: false, reason: 'NO_METADATA' };
+  readonly asins: string[] = [];
+
+  lookUp(asin: string): Promise<LookupResult> {
+    this.asins.push(asin);
     return Promise.resolve(this.next);
   }
 }

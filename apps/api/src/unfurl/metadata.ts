@@ -43,6 +43,25 @@ export function extractMetadata(html: string, pageUrl: URL): PageMetadata {
       page.meta.get('product:price:currency') ?? page.meta.get('og:price:currency'),
     ) ?? offerPrice(product);
 
+  return assemble(title, imageUrl, priceText);
+}
+
+/**
+ * A lookup service's answer, cleaned exactly as a page's is (retailer lookups §5.2): visible text
+ * only, titles cut to 200, https images, and a display price. A field that isn't a string is dropped.
+ */
+export function productMetadata(
+  fields: { title?: unknown; imageUrl?: unknown; amount?: unknown; currency?: unknown },
+  base: URL,
+): PageMetadata {
+  return assemble(
+    typeof fields.title === 'string' ? text(fields.title) : undefined,
+    httpsUrl(fields.imageUrl, base),
+    formatPrice(fields.amount, fields.currency),
+  );
+}
+
+function assemble(title?: string, imageUrl?: string, priceText?: string): PageMetadata {
   const metadata: PageMetadata = {};
   if (title) metadata.title = truncate(title, TITLE_MAX);
   if (imageUrl) metadata.imageUrl = imageUrl;
