@@ -28,10 +28,10 @@ const toggled = <T,>(list: readonly T[], value: T): T[] =>
  * The share page's cards with the filter row above them (design §4, D62): tags narrow with AND,
  * price bands widen with OR. The row is in the server HTML, drawn as the first client render draws
  * it (no filters on), so the cards don't move when the island hydrates. Without JavaScript, CSS
- * hides it (`noscript:` is `@media (scripting: none)`; an inline or `<noscript>` style would need
- * the CSP's nonce), so the page is the plain list. Filtered-out cards are hidden, not unmounted
- * (Plan 7b ruling 2), so a card's own state survives, and the filters live here, above the server
- * render, so the `router.refresh()` after a claim keeps them.
+ * hides it: `noscript:` is `@media (scripting: none)`, a media query in the stylesheet, so no
+ * `<noscript>` markup or inline style is needed. The page is then the plain list. Filtered-out
+ * cards are hidden, not unmounted (Plan 7b ruling 2), so a card's own state survives, and the
+ * filters live here, above the server render, so the `router.refresh()` after a claim keeps them.
  */
 export function ShareFilterList({
   label,

@@ -197,9 +197,9 @@ describe('orderTags', () => {
     expect(orderTags([tag('B'), tag('A')], tied).map((t) => t.name)).toEqual(['A', 'B']);
   });
 
-  it('breaks ties with one English collator, so the server render and the browser agree', () => {
-    // Names differing only in case or accents: a default-locale localeCompare could order these
-    // differently in Node and in a browser set to another language.
+  it('breaks ties with the English collator, in one order for case and accent variants', () => {
+    // Names differing only in case or accents. That the server and a browser in another locale
+    // agree is checked end to end, in the Swedish share-filters E2E test.
     const names = ['Résumé', 'resume', 'résumé', 'Resume'];
     const variants = names.map((name, i) => ({ id: `t${i}`, name }));
     const order = (list: typeof variants) => orderTags(list, []).map((t) => t.name);

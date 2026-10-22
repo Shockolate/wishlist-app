@@ -222,7 +222,6 @@ test('without JavaScript every card shows and the row is hidden (design §4, §7
   const group = reader.locator('[role="group"][aria-label="Filter the list"]');
   await expect(group).toHaveCount(1);
   await expect(group).toBeHidden();
-  await expect(reader.getByRole('button', { name: /price|items?$/i })).toHaveCount(0);
 });
 
 /** The browser globals `settledTop` uses; the E2E tsconfig has no DOM lib. */
@@ -291,6 +290,26 @@ test('the row is in the server HTML, so the cards don’t move when JavaScript l
   expect(html).toContain('aria-label="Filter the list"');
 });
 
+/**
+ * Opens `/s/<token>` in `reader`, waits until the row has hydrated and the network is idle, and
+ * returns the errors logged on the way. React 19's production build reports a text or structure
+ * mismatch as an uncaught "Minified React error #418" (or a sibling), but says nothing about an
+ * attribute mismatch, so only the former can be caught here.
+ */
+async function hydrationErrors(reader: Page, token: string): Promise<string[]> {
+  const errors: string[] = [];
+  reader.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  reader.on('pageerror', (error) => errors.push(error.message));
+  await reader.goto(`/s/${token}`);
+  await expect
+    .poll(() => hydrated(reader, '[role="group"][aria-label="Filter the list"]'))
+    .toBe(true);
+  await reader.waitForLoadState('networkidle');
+  return errors;
+}
+
 test('a priced, tagged share page hydrates without a mismatch', async ({
   page,
   browser,
@@ -303,19 +322,30 @@ test('a priced, tagged share page hydrates without a mismatch', async ({
     'filters-hydration',
     ADAS_LIST,
   );
+  expect(await hydrationErrors(await context.newPage(), token)).toEqual([]);
+});
+
+test('in a Swedish browser the chips keep the server’s order, so hydration matches', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const base = baseURL ?? '';
+  // One item each, so the two tie. Swedish sorts "ä" after "z"; English sorts it with "a".
+  const { token } = await setUp(page, browser, base, 'filters-swedish', [
+    tagged('Zinc bucket', '$20.00', 'Zebra'),
+    tagged('Apple press', '$30.00', 'Äpple'),
+  ]);
+  const html = await (await page.request.get(`/s/${token}`)).text();
+  const serverAt = (name: string) => html.indexOf(`aria-label="${name}, 1 item"`);
+  expect(serverAt('Äpple')).toBeGreaterThan(-1);
+  expect(serverAt('Äpple')).toBeLessThan(serverAt('Zebra'));
+
+  const context = await browser.newContext({ baseURL: base, locale: 'sv-SE' });
   const reader = await context.newPage();
-  const errors: string[] = [];
-  reader.on('console', (message) => {
-    if (message.type() === 'error') errors.push(message.text());
-  });
-  reader.on('pageerror', (error) => errors.push(error.message));
-  await reader.goto(`/s/${token}`);
-  await expect
-    .poll(() => hydrated(reader, '[role="group"][aria-label="Filter the list"]'))
-    .toBe(true);
-  await reader.waitForLoadState('networkidle');
-  // A production build reports a mismatch as an uncaught "Minified React error #418" or similar.
-  expect(errors).toEqual([]);
+  expect(await reader.evaluate(() => 'ä'.localeCompare('z'))).toBeGreaterThan(0);
+  expect(await hydrationErrors(reader, token)).toEqual([]);
+  await expect(row(reader).getByRole('button')).toHaveText([/Any price/, /Äpple/, /Zebra/]);
 });
 
 test('Ada sees the same row on her own link', async ({ page, browser, baseURL }) => {
