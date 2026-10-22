@@ -25,10 +25,12 @@ class FakeLinks {
   next: ResolvedLink = { ok: false, reason: 'NO_METADATA' };
   readonly urls: string[] = [];
   readonly signals: (AbortSignal | undefined)[] = [];
+  readonly stopAts: ((url: URL) => boolean)[] = [];
 
-  resolve(rawUrl: string, _stopAt: (url: URL) => boolean, signal?: AbortSignal) {
+  resolve(rawUrl: string, stopAt: (url: URL) => boolean, signal?: AbortSignal) {
     this.urls.push(rawUrl);
     this.signals.push(signal);
+    this.stopAts.push(stopAt);
     return Promise.resolve(this.next);
   }
 }
@@ -95,6 +97,10 @@ describe('RoutingMetadataFetcher (retailer lookups §5.1–§5.4)', () => {
     expect(links.urls).toEqual([SHORT]);
     expect(links.signals[0]).toBeInstanceOf(AbortSignal);
     expect(amazon.asins).toEqual(['B0CB96ZFL8']);
+    // The hop stops at an Amazon product link, so that page is never requested.
+    const stopAt = links.stopAts[0];
+    expect(stopAt?.(new URL('https://www.amazon.com/dp/B0CB96ZFL8'))).toBe(true);
+    expect(stopAt?.(new URL('https://www.etsy.com/listing/1234567890'))).toBe(false);
   });
 
   it('never looks up a short link that went astray (Review Focus 4)', async () => {
@@ -173,6 +179,11 @@ describe('RoutingMetadataFetcher (retailer lookups §5.1–§5.4)', () => {
       expect(await router().fetch(ETSY_SHORT)).toEqual({ title: 'Hand-thrown mug' });
       expect(links.urls).toEqual([ETSY_SHORT]);
       expect(etsy.listingIds).toEqual(['1234567890']);
+      // The hop stops at the listing link, so Etsy's listing page (behind DataDome) is never requested.
+      const stopAt = links.stopAts[0];
+      expect(stopAt?.(new URL('https://www.etsy.com/listing/1234567890/mug'))).toBe(true);
+      expect(stopAt?.(new URL('https://www.amazon.com/dp/B08FK7B2SC'))).toBe(false);
+      expect(stopAt?.(new URL('https://www.etsy.com/shop/Maker'))).toBe(false);
     });
 
     it('never looks up an etsy.me link that went astray (Review Focus 5)', async () => {
