@@ -50,6 +50,7 @@ export function createApiClient({
     path: string,
     schema: S,
     body?: unknown,
+    signal?: AbortSignal,
   ): Promise<z.output<S>> {
     const endpoint = `${method} ${path}`;
     // Every write carries JSON, `{}` when it has nothing to send, so the CSRF guard's content-type
@@ -67,6 +68,7 @@ export function createApiClient({
         ...(sent === undefined ? {} : { 'content-type': 'application/json' }),
       },
       ...(sent === undefined ? {} : { body: JSON.stringify(sent) }),
+      ...(signal ? { signal } : {}),
     });
 
     if (isRedirect(res)) {
@@ -106,8 +108,12 @@ export function createApiClient({
 
   return {
     get: <S extends z.ZodType>(path: string, schema: S) => request('GET', path, schema),
-    post: <S extends z.ZodType>(path: string, body: unknown, schema: S) =>
-      request('POST', path, schema, body),
+    post: <S extends z.ZodType>(
+      path: string,
+      body: unknown,
+      schema: S,
+      options: { signal?: AbortSignal } = {},
+    ) => request('POST', path, schema, body, options.signal),
     patch: <S extends z.ZodType>(path: string, body: unknown, schema: S) =>
       request('PATCH', path, schema, body),
     put: <S extends z.ZodType>(path: string, body: unknown, schema: S) =>

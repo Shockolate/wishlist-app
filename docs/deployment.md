@@ -178,6 +178,7 @@ The privacy page says Sentry's error reports have IP addresses removed. [Sentry 
 | Vercel `wishlist-api` → Production | `APP_ORIGIN`                                                                                                                  | Web production origin. The CSRF guard compares it exactly, and email links use it                                                                                                                                                |
 | Vercel `wishlist-api` → Production | `CRON_SECRET` (sensitive)                                                                                                     | 48 random bytes, base64. Vercel Cron sends it as a bearer token. Unset means the cron refuses everyone                                                                                                                           |
 | Vercel `wishlist-api` → Production | `TURNSTILE_SECRET_KEY` (sensitive)                                                                                            | **Unset until the end of Plan 4 (D31).** While unset, sign-up, resend-verification and reset-request answer `503 CAPTCHA_UNAVAILABLE`, and the web app says sign-ups are paused. Setting it opens sign-up: see "Opening sign-up" |
+| Vercel `wishlist-api` → Production | `BRIGHT_DATA_API_KEY` (sensitive)                                                                                             | Bright Data API key, free tier with no deposit (D68). Unset means Amazon links take the page fetch. See "Turning on Amazon lookups"                                                                                              |
 | Vercel `wishlist-api` → Production | `EMAIL_TRANSPORT=resend`, `EMAIL_FROM=Hanker <no-reply@mail.hanker.dev>`, `RESEND_API_KEY` (sensitive)                        | Set in Plan 2b. The API refuses to boot in production with Turnstile set and `EMAIL_TRANSPORT=log`                                                                                                                               |
 | Set per preview by CI              | `DATABASE_URL`, `APP_ORIGIN`, `EMAIL_TRANSPORT=log`, `TURNSTILE_SECRET_KEY` (Cloudflare's always-pass test secret), `GIT_SHA` | See `.github/workflows/preview.yml`                                                                                                                                                                                              |
 | Set per deploy by CI               | `GIT_SHA`                                                                                                                     | The commit being deployed                                                                                                                                                                                                        |
@@ -449,6 +450,25 @@ If it still answers `503`, the API's runtime log says why (Vercel → `wishlist-
 - **No `captcha unavailable` line:** the deployment has no secret. Check the variable is in `wishlist-api`'s Production environment, then deploy again.
 - **`siteverify answered HTTP 400 (invalid-input-secret)`:** Cloudflare doesn't recognise the stored value. The site key and the secret key both start `0x4AAAAAAA`, so check it's the widget's **Secret Key**. Replace it with `vercel env rm TURNSTILE_SECRET_KEY production` and the steps above, then deploy again.
 - **A network error or another status:** Cloudflare can't be reached from the function.
+
+## Turning on Amazon lookups
+
+Amazon product links are looked up through Bright Data (D64), only while `BRIGHT_DATA_API_KEY` is set on the API. The `/privacy` page names Bright Data, so set the key **before** merging the release that carries that page (Plan 8a ruling 1).
+
+1. **Account (once).** Sign up at brightdata.com on the free tier, with no card. Account settings → API keys → create a key. A new account answers `400 Customer is not active` until the dashboard shows it as active.
+2. **Never add funds (D68).** With no deposit, spent credits make lookups fail, and owners type the details in, never charges.
+3. **Store the key.** Paste it at the silent prompt:
+   ```bash
+   read -rs K && printf %s "$K" \
+     | npx --yes vercel@64.5.0 env add BRIGHT_DATA_API_KEY production --sensitive --project wishlist-api --scope shockolate
+   unset K
+   ```
+4. **Deploy.** A runtime variable applies to the next deployment: merge, or `gh workflow run deploy.yml --ref main`, and wait for every job to pass.
+5. **Check it (V1).** On your own list in production, paste a slow Amazon link, e.g. `https://www.amazon.com/Cephalofair-Games-115005-Frosthaven-Surface/dp/B0D169YKJW/` (about 20 seconds in the spike). Expect the waiting panel, then a prefilled title, photo and price. Then paste an `amzn.to` link, then a link from another shop, which behaves as before. Within the hour, the API's runtime logs should have no `LOOKUP_UNAVAILABLE` line, and Sentry no Bright Data warning.
+
+**To turn it off,** remove the variable (`npx --yes vercel@64.5.0 env rm BRIGHT_DATA_API_KEY production --project wishlist-api --scope shockolate`) and redeploy. Amazon links go back to the page fetch, which Amazon answers with a bot check. Then remove Bright Data from `/privacy`.
+
+**To rotate the key,** create a new one in Bright Data, `env rm` then step 3, redeploy, then delete the old key in Bright Data.
 
 ## GitHub configuration
 

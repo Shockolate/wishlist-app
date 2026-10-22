@@ -5,7 +5,7 @@
 - **Author:** Ted Armstrong (with Claude)
 - **Repo:** `github.com/Shockolate/wishlist-app` (public; not yet created)
 - **Product name:** **Hanker**, at `hanker.dev` (decided 2026-10-09, D26). Internal identifiers keep the domain noun `wishlist`.
-- **Amended by:** [item tags and share-page filters](2026-10-21-item-tags-and-filters-design.md) (2026-10-21; D58 on). Plan 7a amends §2, §4 and §5 for the tags API, and Plan 7b §7 for the web.
+- **Amended by:** [item tags and share-page filters](2026-10-21-item-tags-and-filters-design.md) (2026-10-21; D58 on). Plan 7a amends §2, §4 and §5 for the tags API, and Plan 7b §7 for the web. [Retailer lookups](2026-10-22-retailer-lookups-design.md) (2026-10-22; D64 on): Plan 8a amends §6.8 and §7 for Amazon, and narrows D34.
 
 ## 1. Intent
 
@@ -496,9 +496,10 @@ These are the initial values. They're configurable, and every limited endpoint r
 - **Parsing:** done with a real HTML parser. Sources are tried in this order: Open Graph tags, then JSON-LD `Product` (name, image, offers price and currency), then `<title>`. A title that is only the site's name (`og:site_name`, or the host without `www.`) is skipped, as on a bot check's page (Plan 3a follow-up).
 - **Output (Plan 3a):** a JSON-LD price and currency become a display string with `Intl.NumberFormat('en-US')`, e.g. `"$24.99"`. Titles are trimmed to 200 characters. Titles and prices keep only visible characters, so a prefill always passes the item contract (D35, D36).
 - **Images:** the extracted image URL is resolved against the final page URL and must be https, and the server never fetches it.
-- **Identification:** requests send `User-Agent: Mozilla/5.0 (compatible; Hanker/1.0; +https://hanker.dev)` and `Accept: text/html`. No browser or crawler impersonation (D34).
+- **Identification:** Hanker's own requests send `User-Agent: Mozilla/5.0 (compatible; Hanker/1.0; +https://hanker.dev)` and `Accept: text/html`. No browser or crawler impersonation (D34). Amazon product lookups are delegated to Bright Data instead (D64).
+- **Retailer lookups (Plan 8a):** `retailerOf()` in `packages/contracts` picks the links that skip the page fetch. An amazon.com product link (`/dp/<ASIN>` or `/gp/product/<ASIN>`), or an `amzn.to` / `a.co` short link that redirects to one, is looked up through Bright Data's Amazon dataset, which is sent only `https://www.amazon.com/dp/<ASIN>`. Short links are followed under this section's hop rules without fetching the final page. The whole lookup has 30 seconds. Every other link, and every Amazon link while `BRIGHT_DATA_API_KEY` is unset, takes the page fetch. A service that can't answer (spent credits, an outage, a refused key) is `LOOKUP_UNAVAILABLE`. A refused key, account or dataset (`400`, `401`, `403`, `404`) also goes to Sentry as a warning, with no URL or ASIN.
 - **Logs** carry the hostname and the failure reason, never the full URL: query strings can carry personal data.
-- **Failure:** any failure returns `200` with empty fields and a `failureReason` code from a fixed list in `packages/contracts` (Plan 3a): `INVALID_URL`, `DISALLOWED_ADDRESS`, `DNS_FAILED`, `UNREACHABLE` (the connection or TLS handshake failed), `TIMEOUT`, `TOO_MANY_REDIRECTS`, `BLOCKED_BY_SITE` (after redirects, the site answered anything but `200`: a 4xx, a 5xx, or a bot check's `202`), `NOT_HTML`, `TOO_LARGE` (the first megabyte of a longer page had nothing usable) or `NO_METADATA`.
+- **Failure:** any failure returns `200` with empty fields and a `failureReason` code from a fixed list in `packages/contracts` (Plan 3a): `INVALID_URL`, `DISALLOWED_ADDRESS`, `DNS_FAILED`, `UNREACHABLE` (the connection or TLS handshake failed), `TIMEOUT`, `TOO_MANY_REDIRECTS`, `BLOCKED_BY_SITE` (after redirects, the site answered anything but `200`: a 4xx, a 5xx, or a bot check's `202`), `NOT_HTML`, `TOO_LARGE` (the first megabyte of a longer page had nothing usable), `NO_METADATA` or `LOOKUP_UNAVAILABLE` (a lookup service couldn't answer, D66).
 
 ### 6.9 Headers
 
@@ -842,7 +843,7 @@ As of 2026-10-07 on the development machine:
 | D31 | Sign-up opens at the end of Plan 4, once a list can be shared and claimed; amends D29 (2026-10-12) | The end of Plan 3 with the share link hidden; a read-only share page pulled forward from Plan 4 |
 | D32 | No priority field on items: the owner's order is the priority, and terracotta stays for actions (2026-10-12) | A "most wanted" flag; priority levels |
 | D33 | `showClaimsToOwner`, its API field and its settings toggle, ship in Plan 4 with the claims it controls (2026-10-12) | Shipping the toggle in Plan 3, with nothing for it to show |
-| D34 | Unfurl identifies itself honestly, as `Mozilla/5.0 (compatible; Hanker/1.0; +https://hanker.dev)` (2026-10-12) | A browser user agent; posing as a social network's crawler |
+| D34 | Unfurl identifies itself honestly, as `Mozilla/5.0 (compatible; Hanker/1.0; +https://hanker.dev)` (2026-10-12; narrowed by D64, 2026-10-22) | A browser user agent; posing as a social network's crawler |
 | D35 | List and item titles follow the display-name rule: visible characters only; control and format characters (newlines, bidirectional overrides, zero-width spaces) are refused, except the joiners emoji and Persian need (Ted, 2026-10-12) | Refusing only NUL, the one character Postgres rejects |
 | D36 | Prices follow the title rule (D35): visible characters only. A price sits beside its title in front of gifters, and no currency Intl formats uses a control or format character (Ted, 2026-10-13) | Refusing only NUL; silently stripping the characters instead of refusing them |
 | D37 | The owner editor is compact rows, edited in place; quantity is a form field saved with Save, so only reorder and delete update before the API answers; the share actions sit on `/list` once it has an item (Ted, 2026-10-13) | Image cards edited in a bottom sheet, with a quantity stepper on each card; rows edited in a sheet |
@@ -872,3 +873,8 @@ As of 2026-10-07 on the development machine:
 | D61 | The share page's price filter reads the number out of `priceText` in the browser, for dollar-scale currencies only (`$`, `US$`, `CA$`, `A$`, `NZ$`, `£`, `€`) (Ted, 2026-10-21) | A stored numeric price (the display string is unchanged, so the "prices are display strings" non-goal holds); bands for every currency, which would put nearly all of a yen list in "100+" |
 | D62 | The filter row has charcoal active pills, tags that combine with AND, price bands with OR, and live counts (Ted, 2026-10-21) | Terracotta active pills, which would read as an action |
 | D63 | The Tags view is a tag-first bottom sheet: pick a tag, then tick its items (Ted, 2026-10-21) | Per-item batch selection, picking items first and then their tags |
+| D64 | Amazon product links are looked up through Bright Data's Amazon dataset, sent only `https://www.amazon.com/dp/<ASIN>`, within 30 seconds ([design](2026-10-22-retailer-lookups-design.md), Ted, 2026-10-22). Hanker's own requests still never impersonate a browser | The Product Advertising API, which needs affiliate sales; Amazon-specific HTML parsing, since production is served a bot check |
+| D65 | Etsy listings will be looked up through Etsy's Open API v3 with a Personal App (Plan 8b) (Ted, 2026-10-22) | The page fetch, which DataDome answers with `403` |
+| D66 | `LOOKUP_UNAVAILABLE` covers a lookup service that can't answer, spent credits included (Ted, 2026-10-22) | Reusing `BLOCKED_BY_SITE`, which blames the shop |
+| D67 | An Amazon link shows a waiting panel, "Amazon can take up to half a minute", with a Skip button (Ted, 2026-10-22) | Today's "Reading the page…" line alone; a message that changes after 8 seconds |
+| D68 | No money is kept on deposit with Bright Data, and there's no global lookup cap: spent credits degrade to typing the details in (Ted, 2026-10-22) | Pay-as-you-go |
