@@ -179,6 +179,7 @@ The privacy page says Sentry's error reports have IP addresses removed. [Sentry 
 | Vercel `wishlist-api` → Production | `CRON_SECRET` (sensitive)                                                                                                     | 48 random bytes, base64. Vercel Cron sends it as a bearer token. Unset means the cron refuses everyone                                                                                                                           |
 | Vercel `wishlist-api` → Production | `TURNSTILE_SECRET_KEY` (sensitive)                                                                                            | **Unset until the end of Plan 4 (D31).** While unset, sign-up, resend-verification and reset-request answer `503 CAPTCHA_UNAVAILABLE`, and the web app says sign-ups are paused. Setting it opens sign-up: see "Opening sign-up" |
 | Vercel `wishlist-api` → Production | `BRIGHT_DATA_API_KEY` (sensitive)                                                                                             | Bright Data API key, free tier with no deposit (D68). Unset means Amazon links take the page fetch. See "Turning on Amazon lookups"                                                                                              |
+| Vercel `wishlist-api` → Production | `ETSY_API_KEY` (sensitive)                                                                                                    | Etsy Open API key, as `keystring:shared_secret`. Unset means Etsy links take the page fetch. See "Turning on Etsy lookups"                                                                                                       |
 | Vercel `wishlist-api` → Production | `EMAIL_TRANSPORT=resend`, `EMAIL_FROM=Hanker <no-reply@mail.hanker.dev>`, `RESEND_API_KEY` (sensitive)                        | Set in Plan 2b. The API refuses to boot in production with Turnstile set and `EMAIL_TRANSPORT=log`                                                                                                                               |
 | Set per preview by CI              | `DATABASE_URL`, `APP_ORIGIN`, `EMAIL_TRANSPORT=log`, `TURNSTILE_SECRET_KEY` (Cloudflare's always-pass test secret), `GIT_SHA` | See `.github/workflows/preview.yml`                                                                                                                                                                                              |
 | Set per deploy by CI               | `GIT_SHA`                                                                                                                     | The commit being deployed                                                                                                                                                                                                        |
@@ -469,6 +470,24 @@ Amazon product links are looked up through Bright Data (D64), only while `BRIGHT
 **To turn it off,** remove the variable (`npx --yes vercel@64.5.0 env rm BRIGHT_DATA_API_KEY production --project wishlist-api --scope shockolate`) and redeploy. Amazon links go back to the page fetch, which Amazon answers with a bot check. Then remove Bright Data from `/privacy`.
 
 **To rotate the key,** create a new one in Bright Data, `env rm` then step 3, redeploy, then delete the old key in Bright Data.
+
+## Turning on Etsy lookups
+
+Etsy listing links are looked up through Etsy's Open API (D65), only while `ETSY_API_KEY` is set on the API. `/terms` carries Etsy's trademark statement and `/privacy` names Etsy, so set the key **before** merging the release that carries those pages (Plan 8b ruling 5). The answer only prefills the add form, and is never stored beyond what the owner saves or refreshed from Etsy (D69), as Etsy's terms limit how old displayed listing content may be.
+
+1. **App (once).** Register a Personal App at https://www.etsy.com/developers/register and wait for Etsy's approval. Its keystring and shared secret are under "Apps You've Made". The app's limits are 5 requests a second and 5,000 a day.
+2. **Store the key.** Paste the keystring at the first silent prompt and the shared secret at the second:
+   ```bash
+   read -rs K && read -rs S && printf '%s:%s' "$K" "$S" \
+     | npx --yes vercel@64.5.0 env add ETSY_API_KEY production --sensitive --project wishlist-api --scope shockolate
+   unset K S
+   ```
+3. **Deploy.** A runtime variable applies to the next deployment: merge, or `gh workflow run deploy.yml --ref main`, and wait for every job to pass.
+4. **Check it (V1).** On your own list in production, paste an Etsy listing link with a slug and `?ref=`, e.g. one copied from Etsy's address bar. Expect the plain "Reading the page…" line, then a prefilled title, photo and price. Then paste an `etsy.me` link from Etsy's Share button, then a link from another shop, which behaves as before. Within the hour, the API's runtime logs should have no `LOOKUP_UNAVAILABLE … provider=etsy` line, and Sentry no Etsy warning. If only the `etsy.me` link fails, the API logs `unfurl NO_METADATA host=etsy.me` and the owner sees "We couldn’t find the details on that page…". That means the short link didn't redirect straight to a listing: it was refused, or it passed through another page first. Listing links still work.
+
+**To turn it off,** remove the variable (`npx --yes vercel@64.5.0 env rm ETSY_API_KEY production --project wishlist-api --scope shockolate`) and redeploy. Etsy links go back to the page fetch, which Etsy refuses. Then remove Etsy from `/privacy`, and its statement from `/terms`.
+
+**To rotate the key,** reset the shared secret under "Apps You've Made", `env rm` then step 2, and redeploy.
 
 ## GitHub configuration
 

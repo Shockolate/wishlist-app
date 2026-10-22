@@ -131,6 +131,13 @@ describe('prefillMessage (Plan 3b rule 6)', () => {
     );
   });
 
+  it('names Etsy when its lookup couldn’t answer (retailer lookups §5.4)', () => {
+    const response = { failureReason: 'LOOKUP_UNAVAILABLE' } as const;
+    expect(prefillMessage({ response }, 'https://www.etsy.com/listing/1234567890')).toBe(
+      'We couldn’t get the details from Etsy right now, so fill them in yourself.',
+    );
+  });
+
   it('says why when unfurl itself failed', () => {
     const limited = apiError(ErrorCode.RATE_LIMITED, { status: 429 });
     expect(prefillMessage({ error: limited }, 'https://x.example/')).toBe(UNFURL_RATE_LIMITED);

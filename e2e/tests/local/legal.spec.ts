@@ -35,5 +35,16 @@ test('/privacy matches what the code keeps, where and for how long (final review
   await expect(main).toContainText('email-link requests');
   // routing-metadata-fetcher.ts sends Amazon product links to Bright Data, as /dp/<ASIN> only.
   await expect(main).toContainText('Bright Data looks up Amazon product links');
-  await expect(main).toContainText('sends it only the product’s ID');
+  await expect(main).toContainText('sends only the product’s ID');
+  // routing-metadata-fetcher.ts sends Etsy listing links to Etsy's Open API, as the listing ID only.
+  await expect(main).toContainText('Etsy looks up Etsy listing links');
+});
+
+test('/terms carries Etsy’s trademark statement, verbatim (retailer lookups §5.7)', async ({
+  page,
+}) => {
+  await page.goto('/terms');
+  await expect(page.getByRole('main')).toContainText(
+    "The term 'Etsy' is a trademark of Etsy, Inc. This Application uses Etsy's API, but is not endorsed or certified by Etsy.",
+  );
 });
