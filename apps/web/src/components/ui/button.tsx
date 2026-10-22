@@ -2,9 +2,17 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import type { ComponentProps } from 'react';
 import { cn } from '@/lib/utils';
 
-/** Terracotta for the main action, with espresso text (5.5:1); white on terracotta fails AA. */
+/**
+ * Terracotta for the main action, with espresso text (5.5:1); white on terracotta fails AA.
+ *
+ * Hovering lifts a button 1px, and only while hovered an empty strip (`after:`) fills the gap the
+ * lift opens below it. So the hovered button covers everywhere the resting one did: otherwise a
+ * pointer on the bottom edge would hover, lift the edge off itself, unhover and drop it, every
+ * frame. A strip that was always there would only move that edge 1px lower. It's 2px because
+ * `top-full` starts inside the bottom border: 1px of it covers a bordered button's border.
+ */
 const variants = cva(
-  'inline-flex items-center justify-center gap-2 rounded-control px-5 text-[15px] font-semibold no-underline transition-[box-shadow,transform] duration-200 hover:-translate-y-px hover:shadow-[0_8px_18px_rgba(30,27,24,0.16)] active:translate-y-0 disabled:pointer-events-none disabled:opacity-60 motion-reduce:hover:translate-y-0',
+  'relative inline-flex items-center justify-center gap-2 rounded-control px-5 text-[15px] font-semibold no-underline transition-[box-shadow,transform] duration-200 after:absolute after:inset-x-0 after:top-full hover:-translate-y-px hover:after:h-0.5 hover:shadow-[0_8px_18px_rgba(30,27,24,0.16)] active:translate-y-0 disabled:pointer-events-none disabled:opacity-60 motion-reduce:hover:translate-y-0',
   {
     variants: {
       variant: {

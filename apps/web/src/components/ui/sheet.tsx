@@ -8,8 +8,10 @@ export const Sheet = DialogPrimitive.Root;
 export const SheetClose = DialogPrimitive.Close;
 
 /**
- * A modal dialog that rises from the bottom of the screen (spec §7 Claim flow). Radix traps focus,
- * closes on Escape, and marks the rest of the page inert.
+ * A modal dialog that rises from the bottom of the screen on a phone (spec §7 Claim flow). From
+ * 640px it's a centered dialog with a full border instead: in a wider window, a sheet flush on the
+ * bottom edge looks cut off. Radix traps focus, closes on Escape, and marks the rest of the page
+ * inert.
  */
 export function SheetContent({
   className,
@@ -21,12 +23,19 @@ export function SheetContent({
       <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-foreground/50" />
       <DialogPrimitive.Content
         className={cn(
-          'fixed inset-x-0 bottom-0 z-50 mx-auto max-h-[calc(100dvh-2rem)] w-full max-w-[680px] overflow-y-auto rounded-t-card border-t border-border bg-background px-4 pt-2 pb-6 sm:px-7',
+          'fixed inset-x-0 bottom-0 z-50 mx-auto max-h-[calc(100dvh-2rem)] w-full max-w-[680px] overflow-y-auto rounded-t-card border-t border-border bg-background px-4 pt-2 pb-6',
+          // Centered from 640px. With both side insets set and width auto, max-w caps the width
+          // and the auto margins center it.
+          'sm:inset-x-4 sm:top-1/2 sm:bottom-auto sm:max-h-[calc(100dvh-4rem)] sm:w-auto sm:-translate-y-1/2 sm:rounded-card sm:border sm:px-7 sm:pt-6',
           className,
         )}
         {...props}
       >
-        <div aria-hidden="true" className="mx-auto mb-1.5 h-1 w-10 rounded-full bg-input" />
+        {/* The grab handle only means something on a sheet that rises from the bottom edge. */}
+        <div
+          aria-hidden="true"
+          className="mx-auto mb-1.5 h-1 w-10 rounded-full bg-input sm:hidden"
+        />
         {children}
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>
