@@ -38,6 +38,9 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   [ErrorCode.MANAGE_TOKEN_IN_USE]:
     'Something went wrong with this claim. Close this and try again.',
   [ErrorCode.SHARE_LINK_NOT_FOUND]: 'This list’s link doesn’t work any more.',
+  [ErrorCode.TAG_NAME_TAKEN]: 'You already have a tag called that.',
+  [ErrorCode.TAG_LIMIT_REACHED]: 'Your list has 50 tags, the most it can hold.',
+  [ErrorCode.ITEM_TAG_LIMIT_REACHED]: 'An item can have at most 10 tags.',
 };
 
 const FALLBACK = 'Something went wrong on our side. Try again in a moment.';

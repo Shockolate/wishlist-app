@@ -8,6 +8,7 @@ import {
   ErrorCode,
   WishlistResponseSchema,
   type Item,
+  type Tag,
   type WishlistResponse,
 } from '@wishlist/contracts';
 import { describe, expect, it, vi } from 'vitest';
@@ -27,6 +28,11 @@ const item = (n: number, extra: Partial<Item> = {}): Item => ({
   ...extra,
 });
 
+const tag = (n: number, name = `Tag ${String(n)}`): Tag => ({
+  id: `00000000-0000-4000-8000-0000000002${String(n).padStart(2, '0')}`,
+  name,
+});
+
 interface Sent {
   method: string;
   path: string;
@@ -44,10 +50,15 @@ const problem = (status: number, code: string) =>
 
 /** A list in a real QueryClient, and an API whose every request waits for `answer(n, …)`. */
 function setup(...items: Item[]) {
+  return setupWith(undefined, ...items);
+}
+
+function setupWith(tags: Tag[] | undefined, ...items: Item[]) {
   const client = new QueryClient();
   const list: WishlistResponse = {
     title: 'Ada’s wishlist',
     shareUrl: 'https://hanker.test/s/abcdefghijklmnopqrstuv',
+    ...(tags ? { tags } : {}),
     items,
   };
   client.setQueryData(WISHLIST_KEY, list);
@@ -72,6 +83,7 @@ function setup(...items: Item[]) {
   const run = <D, V>(options: MutationOptions<D, unknown, V>, variables: V) =>
     new MutationObserver(client, options).mutate(variables);
   const order = () => orderOf(client.getQueryData<WishlistResponse>(WISHLIST_KEY));
+  const cached = () => client.getQueryData<WishlistResponse>(WISHLIST_KEY);
   const invalidated = () => client.getQueryState(WISHLIST_KEY)?.isInvalidated ?? false;
   // The page's own subscription to the list, so that invalidating it really refetches (a GET in `sent`).
   const watch = () =>
@@ -94,6 +106,7 @@ function setup(...items: Item[]) {
     answer,
     run,
     order,
+    cached,
     invalidated,
     watch,
     settle,
@@ -358,5 +371,229 @@ describe('the list’s mutation queue (spec §7, Plan 3b rules 2–4)', () => {
     t.answer(0, problem(400, ErrorCode.VALIDATION_FAILED));
     await expect(adding).rejects.toThrow('400 VALIDATION_FAILED');
     expect(t.invalidated()).toBe(false);
+  });
+
+  describe('tags (Plan 7b rulings 4, 7)', () => {
+    it('adds the tags an item write answers with, and stores the item without them', async () => {
+      const t = setupWith([tag(1)], item(1));
+      const adding = t.run(t.mutations.create, {
+        title: 'Item 2',
+        quantity: 1,
+        tags: [{ name: 'Garden' }, { id: tag(1).id }],
+      });
+      await vi.waitFor(() => expect(t.sent).toHaveLength(1));
+      t.answer(
+        0,
+        json(201, {
+          ...item(2, { tagIds: [tag(2).id, tag(1).id] }),
+          tags: [tag(2, 'Garden'), tag(1)],
+        }),
+      );
+      await adding;
+      expect(t.cached()?.tags).toEqual([tag(1), tag(2, 'Garden')]);
+      const stored = t.cached()?.items[1];
+      expect(stored?.tagIds).toEqual([tag(2).id, tag(1).id]);
+      expect(stored).not.toHaveProperty('tags');
+    });
+
+    it('takes a renamed tag from a save, and stores the edited item without tags', async () => {
+      const t = setupWith([tag(1, 'Old')], item(1, { tagIds: [tag(1).id] }));
+      const editing = t.run(t.mutations.update, {
+        id: item(1).id,
+        body: { tags: [{ id: tag(1).id }] },
+      });
+      await vi.waitFor(() => expect(t.sent).toHaveLength(1));
+      t.answer(0, json(200, { ...item(1, { tagIds: [tag(1).id] }), tags: [tag(1, 'Renamed')] }));
+      await editing;
+      expect(t.cached()?.tags).toEqual([tag(1, 'Renamed')]);
+      expect(t.cached()?.items[0]).not.toHaveProperty('tags');
+    });
+
+    it('still saves against an API that sends no tags', async () => {
+      const t = setup(item(1));
+      const adding = t.run(t.mutations.create, { title: 'Item 2', quantity: 1 });
+      await vi.waitFor(() => expect(t.sent).toHaveLength(1));
+      t.answer(0, json(201, item(2)));
+      await adding;
+      expect(t.cached()?.tags).toBeUndefined();
+      expect(t.order()).toEqual([item(1).id, item(2).id]);
+    });
+
+    it('shows a tick at once, and sends PUT /wishlist/tags/<tag>/items/<item>', async () => {
+      const t = setupWith([tag(1)], item(1));
+      const ticking = t.run(t.mutations.tick, { tagId: tag(1).id, itemId: item(1).id });
+      await vi.waitFor(() => expect(t.cached()?.items[0]?.tagIds).toEqual([tag(1).id]));
+      await vi.waitFor(() => expect(t.sent).toHaveLength(1));
+      expect(t.sent[0]).toEqual({
+        method: 'PUT',
+        path: `/api/wishlist/tags/${tag(1).id}/items/${item(1).id}`,
+        body: {},
+      });
+      t.answer(0, noContent());
+      await ticking;
+      expect(t.invalidated()).toBe(false);
+    });
+
+    it('shows an untick at once, and sends DELETE /wishlist/tags/<tag>/items/<item>', async () => {
+      const t = setupWith([tag(1)], item(1, { tagIds: [tag(1).id] }));
+      const unticking = t.run(t.mutations.untick, { tagId: tag(1).id, itemId: item(1).id });
+      await vi.waitFor(() => expect(t.cached()?.items[0]?.tagIds).toEqual([]));
+      await vi.waitFor(() => expect(t.sent).toHaveLength(1));
+      expect(t.sent[0]).toEqual({
+        method: 'DELETE',
+        path: `/api/wishlist/tags/${tag(1).id}/items/${item(1).id}`,
+        body: {},
+      });
+      t.answer(0, noContent());
+      await unticking;
+      expect(t.invalidated()).toBe(false);
+    });
+
+    it('refetches once the queue drains after a tick that fails', async () => {
+      const t = setupWith([tag(1)], item(1));
+      t.watch();
+      const ticking = t.run(t.mutations.tick, { tagId: tag(1).id, itemId: item(1).id });
+      await vi.waitFor(() => expect(t.sent).toHaveLength(1));
+      t.answer(0, problem(422, ErrorCode.ITEM_TAG_LIMIT_REACHED));
+      await expect(ticking).rejects.toThrow('422 ITEM_TAG_LIMIT_REACHED');
+      await vi.waitFor(() => expect(t.sent).toHaveLength(2));
+      expect(t.sent[1]).toMatchObject({ method: 'GET', path: '/api/wishlist' });
+    });
+
+    it('sends a tick queued behind a save second, and refetches once the queue drains', async () => {
+      const t = setupWith([tag(1), tag(2)], item(1, { tagIds: [tag(1).id] }));
+      t.watch();
+      const editing = t.run(t.mutations.update, { id: item(1).id, body: { title: 'Kettle' } });
+      const ticking = t.run(t.mutations.tick, { tagId: tag(2).id, itemId: item(1).id });
+      // The tick shows at once, but its request waits for the save's.
+      await vi.waitFor(() => expect(t.cached()?.items[0]?.tagIds).toEqual([tag(1).id, tag(2).id]));
+      expect(t.sent.map((r) => r.method)).toEqual(['PATCH']);
+      // The save's answer predates the tick.
+      t.answer(
+        0,
+        json(200, { ...item(1, { title: 'Kettle', tagIds: [tag(1).id] }), tags: [tag(1)] }),
+      );
+      await editing;
+      await vi.waitFor(() => expect(t.sent).toHaveLength(2));
+      expect(t.sent[1]?.method).toBe('PUT');
+      t.answer(1, noContent());
+      await ticking;
+      // The cache is stale, so the list is refetched, and the server's copy is what stays.
+      await vi.waitFor(() => expect(t.sent).toHaveLength(3));
+      expect(t.sent[2]).toMatchObject({ method: 'GET', path: '/api/wishlist' });
+      t.answer(
+        2,
+        json(200, {
+          ...t.serverList(item(1, { title: 'Kettle', tagIds: [tag(1).id, tag(2).id] })),
+          tags: [tag(1), tag(2)],
+        }),
+      );
+      await vi.waitFor(() => expect(t.invalidated()).toBe(false));
+      expect(t.cached()?.items[0]?.tagIds).toEqual([tag(1).id, tag(2).id]);
+      await t.settle();
+      expect(t.sent).toHaveLength(3);
+    });
+
+    it('does not bring a deleted tag back from a save it was queued behind', async () => {
+      const t = setupWith([tag(1)], item(1, { tagIds: [tag(1).id] }));
+      t.watch();
+      const editing = t.run(t.mutations.update, { id: item(1).id, body: { title: 'Kettle' } });
+      const deleting = t.run(t.mutations.deleteTag, tag(1).id);
+      await vi.waitFor(() => expect(t.cached()?.tags).toEqual([]));
+      t.answer(
+        0,
+        json(200, { ...item(1, { title: 'Kettle', tagIds: [tag(1).id] }), tags: [tag(1)] }),
+      );
+      await editing;
+      await vi.waitFor(() => expect(t.sent).toHaveLength(2));
+      expect(t.sent[1]?.method).toBe('DELETE');
+      t.answer(1, noContent());
+      await deleting;
+      await vi.waitFor(() => expect(t.sent).toHaveLength(3));
+      expect(t.sent[2]).toMatchObject({ method: 'GET', path: '/api/wishlist' });
+      t.answer(
+        2,
+        json(200, { ...t.serverList(item(1, { title: 'Kettle', tagIds: [] })), tags: [] }),
+      );
+      await vi.waitFor(() => expect(t.invalidated()).toBe(false));
+      expect(t.cached()?.tags).toEqual([]);
+      expect(t.cached()?.items[0]?.tagIds).toEqual([]);
+    });
+
+    it('does not refetch after a save with nothing queued behind it', async () => {
+      const t = setupWith([tag(1)], item(1, { tagIds: [tag(1).id] }));
+      t.watch();
+      const editing = t.run(t.mutations.update, { id: item(1).id, body: { title: 'Kettle' } });
+      await vi.waitFor(() => expect(t.sent).toHaveLength(1));
+      t.answer(
+        0,
+        json(200, { ...item(1, { title: 'Kettle', tagIds: [tag(1).id] }), tags: [tag(1)] }),
+      );
+      await editing;
+      await t.settle();
+      expect(t.sent).toHaveLength(1);
+      expect(t.invalidated()).toBe(false);
+    });
+
+    it('removes a deleted tag from the list and its items before the request runs', async () => {
+      const t = setupWith([tag(1), tag(2)], item(1, { tagIds: [tag(1).id, tag(2).id] }), item(2));
+      const deleting = t.run(t.mutations.deleteTag, tag(1).id);
+      await vi.waitFor(() => expect(t.cached()?.tags).toEqual([tag(2)]));
+      expect(t.cached()?.items[0]?.tagIds).toEqual([tag(2).id]);
+      await vi.waitFor(() => expect(t.sent).toHaveLength(1));
+      expect(t.sent[0]).toEqual({
+        method: 'DELETE',
+        path: `/api/wishlist/tags/${tag(1).id}`,
+        body: {},
+      });
+      t.answer(0, noContent());
+      await deleting;
+      expect(t.invalidated()).toBe(false);
+    });
+
+    it('waits for the API before adding a created tag', async () => {
+      const t = setupWith([], item(1));
+      const creating = t.run(t.mutations.createTag, 'Garden');
+      await vi.waitFor(() => expect(t.sent).toHaveLength(1));
+      expect(t.sent[0]).toEqual({
+        method: 'POST',
+        path: '/api/wishlist/tags',
+        body: { name: 'Garden' },
+      });
+      expect(t.cached()?.tags).toEqual([]);
+      t.answer(0, json(201, tag(1, 'Garden')));
+      await expect(creating).resolves.toEqual(tag(1, 'Garden'));
+      expect(t.cached()?.tags).toEqual([tag(1, 'Garden')]);
+    });
+
+    it('accepts the 200 an existing tag name gets, without adding it twice', async () => {
+      const t = setupWith([tag(1, 'Garden')], item(1));
+      const creating = t.run(t.mutations.createTag, 'garden');
+      await vi.waitFor(() => expect(t.sent).toHaveLength(1));
+      t.answer(0, json(200, tag(1, 'Garden')));
+      await creating;
+      expect(t.cached()?.tags).toEqual([tag(1, 'Garden')]);
+    });
+
+    it('waits for the API before renaming, and leaves the name alone when it is taken', async () => {
+      const t = setupWith([tag(1, 'Garden'), tag(2, 'Kitchen')], item(1));
+      const renaming = t.run(t.mutations.renameTagTo, { id: tag(1).id, name: 'Yard' });
+      await vi.waitFor(() => expect(t.sent).toHaveLength(1));
+      expect(t.sent[0]).toEqual({
+        method: 'PATCH',
+        path: `/api/wishlist/tags/${tag(1).id}`,
+        body: { name: 'Yard' },
+      });
+      expect(t.cached()?.tags?.[0]?.name).toBe('Garden');
+      t.answer(0, json(200, tag(1, 'Yard')));
+      await renaming;
+      expect(t.cached()?.tags).toEqual([tag(1, 'Yard'), tag(2, 'Kitchen')]);
+
+      const clash = t.run(t.mutations.renameTagTo, { id: tag(2).id, name: 'Yard' });
+      await vi.waitFor(() => expect(t.sent).toHaveLength(2));
+      t.answer(1, problem(409, ErrorCode.TAG_NAME_TAKEN));
+      await expect(clash).rejects.toThrow('409 TAG_NAME_TAKEN');
+      expect(t.cached()?.tags?.[1]?.name).toBe('Kitchen');
+    });
   });
 });
