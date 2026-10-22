@@ -325,17 +325,55 @@ const mutations = [
       s.run = s.run.replace(' --prod', '');
     },
   ],
+  [
+    'a smoke job without the Playwright image',
+    'deploy.yml',
+    (wf) => {
+      delete wf.jobs.smoke.container;
+    },
+  ],
+  [
+    'a smoke image pinned by tag only',
+    'preview.yml',
+    (wf) => {
+      wf.jobs.smoke.container.image = wf.jobs.smoke.container.image.replace(/@sha256:.*/, '');
+    },
+  ],
+  [
+    'a Playwright image that differs from @playwright/test',
+    'e2e/package.json',
+    (pkg) => {
+      pkg.devDependencies['@playwright/test'] = '1.62.0';
+    },
+  ],
+  [
+    'a smoke job that installs browsers again',
+    'deploy.yml',
+    (wf) => {
+      wf.jobs.smoke.steps.splice(-1, 0, {
+        run: 'pnpm --filter @wishlist/e2e exec playwright install --with-deps chromium',
+      });
+    },
+  ],
+  [
+    'an unpinned service image',
+    'ci.yml',
+    (wf) => {
+      wf.jobs.e2e.services = { db: { image: 'postgres:17' } };
+    },
+  ],
 ];
 
 function copyRoot() {
   const dir = mkdtempSync(join(tmpdir(), 'policy-'));
   cpSync(join(root, '.github/workflows'), join(dir, '.github/workflows'), { recursive: true });
-  for (const f of ['renovate.json', 'package.json']) cpSync(join(root, f), join(dir, f));
+  for (const f of ['renovate.json', 'package.json', 'e2e/package.json'])
+    cpSync(join(root, f), join(dir, f));
   return dir;
 }
 
 function rewrite(dir, file, mutate) {
-  const path = file === 'package.json' ? join(dir, file) : join(dir, '.github/workflows', file);
+  const path = file.endsWith('.json') ? join(dir, file) : join(dir, '.github/workflows', file);
   const isJson = file.endsWith('.json');
   const doc = isJson ? JSON.parse(readFileSync(path, 'utf8')) : parse(readFileSync(path, 'utf8'));
   mutate?.(doc);

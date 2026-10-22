@@ -19,6 +19,11 @@
       "description": "eslint-config-next's plugins don't support ESLint 10 yet (spec §3)",
       "matchPackageNames": ["eslint", "@eslint/js"],
       "allowedVersions": "<10.0.0"
+    },
+    {
+      "description": "The smoke jobs' Playwright image must match @playwright/test, so both move in one PR (workflow policy Rule 13)",
+      "matchPackageNames": ["@playwright/test", "mcr.microsoft.com/playwright"],
+      "groupName": "playwright"
     }
   ]
 }

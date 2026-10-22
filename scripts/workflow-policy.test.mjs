@@ -370,6 +370,39 @@ if (
 else if (auditGate['continue-on-error'] === true || auditGate['continue-on-error'] === 'true')
   fail('ci.yml#checks: the production audit must block the build (no continue-on-error)');
 
+// Rule 13: a job's container image is pinned by digest, as actions are by SHA. Both smoke jobs run
+// in Playwright's image, which ships Chromium and its system packages, so nothing comes from apt,
+// whose mirror stalled smoke past its timeout twice on 2026-10-22. Its version is the one
+// @playwright/test is pinned to, since Playwright only finds the browser build it was released with.
+const e2ePkg = JSON.parse(readFileSync(join(root, 'e2e/package.json'), 'utf8'));
+const playwrightVersion = e2ePkg.devDependencies?.['@playwright/test'];
+const imageOf = (spec) => (typeof spec === 'string' ? spec : spec?.image);
+for (const { file, wf } of workflows) {
+  for (const [jobName, job] of Object.entries(wf.jobs ?? {})) {
+    const images = [job.container, ...Object.values(job.services ?? {})]
+      .map(imageOf)
+      .filter((image) => image !== undefined);
+    for (const image of images)
+      if (!/^[\w./:-]+@sha256:[0-9a-f]{64}$/.test(String(image)))
+        fail(`${file}#${jobName}: container image not pinned by digest: ${image}`);
+  }
+}
+for (const [file, jobName] of [
+  ['deploy.yml', 'smoke'],
+  ['preview.yml', 'smoke'],
+]) {
+  const job = byFile[file]?.jobs?.[jobName];
+  if (!job) continue;
+  const where = `${file}#${jobName}`;
+  const image = String(imageOf(job.container) ?? '');
+  if (!image.startsWith(`mcr.microsoft.com/playwright:v${playwrightVersion}-`))
+    fail(
+      `${where}: run in mcr.microsoft.com/playwright:v${playwrightVersion}-<os>, the version @playwright/test is pinned to (Rule 13)`,
+    );
+  if (commandLines(job).some((line) => /\bplaywright install\b/.test(line)))
+    fail(`${where}: the Playwright image already has the browser; don't run playwright install`);
+}
+
 // Secret jobs run `npx vercel@<this version>`; a range would float in token-holding jobs.
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 if (!/^\d+\.\d+\.\d+$/.test(pkg.devDependencies?.vercel ?? ''))
