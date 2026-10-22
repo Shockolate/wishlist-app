@@ -119,8 +119,8 @@ export function ShareFilterList({
                   className={PILL_HIT}
                 >
                   <span className={pillFace(on)}>
-                    {tag.name}
-                    <span className={pillCount(on)}>{count}</span>
+                    {/* The space keeps the visible text within the aria-label (WCAG 2.5.3). */}
+                    {tag.name} <span className={pillCount(on)}>{count}</span>
                   </span>
                 </button>
               );
