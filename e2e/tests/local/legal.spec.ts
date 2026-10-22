@@ -33,4 +33,7 @@ test('/privacy matches what the code keeps, where and for how long (final review
   await expect(main).not.toContainText('when its time window ends');
   // EmailLinkForm renders Turnstile on reset-password and resend-verification too.
   await expect(main).toContainText('email-link requests');
+  // routing-metadata-fetcher.ts sends Amazon product links to Bright Data, as /dp/<ASIN> only.
+  await expect(main).toContainText('Bright Data looks up Amazon product links');
+  await expect(main).toContainText('sends it only the product’s ID');
 });

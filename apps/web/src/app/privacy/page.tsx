@@ -10,7 +10,7 @@ const Contact = () => <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>;
 /** `/privacy` (D54). Every claim here was checked against the code and the services (Plan 6). */
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Privacy" updated="2026-10-21">
+    <LegalPage title="Privacy" updated="2026-10-22">
       <p>
         Hanker is a small wishlist site run by Ted Armstrong in Portland, Maine, USA. This page says
         what Hanker keeps about you, who else handles it, and for how long. Questions go to{' '}
@@ -22,7 +22,8 @@ export default function PrivacyPage() {
         Hanker keeps your email address, your display name, your password as a one-way hash (never
         the password itself), and your list: its title, items, links, prices, photo addresses, notes
         and tags. When you paste a shop link, Hanker’s server visits that page to fill in the title,
-        price and photo, so the shop sees a visit from Hanker, not from you.
+        price and photo, so the shop sees a visit from Hanker, not from you. For Amazon product
+        links, Hanker asks Bright Data for the details instead, and sends it only the product’s ID.
       </p>
 
       <h2>If you claim a gift</h2>
@@ -62,6 +63,10 @@ export default function PrivacyPage() {
           Cloudflare checks that sign-ups and email-link requests (password resets and new
           confirmation links) come from a person, which means it sees your IP address and browser
           details. It also stores Hanker’s encrypted backups.
+        </li>
+        <li>
+          Bright Data looks up Amazon product links. It sees the product’s ID, and nothing about who
+          pasted it.
         </li>
         <li>
           GitHub runs the nightly backup, which is encrypted before it leaves GitHub’s machine.
