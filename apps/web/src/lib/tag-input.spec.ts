@@ -16,7 +16,7 @@ const tag = (name: string): Tag => ({
 });
 const names = (tags: readonly Tag[]) => tags.map((each) => each.name);
 
-describe('suggestTags (values table, Ledger ruling 6)', () => {
+describe('suggestTags (spec §7, the tag field)', () => {
   const kitchen = tag('Kitchen');
   const books = tag('Books');
   const hashBooks = tag('#books');
@@ -67,7 +67,7 @@ describe('suggestTags (values table, Ledger ruling 6)', () => {
   });
 });
 
-describe('addTypedTag (ruling 7)', () => {
+describe('addTypedTag (Plan 7b ruling 7)', () => {
   const kitchen = tag('Kitchen');
   const all = [kitchen, tag('Christmas')];
 
@@ -105,7 +105,7 @@ describe('addTypedTag (ruling 7)', () => {
   });
 });
 
-describe('addPendingTags (controller rulings: typed text is added on save, comma by comma)', () => {
+describe('addPendingTags (spec §7: typed text is added on save, comma by comma)', () => {
   const kitchen = tag('Kitchen');
   const all = [kitchen];
   const chosen: ItemTagRef[] = [{ name: 'Garden' }];
@@ -147,7 +147,7 @@ describe('addPendingTags (controller rulings: typed text is added on save, comma
   });
 });
 
-describe('shownTags and liveTags (ruling 6)', () => {
+describe('shownTags and liveTags (Plan 7b ruling 6)', () => {
   const kitchen = tag('Kitchen');
   const books = tag('books');
   const deleted = tag('Gone');
@@ -162,7 +162,7 @@ describe('shownTags and liveTags (ruling 6)', () => {
   });
 });
 
-describe('itemBody (ruling 5)', () => {
+describe('itemBody (Plan 7b ruling 5)', () => {
   const values = { title: 'Kettle', tags: [{ name: 'Kitchen' }] };
 
   it('sends the tags only when they changed', () => {
