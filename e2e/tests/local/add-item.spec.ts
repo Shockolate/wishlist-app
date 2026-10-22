@@ -106,7 +106,79 @@ test('says the page is being read while unfurl runs', async ({ page, baseURL }) 
   await page.goto('/list');
   await addThroughTheBox(page, 'https://hanker-e2e.invalid/kettle');
   await expect(status(page, 'Reading the page…')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Skip, I’ll type them' })).toHaveCount(0);
   await expect(page.getByLabel('Title')).toHaveValue('Kettle');
+});
+
+const AMAZON = 'https://www.amazon.com/dp/B08FK7B2SC';
+
+test('an Amazon link shows the waiting panel, then the prefill (retailer lookups §5.5)', async ({
+  page,
+  baseURL,
+}) => {
+  await verifiedOwner(page, baseURL ?? '', 'amazon-wait');
+  await page.route('**/api/wishlist/unfurl', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ title: 'Cephalofair Games: Frosthaven' }),
+    });
+  });
+  await page.goto('/list');
+  await addThroughTheBox(page, AMAZON);
+  await expect(status(page, 'Getting the details from Amazon…')).toBeVisible();
+  await expect(page.getByText('Amazon can take up to half a minute.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Skip, I’ll type them' })).toBeVisible();
+  await expectAccessible(page);
+  await expect(page.getByLabel('Title')).toHaveValue('Cephalofair Games: Frosthaven');
+});
+
+test('Skip opens the form at once, and a late answer doesn’t overwrite it (Review Focus 3)', async ({
+  page,
+  baseURL,
+}) => {
+  await verifiedOwner(page, baseURL ?? '', 'amazon-skip');
+  await page.route('**/api/wishlist/unfurl', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    await route
+      .fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ title: 'Late title' }),
+      })
+      .catch(() => undefined); // The browser may have aborted it.
+  });
+  await page.goto('/list');
+  await addThroughTheBox(page, AMAZON);
+  await page.getByRole('button', { name: 'Skip, I’ll type them' }).click();
+  await expect(status(page, 'Fill in the details yourself.')).toBeVisible();
+  await expect(page.getByLabel('Link', { exact: true })).toHaveValue(AMAZON);
+  const title = page.getByLabel('Title');
+  await expect(title).toBeFocused();
+  await title.fill('My own title');
+  await page.waitForTimeout(3500);
+  await expect(title).toHaveValue('My own title');
+});
+
+test('an Amazon lookup that can’t answer names Amazon (retailer lookups §5.4)', async ({
+  page,
+  baseURL,
+}) => {
+  await verifiedOwner(page, baseURL ?? '', 'amazon-down');
+  await page.route('**/api/wishlist/unfurl', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ failureReason: 'LOOKUP_UNAVAILABLE' }),
+    }),
+  );
+  await page.goto('/list');
+  await addThroughTheBox(page, AMAZON);
+  await expect(
+    status(page, 'We couldn’t get the details from Amazon right now, so fill them in yourself.'),
+  ).toBeVisible();
+  await expect(page.getByLabel('Link', { exact: true })).toHaveValue(AMAZON);
 });
 
 test('the quantity stepper hands focus on when a button reaches its limit', async ({

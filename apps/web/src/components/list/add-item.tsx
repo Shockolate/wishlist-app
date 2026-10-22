@@ -1,27 +1,44 @@
 'use client';
 
 import { useMutation } from '@tanstack/react-query';
-import { ErrorCode, ItemTitleSchema, UnfurlResponseSchema, type Item } from '@wishlist/contracts';
+import {
+  ErrorCode,
+  ItemTitleSchema,
+  retailerOf,
+  UnfurlResponseSchema,
+  type Item,
+  type Retailer,
+} from '@wishlist/contracts';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { classifyAddInput, prefill, type ItemFormValues } from '@/lib/add-input';
+import { classifyAddInput, prefill, type AddInput, type ItemFormValues } from '@/lib/add-input';
 import { browserApi } from '@/lib/browser-api';
 import { formErrorMap } from '@/lib/form-errors';
 import {
   ADD_BOX_EMPTY,
+  AMAZON_WAIT,
   fieldErrors,
   hasCode,
   LINK_TOO_LONG,
+  LOOKUP_SKIPPED,
   OTHER_SCHEME_LINK,
   prefillMessage,
 } from '@/lib/messages';
 import { AddForm } from './add-form';
+import { LookupWait } from './lookup-wait';
 import { useListStatus } from './list-status';
 import { useListMutations } from './use-list-mutations';
 
 type Step =
-  { step: 'box' } | { step: 'reading' } | { step: 'form'; values: ItemFormValues; message: string };
+  | { step: 'box' }
+  | {
+      step: 'reading';
+      link: Extract<AddInput, { kind: 'link' }>;
+      retailer: Retailer | null;
+      abort: AbortController;
+    }
+  | { step: 'form'; values: ItemFormValues; message: string };
 
 /** The link-first add box (spec §7 Owner editor, Plan 3b rules 5 and 6). */
 export function AddItem() {
@@ -77,19 +94,24 @@ export function AddItem() {
       return;
     }
     if (input.url.length > 2048) return refuse(LINK_TOO_LONG);
-    setStep({ step: 'reading' });
+    const abort = new AbortController();
+    setStep({ step: 'reading', link: input, retailer: retailerOf(input.url), abort });
     try {
       const response = await browserApi.post(
         '/wishlist/unfurl',
         { url: input.url },
         UnfurlResponseSchema,
+        { signal: abort.signal },
       );
+      // Skipped: the form is already open, and may already hold what the owner typed.
+      if (abort.signal.aborted) return;
       setStep({
         step: 'form',
         values: prefill(input.url, input.titleHint, response),
         message: prefillMessage({ response }, input.url),
       });
     } catch (error) {
+      if (abort.signal.aborted) return;
       if (hasCode(error, ErrorCode.UNAUTHENTICATED)) return fail(error);
       setStep({
         step: 'form',
@@ -99,7 +121,19 @@ export function AddItem() {
     }
   }
 
+  /** Skip (retailer lookups §5.5): stop waiting, and open the form with just the link. */
+  function skip() {
+    if (step.step !== 'reading') return;
+    step.abort.abort();
+    setStep({
+      step: 'form',
+      values: prefill(step.link.url, step.link.titleHint, null),
+      message: LOOKUP_SKIPPED,
+    });
+  }
+
   const reading = step.step === 'reading';
+  const amazon = step.step === 'reading' && step.retailer === 'amazon';
   return (
     // Not a labelled region: the heading already labels the box, and one label should name one thing.
     <section className="mt-5 rounded-card border border-border bg-card p-4 sm:p-5">
@@ -111,7 +145,11 @@ export function AddItem() {
         {step.step === 'form' ? (
           <p className="mt-1 text-sm text-muted-foreground">{step.message}</p>
         ) : null}
-        {reading ? <p className="mt-1 text-sm text-muted-foreground">Reading the page…</p> : null}
+        {reading ? (
+          <p className="mt-1 text-sm text-muted-foreground">
+            {amazon ? AMAZON_WAIT : 'Reading the page…'}
+          </p>
+        ) : null}
       </div>
       {step.step === 'form' ? (
         <AddForm initial={step.values} onAdded={added} onCancel={cancel} />
@@ -145,6 +183,7 @@ export function AddItem() {
               {boxError.message}
             </p>
           ) : null}
+          {amazon ? <LookupWait onSkip={skip} /> : null}
         </form>
       )}
     </section>

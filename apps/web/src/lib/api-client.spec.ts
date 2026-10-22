@@ -63,6 +63,16 @@ describe('createApiClient', () => {
     expect(calls[0]?.init.headers).toMatchObject({ cookie: 'a=b' });
   });
 
+  it('passes a POST’s abort signal through, so Skip can cancel a lookup (retailer lookups §5.5)', async () => {
+    const { client, calls } = clientReturning(json({ id: 't3' }));
+    const controller = new AbortController();
+    await client.post('/things', {}, Thing, { signal: controller.signal });
+    expect(calls[0]?.init.signal).toBe(controller.signal);
+    const plain = clientReturning(json({ id: 't4' }));
+    await plain.client.post('/things', {}, Thing);
+    expect(plain.calls[0]?.init).not.toHaveProperty('signal');
+  });
+
   it('sends JSON bodies with a JSON content type', async () => {
     const { client, calls } = clientReturning(json({ id: 't2' }, 201));
     await client.post('/things', { name: 'x' }, Thing);
