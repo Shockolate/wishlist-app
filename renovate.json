@@ -24,6 +24,26 @@
       "description": "The smoke jobs' Playwright image must match @playwright/test, so both move in one PR (workflow policy Rule 13)",
       "matchPackageNames": ["@playwright/test", "mcr.microsoft.com/playwright"],
       "groupName": "playwright"
+    },
+    {
+      "description": "Node is 24, Vercel's runtime (AGENTS.md). Pinning engines would set it to the newest Node, and .nvmrc keeps the major only, so both change by hand",
+      "matchDepTypes": ["engines"],
+      "enabled": false
+    },
+    {
+      "description": "Node is 24, Vercel's runtime (AGENTS.md). Pinning engines would set it to the newest Node, and .nvmrc keeps the major only, so both change by hand",
+      "matchManagers": ["nvm"],
+      "enabled": false
+    },
+    {
+      "description": "undici-types is pinned at the version @types/node locks, so it moves by hand with @types/node (docs/development.md)",
+      "matchPackageNames": ["undici-types"],
+      "enabled": false
+    },
+    {
+      "description": "Production Neon runs Postgres 17, and local, test and backup images match it because pg_dump refuses newer servers (docs/deployment.md)",
+      "matchPackageNames": ["postgres"],
+      "allowedVersions": "<18"
     }
   ]
 }
