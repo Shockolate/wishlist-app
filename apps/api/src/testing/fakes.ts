@@ -4,8 +4,9 @@ import type { EmailMessage, EmailSender } from '../email/email-sender.js';
 import type { ErrorContext, ErrorReporter } from '../observability/error-reporter.js';
 import type { BreachedPasswordChecker } from '../security/breached-passwords.js';
 import type { CaptchaVerdict, CaptchaVerifier } from '../security/captcha.js';
-import type { AmazonLookup, LookupResult } from '../unfurl/amazon-lookup.js';
+import type { AmazonLookup } from '../unfurl/amazon-lookup.js';
 import type { EtsyLookup } from '../unfurl/etsy-lookup.js';
+import type { LookupResult } from '../unfurl/lookup-result.js';
 import type { MetadataFetcher } from '../unfurl/metadata-fetcher.js';
 
 /** A clock tests move by hand. */

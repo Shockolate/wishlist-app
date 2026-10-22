@@ -6,8 +6,9 @@ import {
   FakeEtsyLookup,
   FakeMetadataFetcher,
 } from '../testing/fakes.js';
-import type { AmazonLookup, LookupResult } from './amazon-lookup.js';
+import type { AmazonLookup } from './amazon-lookup.js';
 import type { EtsyLookup } from './etsy-lookup.js';
+import type { LookupResult } from './lookup-result.js';
 import type { ResolvedLink } from './page-fetcher.js';
 import {
   AMAZON_DEADLINE_MS,

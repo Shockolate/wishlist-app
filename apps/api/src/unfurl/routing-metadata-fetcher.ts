@@ -10,8 +10,9 @@ import {
   type UrlLike,
 } from '@wishlist/contracts';
 import type { ErrorReporter } from '../observability/error-reporter.js';
-import type { AmazonLookup, LookupResult } from './amazon-lookup.js';
+import type { AmazonLookup } from './amazon-lookup.js';
 import type { EtsyLookup } from './etsy-lookup.js';
+import type { LookupResult } from './lookup-result.js';
 import type { MetadataFetcher } from './metadata-fetcher.js';
 import type { PageFetcher } from './page-fetcher.js';
 

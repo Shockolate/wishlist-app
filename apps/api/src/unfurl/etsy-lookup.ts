@@ -1,5 +1,5 @@
 import { decodeHTML } from 'entities/decode';
-import type { LookupResult } from './amazon-lookup.js';
+import type { LookupResult } from './lookup-result.js';
 import { productMetadata } from './metadata.js';
 
 /** The Etsy lookup port (retailer lookups §5.3). Never throws. */
