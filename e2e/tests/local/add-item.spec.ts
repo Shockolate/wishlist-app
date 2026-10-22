@@ -181,6 +181,31 @@ test('an Amazon lookup that can’t answer names Amazon (retailer lookups §5.4)
   await expect(page.getByLabel('Link', { exact: true })).toHaveValue(AMAZON);
 });
 
+const ETSY = 'https://www.etsy.com/listing/1234567890/hand-thrown-mug';
+
+test('an Etsy link reads like any shop, and an unavailable lookup names Etsy (retailer lookups §5.3, §5.4)', async ({
+  page,
+  baseURL,
+}) => {
+  await verifiedOwner(page, baseURL ?? '', 'etsy-down');
+  await page.route('**/api/wishlist/unfurl', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ failureReason: 'LOOKUP_UNAVAILABLE' }),
+    });
+  });
+  await page.goto('/list');
+  await addThroughTheBox(page, ETSY);
+  await expect(status(page, 'Reading the page…')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Skip, I’ll type them' })).toHaveCount(0);
+  await expect(
+    status(page, 'We couldn’t get the details from Etsy right now, so fill them in yourself.'),
+  ).toBeVisible();
+  await expect(page.getByLabel('Link', { exact: true })).toHaveValue(ETSY);
+});
+
 test('the quantity stepper hands focus on when a button reaches its limit', async ({
   page,
   baseURL,

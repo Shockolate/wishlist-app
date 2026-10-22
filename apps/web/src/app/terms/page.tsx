@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: 'Terms' };
 /** `/terms` (D54, D55). */
 export default function TermsPage() {
   return (
-    <LegalPage title="Terms" updated="2026-10-21">
+    <LegalPage title="Terms" updated="2026-10-22">
       <p>
         Hanker is a free wishlist site that Ted Armstrong runs as a personal project. Using it means
         agreeing to these terms.
@@ -40,6 +40,10 @@ export default function TermsPage() {
       <p>
         Hanker links to shops it doesn’t run. It isn’t responsible for them, their prices, or
         anything anyone buys.
+      </p>
+      <p>
+        The term &apos;Etsy&apos; is a trademark of Etsy, Inc. This Application uses Etsy&apos;s
+        API, but is not endorsed or certified by Etsy.
       </p>
 
       <h2>Changes</h2>

@@ -1,6 +1,7 @@
 import {
   ErrorCode,
   retailerOf,
+  type Retailer,
   type UnfurlFailureReason,
   type UnfurlResponse,
 } from '@wishlist/contracts';
@@ -129,9 +130,8 @@ export const UNFURL_MESSAGES: Readonly<Record<UnfurlFailureReason, string>> = {
   DISALLOWED_ADDRESS: NOT_PUBLIC,
   LOOKUP_UNAVAILABLE: 'We couldn’t get the details right now, so fill them in yourself.',
 };
-/** LOOKUP_UNAVAILABLE for an Amazon link names the shop (retailer lookups §5.4). */
-const AMAZON_UNAVAILABLE =
-  'We couldn’t get the details from Amazon right now, so fill them in yourself.';
+/** LOOKUP_UNAVAILABLE for a retailer's link names the shop (retailer lookups §5.4). */
+const RETAILER_NAMES: Record<Retailer, string> = { amazon: 'Amazon', etsy: 'Etsy' };
 export const UNFURL_RATE_LIMITED =
   'You’ve added a lot of links this hour, so fill in the details yourself.';
 export const UNFURL_FAILED = 'We couldn’t read that page, so fill in the details yourself.';
@@ -154,8 +154,9 @@ export function prefillMessage(
     return hasCode(outcome.error, ErrorCode.RATE_LIMITED) ? UNFURL_RATE_LIMITED : UNFURL_FAILED;
   }
   const { failureReason } = outcome.response;
-  if (failureReason === 'LOOKUP_UNAVAILABLE' && retailerOf(url) === 'amazon') {
-    return AMAZON_UNAVAILABLE;
+  const retailer = retailerOf(url);
+  if (failureReason === 'LOOKUP_UNAVAILABLE' && retailer) {
+    return `We couldn’t get the details from ${RETAILER_NAMES[retailer]} right now, so fill them in yourself.`;
   }
   if (failureReason) return UNFURL_MESSAGES[failureReason];
   return `Filled in from ${shopName(url) ?? 'the page'}. Check it, then add it.`;
