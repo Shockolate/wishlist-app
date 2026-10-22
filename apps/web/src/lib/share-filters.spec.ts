@@ -4,6 +4,7 @@ import {
   NO_FILTERS,
   bandCount,
   bandLabel,
+  compareTagNames,
   joinedBandLabel,
   listCurrency,
   matches,
@@ -191,9 +192,21 @@ describe('orderTags', () => {
     expect(orderTags(tags, items).map((t) => t.name)).toEqual(['Zeta', 'Alpha', 'Mid', 'Unused']);
   });
 
-  it('breaks ties with localeCompare', () => {
+  it('breaks ties by name', () => {
     const tied = [item(null, ['b']), item(null, ['a'])];
     expect(orderTags([tag('B'), tag('A')], tied).map((t) => t.name)).toEqual(['A', 'B']);
+  });
+
+  it('breaks ties with one English collator, so the server render and the browser agree', () => {
+    // Names differing only in case or accents: a default-locale localeCompare could order these
+    // differently in Node and in a browser set to another language.
+    const names = ['Résumé', 'resume', 'résumé', 'Resume'];
+    const variants = names.map((name, i) => ({ id: `t${i}`, name }));
+    const order = (list: typeof variants) => orderTags(list, []).map((t) => t.name);
+    expect(order(variants)).toEqual(['resume', 'Resume', 'résumé', 'Résumé']);
+    expect(order([...variants].reverse())).toEqual(order(variants));
+    expect([...names].sort(compareTagNames)).toEqual(order(variants));
+    expect(compareTagNames('a', 'B')).toBeLessThan(0);
   });
 
   it('does not mutate its input', () => {

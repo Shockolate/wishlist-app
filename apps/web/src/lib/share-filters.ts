@@ -97,6 +97,12 @@ export function bandCount(
 }
 
 /**
+ * Compares tag names in English. The row is rendered on the server and then hydrated, so its
+ * order must not depend on the default locale of Node or of the gifter's browser.
+ */
+export const compareTagNames = new Intl.Collator('en').compare;
+
+/**
  * Tags by how many of the list's items carry them, most first, then by name. It takes the whole
  * list, not the shown items, so the chips don't shuffle as filters change.
  */
@@ -107,7 +113,7 @@ export function orderTags<T extends { id: string; name: string }>(
   const carried = (id: string) => items.filter((item) => item.tagIds?.includes(id)).length;
   return tags
     .map((tag) => ({ tag, count: carried(tag.id) }))
-    .sort((a, b) => b.count - a.count || a.tag.name.localeCompare(b.tag.name))
+    .sort((a, b) => b.count - a.count || compareTagNames(a.tag.name, b.tag.name))
     .map(({ tag }) => tag);
 }
 
