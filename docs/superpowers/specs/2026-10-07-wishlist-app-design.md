@@ -561,7 +561,7 @@ The share page, the claim sheet and the manage page say whether the owner can se
 
 These follow the Plan 4b mockups, on the same canvas as the editor's.
 
-- **Server render, client islands.** `/s` and `/c` are Server Components. The claim sheet (a Radix Dialog shaped as a bottom sheet), the manage form and the `localStorage` strips are client components, and every write goes through the `/api` rewrite. After a write the page calls `router.refresh()`, so the server stays the only source of the list; TanStack Query isn't used on these pages.
+- **Server render, client islands.** `/s` and `/c` are Server Components. The claim sheet (a Radix Dialog shaped as a bottom sheet on a phone, and from 640px a centered dialog, since a sheet flush on the bottom edge of a wide window looks cut off), the manage form and the `localStorage` strips are client components, and every write goes through the `/api` rewrite. After a write the page calls `router.refresh()`, so the server stays the only source of the list; TanStack Query isn't used on these pages.
 - **The owner on their own link** (`viewerIsOwner`) sees the cards without claim controls, a note that says whether claims are hidden from them, and a link back to the editor.
 - **A dead share link** gets its own page: the link may be mistyped or replaced, and a saved claim link still works. A dead manage link says *"This claim no longer exists."* (§2). Cancelling a claim shows its confirmation in the browser, since the link stops working.
 - **The spoiler toggle** is a switch on `/settings`. Turning it on asks first; turning it off doesn't, and removes the claim fields from the editor's cache before the request returns, so the browser never keeps claim data the owner has turned off (§1, criterion 4).
