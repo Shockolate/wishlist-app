@@ -1,11 +1,6 @@
 import { amazonProductUrl } from '@wishlist/contracts';
-import { productMetadata, type PageMetadata } from './metadata.js';
-
-/** A lookup's answer. Only LOOKUP_UNAVAILABLE carries detail, for the log and the error report. */
-export type LookupResult =
-  | { ok: true; metadata: PageMetadata }
-  | { ok: false; reason: 'NO_METADATA' | 'TIMEOUT' }
-  | { ok: false; reason: 'LOOKUP_UNAVAILABLE'; status?: number; misconfigured: boolean };
+import type { LookupResult } from './lookup-result.js';
+import { productMetadata } from './metadata.js';
 
 /** The Amazon lookup port (retailer lookups §5.2). Never throws. */
 export interface AmazonLookup {

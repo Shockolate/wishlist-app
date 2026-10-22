@@ -41,6 +41,8 @@ const EnvSchema = z
     SENTRY_DSN: z.url().optional(),
     /** Unset means Amazon links take the page fetch (retailer lookups design §5.6). */
     BRIGHT_DATA_API_KEY: z.string().min(1).optional(),
+    /** Etsy's `keystring:shared_secret`. Unset means Etsy links take the page fetch (§5.6). */
+    ETSY_API_KEY: z.string().min(1).optional(),
   })
   .superRefine((env, ctx) => {
     if (env.EMAIL_TRANSPORT === 'resend' && !env.RESEND_API_KEY) {
