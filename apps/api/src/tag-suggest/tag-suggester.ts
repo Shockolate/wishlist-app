@@ -24,7 +24,8 @@
  *   (https://developers.cloudflare.com/workers-ai/get-started/rest-api/). The older models' `result` is
  *   `{ response }`; this model's output schema (…/sync-output.json) is a chat completion, so the answer
  *   is `result.choices[0].message.content`, a string. Both are read, so the model can change without
- *   touching the parser. Neither has been seen live from this account yet (V1 checks it).
+ *   touching the parser. A live check on 2026-10-23 got the chat completion, bare JSON with no
+ *   code fence, thinking off (7–11 output tokens), about 2.5 Neurons a call, and 0.6–1 s answers.
  * - Quota: on Workers Free, past the 10,000 daily Neurons "further operations will fail with an error"
  *   until 00:00 UTC (pricing page). The errors page lists it as `3036 Account limited`, HTTP `429`
  *   (https://developers.cloudflare.com/workers-ai/platform/errors/), so it is an expected outage.
@@ -128,6 +129,9 @@ export class WorkersAiTagSuggester implements TagSuggester {
             response_format: RESPONSE_FORMAT,
             chat_template_kwargs: { enable_thinking: false },
             max_completion_tokens: MAX_COMPLETION_TOKENS,
+            // The schema documents no default for storing outputs "for model distillation / evals";
+            // `/privacy` says Cloudflare doesn't keep what it reads, so it's never left to the default.
+            store: false,
           }),
           signal,
         },

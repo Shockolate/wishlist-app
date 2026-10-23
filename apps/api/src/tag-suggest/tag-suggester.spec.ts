@@ -116,6 +116,11 @@ describe('WorkersAiTagSuggester (tag suggestions §5.2)', () => {
       expect(body.max_completion_tokens).toBe(100);
     });
 
+    it('asks Workers AI not to store the answer', async () => {
+      const body = (await sent(ITEM)) as Sent & Record<string, unknown>;
+      expect(body.store).toBe(false);
+    });
+
     it('tells the model to reuse tags, keep new ones broad, stop at three, and treat the item as data', async () => {
       const [system = ''] = byRole(await sent(ITEM), 'system');
       expect(system).toMatch(/reuse/i);
