@@ -88,6 +88,7 @@ test('Back to the list shows an item added before leaving', async ({ page, baseU
   await page.goto('/list');
   await page.getByLabel('Add to your list').fill('Pottery class');
   await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await page.getByRole('button', { name: 'Add to list' }).click();
   await expect(status(page, 'Added “Pottery class”.')).toBeVisible();
   await expect(rowsOf(page)).toHaveCount(2);
 

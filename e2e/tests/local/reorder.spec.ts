@@ -134,6 +134,7 @@ test('a move made while an add is still on its way includes the new item (Review
   });
   await page.getByLabel('Add to your list').fill('C');
   await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await page.getByRole('button', { name: 'Add to list' }).click();
   await arrow(page, 'B', 'up').click();
   await expect(status(page, 'Added “C”.')).toBeVisible();
   await expect.poll(() => savedOrder(page)).toEqual(['B', 'A', 'C']);

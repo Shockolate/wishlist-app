@@ -1,6 +1,5 @@
 'use client';
 
-import { useMutation } from '@tanstack/react-query';
 import {
   ErrorCode,
   ItemTitleSchema,
@@ -18,8 +17,8 @@ import { formErrorMap } from '@/lib/form-errors';
 import {
   ADD_BOX_EMPTY,
   AMAZON_WAIT,
-  fieldErrors,
   hasCode,
+  IDEA_FORM,
   LINK_TOO_LONG,
   LOOKUP_SKIPPED,
   OTHER_SCHEME_LINK,
@@ -28,7 +27,6 @@ import {
 import { AddForm } from './add-form';
 import { LookupWait } from './lookup-wait';
 import { useListStatus } from './list-status';
-import { useListMutations } from './use-list-mutations';
 
 type Step =
   | { step: 'box' }
@@ -40,7 +38,11 @@ type Step =
     }
   | { step: 'form'; values: ItemFormValues; message: string };
 
-/** The link-first add box (spec §7 Owner editor, Plan 3b rules 5 and 6). */
+/**
+ * The link-first add box (spec §7 Owner editor, Plan 3b rules 5 and 6). A link is read, then opens
+ * the add form prefilled; an idea opens the same form at once, titled with the text, so tags and
+ * a note can be added before it is saved (Plan 9 design §5.8). Nothing is saved from the box.
+ */
 export function AddItem() {
   const [text, setText] = useState('');
   // The id changes with every refusal, so the alert is re-announced even for the same message.
@@ -51,7 +53,6 @@ export function AddItem() {
   const [focusBox, setFocusBox] = useState(0);
   const box = useRef<HTMLInputElement>(null);
   const { announce, fail } = useListStatus();
-  const addIdea = useMutation(useListMutations().create);
 
   useEffect(() => {
     if (focusBox > 0) box.current?.focus();
@@ -84,13 +85,11 @@ export function AddItem() {
     if (input.kind === 'idea') {
       const title = ItemTitleSchema.safeParse(input.title, { error: formErrorMap });
       if (!title.success) return refuse(title.error.issues[0]?.message ?? ADD_BOX_EMPTY);
-      try {
-        added(await addIdea.mutateAsync({ title: title.data, quantity: 1 }));
-      } catch (error) {
-        const message = fieldErrors(error).title;
-        if (message) refuse(message);
-        else fail(error);
-      }
+      setStep({
+        step: 'form',
+        values: { ...prefill('', null, null), title: title.data, url: '' },
+        message: IDEA_FORM,
+      });
       return;
     }
     if (input.url.length > 2048) return refuse(LINK_TOO_LONG);
@@ -169,7 +168,7 @@ export function AddItem() {
               autoComplete="off"
               className="min-w-0 flex-1"
             />
-            <Button type="submit" disabled={reading || addIdea.isPending}>
+            <Button type="submit" disabled={reading}>
               {reading ? 'Reading the page…' : 'Add'}
             </Button>
           </div>

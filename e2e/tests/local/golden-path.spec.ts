@@ -59,6 +59,7 @@ test('a new person signs up, confirms, builds and shares a list, a gifter claims
   const box = page.getByLabel('Add to your list');
   await box.fill('Pottery class for two');
   await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await page.getByRole('button', { name: 'Add to list' }).click();
   await expect(
     page.getByRole('status').filter({ hasText: 'Added “Pottery class for two”.' }),
   ).toBeVisible();
