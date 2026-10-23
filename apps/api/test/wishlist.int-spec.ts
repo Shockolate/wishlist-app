@@ -75,6 +75,7 @@ describe('GET /wishlist (spec §5)', () => {
       title: "Ada's wishlist",
       shareUrl: expect.stringMatching(/^http:\/\/localhost:3000\/s\/[A-Za-z0-9_-]{22}$/) as string,
       showClaimsToOwner: false,
+      suggestTags: true,
       tags: [],
       items: [],
     });
@@ -128,6 +129,7 @@ describe('GET /wishlist (spec §5)', () => {
       'items',
       'shareUrl',
       'showClaimsToOwner',
+      'suggestTags',
       'tags',
       'title',
     ]);
@@ -194,10 +196,46 @@ describe('PATCH /wishlist (spec §5)', () => {
     });
   });
 
-  it.each([{}, { showClaimsToOwner: 'yes' }])('refuses %j with 400', async (body) => {
-    const res = await client(t.app, await owner()).patch('/wishlist', body);
-    expect([res.status, codeOf(res)]).toEqual([400, ErrorCode.VALIDATION_FAILED]);
+  it('turns tag suggestions off and on, and the next read agrees (Plan 9)', async () => {
+    const cookie = await owner();
+
+    const off = await client(t.app, cookie).patch('/wishlist', { suggestTags: false });
+    expect(off.status).toBe(200);
+    expect(WishlistSettingsResponseSchema.parse(off.body)).toMatchObject({ suggestTags: false });
+    const offList = WishlistResponseSchema.parse(
+      (await client(t.app, cookie).get('/wishlist')).body,
+    );
+    expect(offList.suggestTags).toBe(false);
+
+    const on = await client(t.app, cookie).patch('/wishlist', { suggestTags: true });
+    expect(WishlistSettingsResponseSchema.parse(on.body)).toMatchObject({ suggestTags: true });
+    const onList = WishlistResponseSchema.parse(
+      (await client(t.app, cookie).get('/wishlist')).body,
+    );
+    expect(onList.suggestTags).toBe(true);
   });
+
+  it('leaves tag suggestions alone when only the title or the spoiler setting changes', async () => {
+    const cookie = await owner();
+    await client(t.app, cookie).patch('/wishlist', { suggestTags: false });
+    const res = await client(t.app, cookie).patch('/wishlist', {
+      title: 'Birthday',
+      showClaimsToOwner: true,
+    });
+    expect(WishlistSettingsResponseSchema.parse(res.body)).toMatchObject({
+      title: 'Birthday',
+      showClaimsToOwner: true,
+      suggestTags: false,
+    });
+  });
+
+  it.each([{}, { showClaimsToOwner: 'yes' }, { suggestTags: 'no' }])(
+    'refuses %j with 400',
+    async (body) => {
+      const res = await client(t.app, await owner()).patch('/wishlist', body);
+      expect([res.status, codeOf(res)]).toEqual([400, ErrorCode.VALIDATION_FAILED]);
+    },
+  );
 
   it('tells gifters which way the setting is, on the share page and the manage page (D40)', async () => {
     const cookie = await owner();

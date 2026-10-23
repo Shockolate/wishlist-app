@@ -40,6 +40,7 @@ export class WishlistService {
           title: wishlists.title,
           shareToken: wishlists.shareToken,
           showClaims: wishlists.showClaimsToOwner,
+          suggestTags: wishlists.suggestTags,
         })
         .from(wishlists)
         .where(eq(wishlists.ownerId, ownerId));
@@ -58,13 +59,14 @@ export class WishlistService {
         title: list.title,
         shareUrl: this.shareUrl(list.shareToken),
         showClaimsToOwner: list.showClaims,
+        suggestTags: list.suggestTags,
         tags: await readTags(tx, list.id, { usedOnly: false }),
         items: projectWishlist(tagged, claimRows, viewer),
       };
     }, SNAPSHOT);
   }
 
-  /** A new title, the spoiler setting, or both (spec §5, D33). One UPDATE takes the row lock. */
+  /** A new title, the spoiler setting, tag suggestions, or any mix (spec §5, D33). One UPDATE takes the row lock. */
   async updateSettings(
     ownerId: string,
     changes: UpdateWishlistRequest,
@@ -76,6 +78,7 @@ export class WishlistService {
         ...(changes.showClaimsToOwner !== undefined && {
           showClaimsToOwner: changes.showClaimsToOwner,
         }),
+        ...(changes.suggestTags !== undefined && { suggestTags: changes.suggestTags }),
         updatedAt: this.clock.now(),
       })
       .where(eq(wishlists.ownerId, ownerId))
@@ -83,12 +86,14 @@ export class WishlistService {
         title: wishlists.title,
         shareToken: wishlists.shareToken,
         showClaimsToOwner: wishlists.showClaimsToOwner,
+        suggestTags: wishlists.suggestTags,
       });
     if (!list) throw unauthenticated();
     return {
       title: list.title,
       shareUrl: this.shareUrl(list.shareToken),
       showClaimsToOwner: list.showClaimsToOwner,
+      suggestTags: list.suggestTags,
     };
   }
 

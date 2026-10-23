@@ -102,6 +102,7 @@ export const wishlists = pgTable('wishlists', {
   title: text('title').notNull(),
   shareToken: text('share_token').notNull().unique(),
   showClaimsToOwner: boolean('show_claims_to_owner').notNull().default(false),
+  suggestTags: boolean('suggest_tags').notNull().default(true),
   ...timestamps(),
 });
 
