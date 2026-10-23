@@ -99,7 +99,7 @@ These are explicit so they don't creep in:
 - If `showClaimsToOwner = true`, the owner sees, for each item, how many are claimed and how many remain, in both the editor and the share view. They never see a claimer's name, and `claims[]` is never sent to an owner (D75).
 - An owner who opens a manage link for a claim on their own list, while signed in, gets no claim data and can't change or cancel the claim from that session (`403 OWN_LIST_CLAIM`, D82). Without this, a manage link a gifter forwarded would show them a name.
 - The UI asks for confirmation before turning the setting on.
-- Gifters are told which way it's set (D40). The share page, the claim sheet and the manage page say whether the owner can see who's getting what, so nobody claims a surprise the owner is watching.
+- Gifters are told which way it's set (D40). The share page, the claim sheet and the manage page say whether the owner can see how many are claimed (never who's getting them), so nobody claims a surprise the owner is watching.
 - The guarantee is about the owner's own session. An owner who opens their link signed out, or in a private window, is a guest like anyone else; that's a deliberate act, and the server can't tell it apart from a gifter.
 
 ### Share link
@@ -337,7 +337,7 @@ These require a session and a verified email. The list is always derived from th
 
 An item or tag ID that belongs to another user's list, or isn't a UUID, returns `404`, the same as one that doesn't exist.
 
-- **`showClaimsToOwner` arrives with claims, in Plan 4a (D33, D39).** `PATCH /wishlist` takes at least one of `title` and `showClaimsToOwner`, and answers `{title, shareUrl, showClaimsToOwner}`. `GET /wishlist` returns `showClaimsToOwner`, and each item carries `remaining` and `claims[]` only when it's on (§5.1). These are fields added to existing responses, so the contracts declare them optional (§10, expand/contract).
+- **`showClaimsToOwner` arrives with claims, in Plan 4a (D33, D39).** `PATCH /wishlist` takes at least one of `title` and `showClaimsToOwner`, and answers `{title, shareUrl, showClaimsToOwner}`. `GET /wishlist` returns `showClaimsToOwner`, and each item carries `remaining` and `claimed` only when it's on, and never `claims[]` (§5.1, D75). These are fields added to existing responses, so the contracts declare them optional (§10, expand/contract).
 - **Tags arrive in Plan 7a (D58–D60).** `GET /wishlist` returns `tags: [{id, name}]`, every tag on the list including empty ones, and each item carries `tagIds`. `GET /shared` returns `tags` with only the tags at least one item carries, and each item carries `tagIds`. Both are read in the same `REPEATABLE READ, READ ONLY` transaction as the items. `POST` and `PATCH` of an item accept `tags?: Array<{id} | {name}>` (at most 10 entries) and answer with the item's `tagIds` and its `tags`. These are fields added to existing responses and requests, so the contracts declare them optional (§10, expand/contract). `GET /claims` omits `tagIds`: the manage page doesn't use them.
 - **Item writes name tags by id or by name (D60).** An entry with an `id` is a tag the owner already has; an entry with a `name` joins the list's tag with the same key, or makes it. An entry with both is refused. Inside the list lock, an `id` that isn't one of this list's tags (deleted meanwhile, or from another list) is dropped, not an error, and entries that resolve to the same tag collapse to one. On `PATCH`, `tags` replaces the item's whole set, `[]` clears it, and leaving `tags` out changes nothing. A write that fails, such as a `TAG_LIMIT_REACHED`, saves nothing.
 - **List changes are serialized per list (Plan 3a).** Every change to a list or its items first locks the owner's `wishlists` row `FOR UPDATE`. Inside that lock a create takes the next position and enforces the 200-item cap, and a reorder compares the submitted IDs with the current set before rewriting positions `0…n−1`. The lock order is users → wishlists → items, the order an account deletion's cascade takes. Every tag write, and every item write that carries `tags`, takes the same lock first. A tag write never takes an explicit lock on an `items` row; a tick's `item_tags` insert waits on a claim's row lock through the foreign key, which keeps the users → wishlists → items order.
@@ -559,7 +559,7 @@ These are the initial values. They're configurable, and every limited endpoint r
 
 `localStorage` is only a convenience. The manage link is the source of truth.
 
-The share page, the claim sheet and the manage page say whether the owner can see who's getting what, from `ownerSeesClaims` (D40).
+The share page, the claim sheet and the manage page say whether the owner can see how many are claimed (never who's getting them), from `ownerSeesClaims` (D40).
 
 ### Share, claim and manage pages (Plan 4b)
 
