@@ -2,7 +2,7 @@ import type { Item } from '@wishlist/contracts';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { ReactNode, Ref } from 'react';
-import { editorClaimLine } from '@/lib/editor-claims';
+import { ownerClaimLine } from '@/lib/editor-claims';
 import { shopName } from '@/lib/item-display';
 import { cn } from '@/lib/utils';
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon, GripIcon } from './icons';
@@ -115,7 +115,7 @@ export function ItemRow({
 /** The title and its details: price, how many, the shop, or what the idea is. */
 export function ItemSummary({ item }: { item: Item }) {
   const shop = shopName(item.url);
-  const claimLine = editorClaimLine(item);
+  const claimLine = ownerClaimLine(item);
   return (
     <>
       <span className="block text-base leading-snug font-semibold [overflow-wrap:anywhere]">

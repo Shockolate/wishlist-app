@@ -27,44 +27,48 @@ export function removeItem(list: WishlistResponse, id: string): WishlistResponse
 }
 
 const optedIn = (list: WishlistResponse) => list.showClaimsToOwner === true;
-const claimed = (claims: readonly { quantity: number }[]) =>
-  claims.reduce((sum, claim) => sum + claim.quantity, 0);
 
 /**
  * Appends `item`, once: an item already in the list stays where it is. On an opted-in list a new
- * item has no claims yet, and all of it is left (Plan 4b rule 13).
+ * item has 0 claimed, and all of it is left (Plan 4b rule 13, D75).
  */
 export function appendItem(list: WishlistResponse, item: Item): WishlistResponse {
   if (list.items.some((existing) => existing.id === item.id)) return list;
   const added =
-    optedIn(list) && item.claims === undefined
-      ? { ...item, claims: [], remaining: item.quantity }
+    optedIn(list) && item.claimed === undefined
+      ? { ...item, claimed: 0, remaining: item.quantity }
       : item;
   return { ...list, items: [...list.items, added] };
 }
 
 /**
  * Puts an item write's answer in place. The answer carries no claim fields, so an opted-in list
- * keeps the claims it had and works out what's left from the new quantity (Plan 4b rule 13).
+ * keeps the claimed total the item had and works out what's left from the new quantity (Plan 4b
+ * rule 13, D75).
  */
 export function replaceItem(list: WishlistResponse, item: Item): WishlistResponse {
   return {
     ...list,
     items: list.items.map((existing) => {
       if (existing.id !== item.id) return existing;
-      if (!optedIn(list) || item.claims !== undefined || existing.claims === undefined) return item;
+      if (!optedIn(list) || item.claimed !== undefined || existing.claimed === undefined) {
+        return item;
+      }
       return {
         ...item,
-        claims: existing.claims,
-        remaining: remainingOf(item.quantity, claimed(existing.claims)),
+        claimed: existing.claimed,
+        remaining: remainingOf(item.quantity, existing.claimed),
       };
     }),
   };
 }
 
+// `claims` is deleted too: an owner never gets it any more, but should one ever reach the cache,
+// opting out must not leave names behind.
 function withoutClaims(item: Item): Item {
   const copy = { ...item };
   delete copy.claims;
+  delete copy.claimed;
   delete copy.remaining;
   return copy;
 }

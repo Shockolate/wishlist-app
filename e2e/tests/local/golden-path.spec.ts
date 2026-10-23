@@ -98,16 +98,16 @@ test('a new person signs up, confirms, builds and shares a list, a gifter claims
   await gifterContext.close();
 
   await mainNav.getByRole('link', { name: 'Settings' }).click();
-  await page.getByRole('switch', { name: 'Show me who’s getting what' }).click();
+  await page.getByRole('switch', { name: 'Show how many are claimed' }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Show me' }).click();
-  await expect(page.getByRole('switch', { name: 'Show me who’s getting what' })).toHaveAttribute(
+  await expect(page.getByRole('switch', { name: 'Show how many are claimed' })).toHaveAttribute(
     'aria-checked',
     'true',
   );
   await mainNav.getByRole('link', { name: 'Your list' }).click();
-  await expect(page.getByRole('listitem').filter({ hasText: 'Enamel kettle' })).toContainText(
-    'Aunt Susan is getting this',
-  );
+  const kettleRow = page.getByRole('listitem').filter({ hasText: 'Enamel kettle' });
+  await expect(kettleRow).toContainText('Claimed');
+  await expect(kettleRow).not.toContainText('Aunt Susan');
 
   await mainNav.getByRole('link', { name: 'Settings' }).click();
   await page.getByLabel('Display name').fill('Ada Lovelace');
