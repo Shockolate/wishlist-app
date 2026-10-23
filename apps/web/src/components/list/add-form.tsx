@@ -13,15 +13,19 @@ import { ItemFields, showFieldErrors } from './item-fields';
 import { ItemPhoto } from './item-photo';
 import { useListStatus } from './list-status';
 import { useListTags, type TagBox } from './tag-field';
+import { useTagSuggestions } from './use-tag-suggestions';
 import { useListMutations } from './use-list-mutations';
 
 /** A new item, checked before it's added. It opens prefilled, or empty but for the link (rule 6). */
 export function AddForm({
   initial,
+  description,
   onAdded,
   onCancel,
 }: {
   initial: ItemFormValues;
+  /** The link's description from unfurl: sent for tag suggestions, never part of the item. */
+  description?: string | undefined;
   onAdded: (item: Item) => void;
   onCancel: () => void;
 }) {
@@ -34,6 +38,7 @@ export function AddForm({
     defaultValues: initial,
   });
   const { setFocus, setValue } = form;
+  const suggestions = useTagSuggestions(form, { url: initial.url, description });
   const photo = useWatch({ control: form.control, name: 'imageUrl' });
 
   useEffect(() => {
@@ -83,7 +88,7 @@ export function AddForm({
           </Button>
         </div>
       ) : null}
-      <ItemFields form={form} idPrefix="add" tagBox={tagBox} />
+      <ItemFields form={form} idPrefix="add" tagBox={tagBox} suggestions={suggestions} />
       <div className="flex flex-wrap justify-end gap-2">
         <Button variant="secondary" onClick={onCancel} disabled={create.isPending}>
           Cancel
