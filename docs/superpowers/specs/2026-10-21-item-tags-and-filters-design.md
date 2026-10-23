@@ -92,6 +92,7 @@ This follows the approved mockup (option A, "charcoal when active"), drawn on th
 - Typing suggests the list's existing tags that start with or contain the text (case-insensitive), excluding ones already on the item. Enter or a comma adds the typed text or the highlighted suggestion; Backspace in an empty input focuses the last chip's remove button rather than deleting silently. Accessible as a combobox with a listbox of suggestions (WCAG 2.2 AA).
 - A typed name that matches an existing tag's key becomes that tag (shown in its existing spelling). A new name becomes a new tag when the item is saved.
 - Field errors (too long, invisible characters, more than 10) follow the existing field-error pattern (`form-errors.ts`, `showFieldErrors`).
+- **Suggestions (Plan 9):** a "Suggested:" row sits under the field, with dashed chips that add a tag when tapped. See the [tag suggestions design](2026-10-23-tag-suggestions-design.md) §5.1.
 
 ### Editor (`/list`): the Tags view
 

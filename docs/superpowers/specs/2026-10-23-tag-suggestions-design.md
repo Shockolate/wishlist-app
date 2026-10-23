@@ -140,14 +140,14 @@ Adding an optional field is additive: an older web build ignores it.
 
 - **Storage:** a new column, `wishlists.suggest_tags boolean not null default true`, beside `show_claims_to_owner`. One migration, expand-only. Existing rows get `true`, as Ted chose.
 - **Contracts:** `suggestTags` joins `WishlistResponseSchema`, `WishlistSettingsResponseSchema` and `UpdateWishlistRequestSchema`, optional for expand/contract like `showClaimsToOwner`.
-- **Settings page:** a switch in `/settings`, in the list section, alongside the claims setting. *(Copy, Claude's draft:)* **"Suggest tags"** — "When you add or edit an item, Hanker asks Cloudflare's AI to suggest tags from its title, note and shop details. Cloudflare doesn't keep or learn from them."
+- **Settings page:** a switch in `/settings`, in the list section, alongside the claims setting. *(Copy, Claude's draft:)* **"Suggest tags"** — "When you add or edit an item, Hanker asks Cloudflare's AI to suggest tags from its title, note, and the shop's web address and description. Cloudflare doesn't keep or learn from them." *(Wording changed in Plan 9 execution: the code sends the host.)*
 - **Turning it off** stops all requests: the web stops asking, and the API returns `[]` without calling Cloudflare even if an old tab asks.
 
 ### 5.5 Secrets and a dark launch *(Claude's call)*
 
 Two new optional variables in the API's env schema, set together or not at all:
 - `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_AI_TOKEN`: an API token scoped to **Workers AI: Read** (which covers running models), on that account only.
+- `CLOUDFLARE_AI_TOKEN`: an API token scoped to **Workers AI: Read and Edit** (Cloudflare's REST guide says a custom token needs both to run models), on that account only.
 
 **Unset** means the port's "unconfigured" adapter, which always returns `[]`. That's how it ships, and how previews and CI behave. The settings switch shows regardless.
 
@@ -158,8 +158,8 @@ Both pages change in the release that sets the token in production, and their "u
 **What is sent, exactly** (the pages must say no more and no less than this): for one item, its title, its note, the host of its link (not the link), the shop's description of the product on add (never for Etsy), and the names of the list's tags. Nothing identifying the owner (no email, name, account or IP address) and nothing from gifters or claims is sent.
 
 **`/privacy`:**
-- **"If you make a list":** a new sentence: "Unless you turn it off in Settings, Hanker sends an item's title, note, shop name and the shop's product description, with your list's tag names, to Cloudflare's AI to suggest tags for it."
-- **"Who else handles your information":** the Cloudflare entry gains: "Cloudflare's AI reads the title, note and shop details of items you add or edit, and your list's tag names, to suggest tags. It isn't told who you are, doesn't keep what it reads, and doesn't train on it. You can turn this off in Settings."
+- **"If you make a list":** a new sentence: "Unless you turn it off in Settings, Hanker sends an item's title, note, the shop's web address (not the full link) and the shop's product description, with your list's tag names, to Cloudflare's AI to suggest tags for it." *(Wording changed in Plan 9 execution: the code sends the host, not a shop name.)*
+- **"Who else handles your information":** the Cloudflare entry gains: "Cloudflare's AI reads the title and note of items you add or edit, the shop's web address and product description, and your list's tag names, to suggest tags. It isn't told who you are, doesn't keep what it reads, and doesn't train on it. You can turn this off in Settings." *(Same change: the code sends the host.)*
 - **"How long it's kept":** nothing new is stored, so nothing changes, unless the builder finds Cloudflare retention that contradicts §3.
 
 **`/terms`:**
@@ -190,10 +190,10 @@ The README describes the feature and its screenshots are refreshed in the releas
 
 **C1. Confirm the Workers plan is Free.** In the Cloudflare dashboard, Workers & Pages → Plans, check the account is on **Workers Free**, not Workers Paid. On Paid, usage past the allowance is billed. *This is the step that makes "no surprise bill" true.* R2 is billed separately and isn't affected.
 
-**C2. Create the API token** (when the feature is ready to turn on). My Profile → API Tokens → Create Token → Custom token:
-- Permissions: Account → **Workers AI** → **Read**.
-- Account resources: only this account.
-- No IP filtering, and a TTL is optional.
+**C2. Create an account API token** (when the feature is ready to turn on). Manage Account → Account API Tokens → Create Token → Custom token. *(Changed in Plan 9 execution: an account token, which Workers AI accepted in the 2026-10-23 live check, rather than a user token, and a one-year expiry, rotated yearly.)*
+- Permissions: Account → **Workers AI** → **Read** and **Edit**.
+- No IP filtering.
+- TTL: one year.
 
 Copy the token, and the **Account ID** from the account's overview page. Don't paste them anywhere yet.
 

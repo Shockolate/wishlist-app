@@ -180,6 +180,8 @@ The privacy page says Sentry's error reports have IP addresses removed. [Sentry 
 | Vercel `wishlist-api` → Production | `TURNSTILE_SECRET_KEY` (sensitive)                                                                                            | **Unset until the end of Plan 4 (D31).** While unset, sign-up, resend-verification and reset-request answer `503 CAPTCHA_UNAVAILABLE`, and the web app says sign-ups are paused. Setting it opens sign-up: see "Opening sign-up" |
 | Vercel `wishlist-api` → Production | `BRIGHT_DATA_API_KEY` (sensitive)                                                                                             | Bright Data API key, free tier with no deposit (D68). Unset means Amazon links take the page fetch. See "Turning on Amazon lookups"                                                                                              |
 | Vercel `wishlist-api` → Production | `ETSY_API_KEY` (sensitive)                                                                                                    | Etsy Open API key, as `keystring:shared_secret`. Unset means Etsy links take the page fetch. See "Turning on Etsy lookups"                                                                                                       |
+| Vercel `wishlist-api` → Production | `CLOUDFLARE_ACCOUNT_ID`                                                                                                       | Cloudflare account ID, from the account's overview page. Set together with the token or not at all. Unset means no tag suggestions. See "Turning on tag suggestions"                                                             |
+| Vercel `wishlist-api` → Production | `CLOUDFLARE_AI_TOKEN` (sensitive)                                                                                             | API token with Account → Workers AI → Read and Edit, on that account only. Unset means no tag suggestions. See "Turning on tag suggestions"                                                                                      |
 | Vercel `wishlist-api` → Production | `EMAIL_TRANSPORT=resend`, `EMAIL_FROM=Hanker <no-reply@mail.hanker.dev>`, `RESEND_API_KEY` (sensitive)                        | Set in Plan 2b. The API refuses to boot in production with Turnstile set and `EMAIL_TRANSPORT=log`                                                                                                                               |
 | Set per preview by CI              | `DATABASE_URL`, `APP_ORIGIN`, `EMAIL_TRANSPORT=log`, `TURNSTILE_SECRET_KEY` (Cloudflare's always-pass test secret), `GIT_SHA` | See `.github/workflows/preview.yml`                                                                                                                                                                                              |
 | Set per deploy by CI               | `GIT_SHA`                                                                                                                     | The commit being deployed                                                                                                                                                                                                        |
@@ -488,6 +490,33 @@ Etsy listing links are looked up through Etsy's Open API (D65), only while `ETSY
 **To turn it off,** remove the variable (`npx --yes vercel@64.5.0 env rm ETSY_API_KEY production --project wishlist-api --scope shockolate`) and redeploy. Etsy links go back to the page fetch, which Etsy refuses. Then remove Etsy from `/privacy`, and its statement from `/terms`.
 
 **To rotate the key,** reset the shared secret under "Apps You've Made", `env rm` then step 2, and redeploy.
+
+## Turning on tag suggestions
+
+Tag suggestions come from Cloudflare Workers AI (D70), only while `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AI_TOKEN` are both set on the API. `/privacy` and `/terms` say what is sent, so set both **before** merging the release that carries those pages (Plan 9). Previews and CI never hold them, so they show no suggestions.
+
+1. **C1. Confirm the Workers plan is Free.** In the Cloudflare dashboard, Workers & Pages → Plans, check the account is on **Workers Free**, not Workers Paid. On Paid, usage past the allowance is billed. This is the step that makes "no surprise bill" true. R2 is billed separately and isn't affected.
+2. **C2. Create an account API token** (when the feature is ready to turn on). Manage Account → Account API Tokens → Create Token → Custom token. An account token belongs to the account, not to your login, and Workers AI accepts it (checked live, 2026-10-23):
+   - Permissions: Account → **Workers AI** → **Read** and **Edit**.
+   - No IP filtering.
+   - TTL: **one year**. An expired token makes every call answer `401`: suggestions stop and Sentry warns `Workers AI answered 401`, but nothing else breaks. The yearly rotation in [operations.md](operations.md) renews it first.
+
+   Copy the token, and the **Account ID** from the account's overview page. Don't paste them anywhere yet.
+
+3. **C3. Store both in production,** at hidden prompts, piped straight into Vercel:
+   ```bash
+   read -rs A && printf %s "$A" \
+     | npx --yes vercel@64.5.0 env add CLOUDFLARE_ACCOUNT_ID production --sensitive --project wishlist-api --scope shockolate
+   read -rs T && printf %s "$T" \
+     | npx --yes vercel@64.5.0 env add CLOUDFLARE_AI_TOKEN production --sensitive --project wishlist-api --scope shockolate
+   unset A T
+   ```
+   Then redeploy: `gh workflow run deploy.yml --ref main`, and wait for every job to pass. The redeploy is only needed when turning the feature on after its code is already merged; when both are stored before merging (the planned path), the merge's own deploy picks them up.
+4. **V1. After it's turned on,** in production on your own list: add an Amazon link, a page-fetch link, an Etsy link and an idea, and edit one existing item. Check that each gets sensible suggestions, that existing tags are reused, and that turning the setting off removes the row. Within the hour, the API's runtime logs should have no `tag-suggest UNAVAILABLE` line, and Sentry no `Workers AI answered` warning.
+
+**To turn it off for everyone,** remove both variables (`npx --yes vercel@64.5.0 env rm CLOUDFLARE_AI_TOKEN production --project wishlist-api --scope shockolate`, then the same for `CLOUDFLARE_ACCOUNT_ID`) and redeploy. The route answers `[]` and the settings switch stays. Then take Cloudflare's AI out of `/privacy` and `/terms`. An owner can turn it off for their own list in Settings.
+
+**To rotate the token** (yearly, before it expires): create a new account token as in C2, `npx --yes vercel@64.5.0 env rm CLOUDFLARE_AI_TOKEN production --project wishlist-api --scope shockolate`, store the new one with the token half of C3, redeploy, then delete the old token in Cloudflare.
 
 ## GitHub configuration
 
