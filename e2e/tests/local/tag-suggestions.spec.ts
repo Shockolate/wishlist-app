@@ -114,6 +114,24 @@ test('suggests tags for a link, and adds the ones tapped (design §5.1)', async 
   expect(requests).toHaveLength(1);
 });
 
+test('stops sending the description once the link is edited', async ({ page, baseURL }) => {
+  const base = baseURL ?? '';
+  const kitchenId = await ownerWithKitchen(page, base, 'suggest-relink');
+  await stubUnfurl(page, { title: 'Stagg EKG kettle', description: 'Electric pour-over kettle.' });
+  const requests = await stubSuggestions(page, [{ id: kitchenId }]);
+  await page.goto('/list');
+  await addThroughTheBox(page, URL_PASTED);
+  await expect(suggested(page)).toBeVisible();
+  expect(requests[0]?.description).toBe('Electric pour-over kettle.');
+
+  const otherLink = 'https://hanker-e2e.invalid/teapot';
+  await page.getByLabel('Link', { exact: true }).fill(otherLink);
+  await page.getByLabel('Title', { exact: true }).fill('Glass teapot');
+  await page.getByLabel('Note').focus();
+  await expect.poll(() => requests.length).toBe(2);
+  expect(requests[1]).toEqual({ title: 'Glass teapot', url: otherLink });
+});
+
 test('suggestions left untapped are dropped when the item is saved', async ({ page, baseURL }) => {
   const base = baseURL ?? '';
   const kitchenId = await ownerWithKitchen(page, base, 'suggest-untapped');

@@ -38,7 +38,7 @@ export function AddForm({
     defaultValues: initial,
   });
   const { setFocus, setValue } = form;
-  const suggestions = useTagSuggestions(form, { description });
+  const suggestions = useTagSuggestions(form, { url: initial.url, description });
   const photo = useWatch({ control: form.control, name: 'imageUrl' });
 
   useEffect(() => {

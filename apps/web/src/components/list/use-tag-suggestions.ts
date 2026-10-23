@@ -2,16 +2,14 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  DESCRIPTION_MAX,
   TagSuggestionsResponseSchema,
   type ItemTagRef,
-  type TagSuggestionsRequest,
   type WishlistResponse,
 } from '@wishlist/contracts';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { browserApi } from '@/lib/browser-api';
 import { WISHLIST_KEY } from '@/lib/list-cache';
-import { SuggestionAsker } from '@/lib/tag-suggestions';
+import { SuggestionAsker, suggestionRequest, type Unfurled } from '@/lib/tag-suggestions';
 import type { ItemForm } from './item-fields';
 
 /**
@@ -38,23 +36,24 @@ export interface TagSuggestions {
 /**
  * Suggested tags for the item in `form` (tag suggestions design §5.1). It asks once on mount and
  * again from `onTitleBlur`; `SuggestionAsker` skips an empty or unchanged title, so a note edit
- * never re-asks. The request is built from the form when it is sent. `extra.description` is the
- * link's unfurled description, which isn't a form field.
+ * never re-asks. The request is built from the form when it is sent. `unfurled` is the link's
+ * unfurled description, which isn't a form field, and the link it came from: the description is
+ * sent only while the form's link is still that one.
  */
-export function useTagSuggestions(form: ItemForm, extra: { description?: string }): TagSuggestions {
+export function useTagSuggestions(form: ItemForm, unfurled: Unfurled): TagSuggestions {
   const on = useSuggestTagsOn();
   const [suggestions, setSuggestions] = useState<ItemTagRef[]>([]);
   const asker = useRef<SuggestionAsker | undefined>(undefined);
-  // The latest form and description, read when asking rather than captured by the effect below.
-  const latest = useRef({ form, description: extra.description });
-  const { description } = extra;
+  // The latest form and unfurl, read when asking rather than captured by the effect below.
+  const latest = useRef({ form, unfurled });
+  const { url, description } = unfurled;
   // Declared before the effect that asks on mount, so that one sees the committed values.
   useEffect(() => {
-    latest.current = { form, description };
+    latest.current = { form, unfurled: { url, description } };
   });
 
   const ask = useCallback(() => {
-    asker.current?.ask(requestFrom(latest.current.form, latest.current.description));
+    asker.current?.ask(requestFrom(latest.current));
   }, []);
 
   useEffect(() => {
@@ -67,7 +66,7 @@ export function useTagSuggestions(form: ItemForm, extra: { description?: string 
       setSuggestions,
     );
     asker.current = next;
-    next.ask(requestFrom(latest.current.form, latest.current.description));
+    next.ask(requestFrom(latest.current));
     return () => {
       next.dispose();
       asker.current = undefined;
@@ -78,15 +77,6 @@ export function useTagSuggestions(form: ItemForm, extra: { description?: string 
   return { suggestions: on ? suggestions : [], onTitleBlur: ask };
 }
 
-/** The request for what the form holds now: empty note and link are left out, `tagIds` are the `{ id }` tags. */
-function requestFrom(form: ItemForm, description: string | undefined): TagSuggestionsRequest {
-  const { title, note, url, tags } = form.getValues();
-  const tagIds = (tags ?? []).flatMap((ref) => ('id' in ref ? [ref.id] : []));
-  return {
-    title,
-    ...(note?.trim() ? { note } : {}),
-    ...(url?.trim() ? { url } : {}),
-    ...(description ? { description: description.slice(0, DESCRIPTION_MAX) } : {}),
-    ...(tagIds.length > 0 ? { tagIds } : {}),
-  };
+function requestFrom({ form, unfurled }: { form: ItemForm; unfurled: Unfurled }) {
+  return suggestionRequest(form.getValues(), unfurled);
 }

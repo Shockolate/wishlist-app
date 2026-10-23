@@ -1,10 +1,11 @@
-import type {
-  ItemTagRef,
-  TagSuggestionsRequest,
-  TagSuggestionsResponse,
+import {
+  DESCRIPTION_MAX,
+  type ItemTagRef,
+  type TagSuggestionsRequest,
+  type TagSuggestionsResponse,
 } from '@wishlist/contracts';
 import { describe, expect, it } from 'vitest';
-import { SuggestionAsker } from './tag-suggestions';
+import { SuggestionAsker, suggestionRequest } from './tag-suggestions';
 
 const KITCHEN = '00000000-0000-4000-8000-000000000001';
 
@@ -128,5 +129,47 @@ describe('SuggestionAsker (tag suggestions design §5.1, ruling 2)', () => {
     asker.ask({ title: 'Kettle' });
     asker.ask({ title: '' });
     expect(changes).toEqual([[{ id: KITCHEN }]]);
+  });
+});
+
+describe('suggestionRequest (tag suggestions design §5.2, §5.3)', () => {
+  const LINK = 'https://shop.example/kettle';
+  const unfurled = { url: LINK, description: 'Gooseneck spout.' };
+
+  it('leaves out an empty note and link, and sends the { id } tags as tagIds', () => {
+    expect(
+      suggestionRequest(
+        { title: 'Kettle', note: '  ', url: '', tags: [{ id: KITCHEN }, { name: 'Tea' }] },
+        {},
+      ),
+    ).toEqual({ title: 'Kettle', tagIds: [KITCHEN] });
+  });
+
+  it('sends the description while the link is the one it came from, cut to DESCRIPTION_MAX', () => {
+    expect(suggestionRequest({ title: 'Kettle', note: 'Black', url: LINK }, unfurled)).toEqual({
+      title: 'Kettle',
+      note: 'Black',
+      url: LINK,
+      description: 'Gooseneck spout.',
+    });
+    const long = 'x'.repeat(DESCRIPTION_MAX + 5);
+    expect(
+      suggestionRequest({ title: 'Kettle', url: LINK }, { url: LINK, description: long })
+        .description,
+    ).toHaveLength(DESCRIPTION_MAX);
+  });
+
+  it.each([
+    ['changed', 'https://shop.example/teapot'],
+    ['cleared', ''],
+  ])('drops the description once the link is %s', (_, url) => {
+    expect(suggestionRequest({ title: 'Teapot', url }, unfurled).description).toBeUndefined();
+  });
+
+  it('drops a description that came without its link', () => {
+    expect(
+      suggestionRequest({ title: 'Kettle', url: LINK }, { description: 'Gooseneck spout.' })
+        .description,
+    ).toBeUndefined();
   });
 });

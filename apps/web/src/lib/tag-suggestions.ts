@@ -1,8 +1,45 @@
-import type {
-  ItemTagRef,
-  TagSuggestionsRequest,
-  TagSuggestionsResponse,
+import {
+  DESCRIPTION_MAX,
+  type ItemTagRef,
+  type TagSuggestionsRequest,
+  type TagSuggestionsResponse,
 } from '@wishlist/contracts';
+
+/** What the item form holds now, as far as a suggestion request reads it. */
+export interface SuggestionFormValues {
+  title: string;
+  note?: string | null | undefined;
+  url?: string | null | undefined;
+  tags?: ItemTagRef[] | undefined;
+}
+
+/** The link's unfurled description, and the link it was unfurled from. */
+export interface Unfurled {
+  url?: string | null | undefined;
+  description?: string | undefined;
+}
+
+/**
+ * The request for what the form holds now: an empty note and link are left out, and `tagIds` are
+ * the `{ id }` tags. The description is sent only while the form's link is still the one it came
+ * from (design §5.3), so an edited link never carries the old product's description.
+ */
+export function suggestionRequest(
+  values: SuggestionFormValues,
+  unfurled: Unfurled,
+): TagSuggestionsRequest {
+  const { title, note, url, tags } = values;
+  const tagIds = (tags ?? []).flatMap((ref) => ('id' in ref ? [ref.id] : []));
+  const sameLink = unfurled.url != null && url?.trim() === unfurled.url.trim();
+  const description = sameLink ? unfurled.description : undefined;
+  return {
+    title,
+    ...(note?.trim() ? { note } : {}),
+    ...(url?.trim() ? { url } : {}),
+    ...(description ? { description: description.slice(0, DESCRIPTION_MAX) } : {}),
+    ...(tagIds.length > 0 ? { tagIds } : {}),
+  };
+}
 
 /**
  * Asks the API for tag suggestions and keeps only the latest answer (tag suggestions design §5.1,
