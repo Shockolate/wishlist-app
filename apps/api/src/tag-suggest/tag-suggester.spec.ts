@@ -202,6 +202,16 @@ describe('WorkersAiTagSuggester (tag suggestions §5.2)', () => {
       ['an object in result.response', envelope({ response: { tags: ['Kitchen'] } })],
       ['a string in result.response', envelope({ response: '{"tags":["Kitchen"]}' })],
       ['a chat completion', completion('{"tags":["Kitchen"]}')],
+      [
+        'a chat completion beside a null result.response',
+        envelope({ response: null, choices: [{ message: { content: '{"tags":["Kitchen"]}' } }] }),
+      ],
+      ['a ```json fence', completion('```json\n{"tags":["Kitchen"]}\n```')],
+      ['a bare ``` fence', completion('```\n{"tags":["Kitchen"]}\n```')],
+      [
+        'a fence on one line, with spaces',
+        envelope({ response: '  ```json {"tags":["Kitchen"]} ```  ' }),
+      ],
     ])('reads %s', async (_, answer) => {
       expect(await suggest(() => answer)).toEqual({ ok: true, names: ['Kitchen'] });
     });
@@ -233,6 +243,8 @@ describe('WorkersAiTagSuggester (tag suggestions §5.2)', () => {
 
     it.each([
       ['prose', envelope({ response: 'Kitchen, Coffee' })],
+      ['prose in a chat completion', completion('Kitchen, Coffee')],
+      ['prose in a fence', completion('```\nKitchen, Coffee\n```')],
       ['an empty object', envelope({ response: {} })],
       ['tags that aren’t a list', envelope({ response: { tags: 'Kitchen' } })],
       ['a null answer', completion(null)],

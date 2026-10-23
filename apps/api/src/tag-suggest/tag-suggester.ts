@@ -177,13 +177,24 @@ function asData(text: string): string {
   return text.replace(/[<>]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-/** `result.response` (older models), else `result.choices[0].message.content` (chat completions). */
+/**
+ * `result.response` (older models), else `result.choices[0].message.content` (chat completions). A
+ * null `response` beside `choices` falls through to `choices`. A string answer loses one Markdown
+ * code fence (```` ```json ```` or ```` ``` ````) around it, which models add despite JSON mode.
+ */
 function answerIn(body: unknown): unknown {
   if (!isRecord(body) || !isRecord(body.result)) return undefined;
   const { result } = body;
-  if ('response' in result) return result.response;
+  if (result.response != null) return withoutFence(result.response);
   const choice: unknown = Array.isArray(result.choices) ? result.choices[0] : undefined;
-  return isRecord(choice) && isRecord(choice.message) ? choice.message.content : undefined;
+  return isRecord(choice) && isRecord(choice.message)
+    ? withoutFence(choice.message.content)
+    : undefined;
+}
+
+function withoutFence(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  return value.replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
 }
 
 /** A string is parsed as JSON (prose becomes undefined); anything else is already parsed. */
