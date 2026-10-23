@@ -162,12 +162,24 @@ describe('GET /shared/:shareToken (spec §5)', () => {
     expect(JSON.stringify(res.body)).not.toContain('Sue');
   });
 
-  it('shows the owner the claims once they opt in', async () => {
+  it('shows the owner who opted in how many are claimed, and never who (D75)', async () => {
+    const { token, sue, sam } = await adasList();
+    await setShowClaims(db, ADA.email, true);
+    const res = await shared(token, await logIn(t));
+    const body = SharedWishlistResponseSchema.parse(res.body);
+    expect([body.viewerIsOwner, body.ownerSeesClaims]).toEqual([true, true]);
+    expect(body.items[0]).toMatchObject({ remaining: 1, claimed: 2 });
+    expect(body.items[0]).not.toHaveProperty('claims');
+    const json = JSON.stringify(res.body);
+    for (const secret of ['Sue', 'Sam', sue.id, sam.id]) expect(json).not.toContain(secret);
+  });
+
+  it('still gives a guest every claim’s name when the owner opted in', async () => {
     const { token } = await adasList();
     await setShowClaims(db, ADA.email, true);
-    const body = SharedWishlistResponseSchema.parse((await shared(token, await logIn(t))).body);
-    expect([body.viewerIsOwner, body.ownerSeesClaims]).toEqual([true, true]);
+    const body = SharedWishlistResponseSchema.parse((await shared(token)).body);
     expect(body.items[0]?.claims?.map((claim) => claim.claimerName)).toEqual(['Sue', 'Sam']);
+    for (const item of body.items) expect(item).not.toHaveProperty('claimed');
   });
 
   it('tells a guest which way the owner’s setting is (D40)', async () => {

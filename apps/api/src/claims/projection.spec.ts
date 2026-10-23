@@ -32,11 +32,22 @@ const WITH_CLAIMS = [
 ];
 
 describe('projectWishlist (spec §5.1)', () => {
-  it.each([
-    ['a guest', GUEST],
-    ['an owner who opted in', OWNER_OPTED_IN],
-  ])('shows %s what is left and who is getting what', (_label, viewer) => {
-    expect(projectWishlist(ITEMS, CLAIMS, viewer)).toEqual(WITH_CLAIMS);
+  it('shows a guest what is left and who is getting what', () => {
+    const items = projectWishlist(ITEMS, CLAIMS, GUEST);
+    expect(items).toEqual(WITH_CLAIMS);
+    for (const item of items) expect(item).not.toHaveProperty('claimed');
+  });
+
+  it('shows an owner who opted in how many are claimed and what is left, and never who (D75)', () => {
+    const items = projectWishlist(ITEMS, CLAIMS, OWNER_OPTED_IN);
+    expect(items).toEqual([
+      { ...KETTLE, remaining: 1, claimed: 2 },
+      { ...SOCKS, remaining: 1, claimed: 0 },
+      { ...LAMP, remaining: 0, claimed: 2 },
+    ]);
+    const json = JSON.stringify(items);
+    expect(json).not.toContain('Sue');
+    expect(json).not.toContain('c1');
   });
 
   it('leaves the claim fields out, not empty, for an owner who has not opted in', () => {
@@ -44,6 +55,7 @@ describe('projectWishlist (spec §5.1)', () => {
     expect(items).toEqual(ITEMS);
     for (const item of items) {
       expect(Object.keys(item).sort()).toEqual(['id', 'quantity', 'title']);
+      expect('claimed' in item).toBe(false);
     }
   });
 

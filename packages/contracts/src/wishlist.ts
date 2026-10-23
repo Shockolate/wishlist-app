@@ -136,16 +136,19 @@ export type Claim = z.infer<typeof ClaimSchema>;
 
 /**
  * The claim fields an item carries when its viewer may see them (spec §5.1). They're optional
- * because the projection leaves them out, rather than empty, for everyone else.
+ * because the projection leaves them out, rather than empty, for everyone else. A gifter gets
+ * `remaining` and `claims`; an owner who opted in gets `remaining` and `claimed`, never `claims`.
  */
 export const ITEM_CLAIM_FIELDS = {
   remaining: z.number().int().min(0).optional(),
+  /** The owner's total, sent instead of `claims` (D75): the sum of the claims' quantities, unclamped. */
+  claimed: z.number().int().min(0).optional(),
   claims: z.array(ClaimSchema).optional(),
 };
 
 /**
  * An item as the owner sees it. Every field is present; empty ones are null (Plan 3a rule 1).
- * `remaining` and `claims` appear only once the owner opts in (spec §5.1). `tagIds` is optional for
+ * `remaining` and `claimed` appear only once the owner opts in (spec §5.1, D75). `tagIds` is optional for
  * expand/contract (spec §10); the tags themselves are sent once, beside the items.
  */
 export const ItemSchema = z.object({
