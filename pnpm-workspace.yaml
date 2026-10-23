@@ -10,3 +10,8 @@ allowBuilds:
   cpu-features: false
   protobufjs: false
   ssh2: false
+overrides:
+  # GHSA-mrhx-c7xc-m3w5: zod before 4.6.6 can exhaust memory. @vercel/cli-config (under
+  # @vercel/functions, so it ships) pins zod 4.1.11 exactly, even in its latest release.
+  # Drop this once it allows 4.6.6 or later. Zod 3 has no fix, and only the Vercel CLI uses it.
+  'zod@>=4.0.0 <4.6.6': 4.6.7
