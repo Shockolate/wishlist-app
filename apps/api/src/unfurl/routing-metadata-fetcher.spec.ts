@@ -244,4 +244,37 @@ describe('RoutingMetadataFetcher (retailer lookups §5.1–§5.4)', () => {
       expect(ETSY_DEADLINE_MS).toBe(5_000);
     });
   });
+
+  describe('never returns a description from Etsy (tag suggestions D74)', () => {
+    const page = { title: 'From the page', description: 'Etsy page description' };
+
+    it('drops it from the page fetch of a listing while the key is unset', async () => {
+      pages.next = page;
+      expect(await router({ etsy: null }).fetch(LISTING)).toEqual({ title: 'From the page' });
+      expect(pages.urls).toEqual([LISTING]);
+    });
+
+    it.each([
+      ['an Etsy shop page', 'https://www.etsy.com/shop/x', {}],
+      ['an Etsy subdomain', 'https://help.etsy.com/hc/en-us', {}],
+      ['an etsy.me link while the key is unset', ETSY_SHORT, { etsy: null }],
+    ] as const)('drops it from the page fetch of %s', async (_name, url, lookups) => {
+      pages.next = page;
+      expect(await router(lookups).fetch(url)).toEqual({ title: 'From the page' });
+      expect(pages.urls).toEqual([url]);
+    });
+
+    it('drops it even if the Etsy lookup returned one', async () => {
+      etsy.next = { ok: true, metadata: { title: 'Hand-thrown mug', description: 'Glazed.' } };
+      expect(await router().fetch(LISTING)).toEqual({ title: 'Hand-thrown mug' });
+    });
+
+    it.each(['https://notetsy.com/mug', 'https://www.etsy.com.evil.test/listing/1234567890'])(
+      'keeps it for a lookalike host, %s',
+      async (url) => {
+        pages.next = page;
+        expect(await router().fetch(url)).toEqual(page);
+      },
+    );
+  });
 });

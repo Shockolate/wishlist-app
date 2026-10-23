@@ -48,11 +48,27 @@ const RETAILERS: Record<
 };
 
 /**
+ * etsy.com, any subdomain of it, or etsy.me. Exact or dot-suffix matches only, so `notetsy.com` and
+ * `etsy.com.evil.test` are not Etsy.
+ */
+function isEtsyHost(url: string): boolean {
+  let host: string;
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    return false;
+  }
+  return host === 'etsy.me' || host === 'etsy.com' || host.endsWith('.etsy.com');
+}
+
+/**
  * Unfurl's front door (retailer lookups §5.1–§5.4). An amazon.com product link or an Etsy listing
  * link, or a short link that leads to one, is looked up through that retailer's port, sending only
  * its ID. Every other link, and every link of a retailer whose port is null (no key), takes the page
  * fetch exactly as before. Never throws; like the page fetch, it logs a failure's host and reason,
- * never the URL.
+ * never the URL. An Etsy link never gets a description, by any path (tag suggestions D74, D69): the
+ * page fetch would otherwise pass on its `og:description` while the Etsy key is unset, or for an
+ * Etsy page that isn't a listing.
  */
 export class RoutingMetadataFetcher implements MetadataFetcher {
   private readonly logger = new Logger('Unfurl');
@@ -69,6 +85,13 @@ export class RoutingMetadataFetcher implements MetadataFetcher {
   ) {}
 
   async fetch(url: string): Promise<UnfurlResponse> {
+    const response = await this.route(url);
+    if (!isEtsyHost(url)) return response;
+    const { description: _dropped, ...rest } = response;
+    return rest;
+  }
+
+  private async route(url: string): Promise<UnfurlResponse> {
     const retailer = (Object.keys(RETAILERS) as Retailer[]).find(
       (name) => RETAILERS[name].idOf(url) !== null || RETAILERS[name].isShortLink(url),
     );
