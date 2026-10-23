@@ -25,8 +25,8 @@ export default function PrivacyPage() {
         price and photo, so the shop sees a visit from Hanker, not from you. For Amazon and Etsy
         product links, Hanker asks Bright Data (Amazon) or Etsy for the details instead, and sends
         only the product’s ID. Unless you turn it off in Settings, Hanker sends an item’s title,
-        note, shop name and the shop’s product description, with your list’s tag names, to
-        Cloudflare’s AI to suggest tags for it.
+        note, the shop’s web address (not the full link) and the shop’s product description, with
+        your list’s tag names, to Cloudflare’s AI to suggest tags for it.
       </p>
 
       <h2>If you claim a gift</h2>
@@ -65,10 +65,10 @@ export default function PrivacyPage() {
         <li>
           Cloudflare checks that sign-ups and email-link requests (password resets and new
           confirmation links) come from a person, which means it sees your IP address and browser
-          details. It also stores Hanker’s encrypted backups. Cloudflare’s AI reads the title, note
-          and shop details of items you add or edit, and your list’s tag names, to suggest tags. It
-          isn’t told who you are, doesn’t keep what it reads, and doesn’t train on it. You can turn
-          this off in <Link href="/settings">Settings</Link>.
+          details. It also stores Hanker’s encrypted backups. Cloudflare’s AI reads the title and
+          note of items you add or edit, the shop’s web address and product description, and your
+          list’s tag names, to suggest tags. It isn’t told who you are, doesn’t keep what it reads,
+          and doesn’t train on it. You can turn this off in <Link href="/settings">Settings</Link>.
         </li>
         <li>
           Bright Data looks up Amazon product links. It sees the product’s ID, and nothing about who

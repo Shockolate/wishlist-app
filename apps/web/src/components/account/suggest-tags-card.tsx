@@ -62,7 +62,8 @@ export function SuggestTagsCard({ suggestTags }: { suggestTags: boolean }) {
       </h2>
       <p className="mt-1.5 text-[15px] text-muted-foreground">
         When you add or edit an item, Hanker asks Cloudflare’s AI to suggest tags from its title,
-        note and shop details. Cloudflare doesn’t keep or learn from them.
+        note, and the shop’s web address and description. Cloudflare doesn’t keep or learn from
+        them.
       </p>
       <div className="mt-4 flex min-h-11 items-center gap-3">
         <span id="suggest-tags-switch-label" className="flex-1 text-[15px] font-semibold">

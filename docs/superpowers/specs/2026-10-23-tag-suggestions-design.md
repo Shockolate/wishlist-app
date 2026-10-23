@@ -140,7 +140,7 @@ Adding an optional field is additive: an older web build ignores it.
 
 - **Storage:** a new column, `wishlists.suggest_tags boolean not null default true`, beside `show_claims_to_owner`. One migration, expand-only. Existing rows get `true`, as Ted chose.
 - **Contracts:** `suggestTags` joins `WishlistResponseSchema`, `WishlistSettingsResponseSchema` and `UpdateWishlistRequestSchema`, optional for expand/contract like `showClaimsToOwner`.
-- **Settings page:** a switch in `/settings`, in the list section, alongside the claims setting. *(Copy, Claude's draft:)* **"Suggest tags"** — "When you add or edit an item, Hanker asks Cloudflare's AI to suggest tags from its title, note and shop details. Cloudflare doesn't keep or learn from them."
+- **Settings page:** a switch in `/settings`, in the list section, alongside the claims setting. *(Copy, Claude's draft:)* **"Suggest tags"** — "When you add or edit an item, Hanker asks Cloudflare's AI to suggest tags from its title, note, and the shop's web address and description. Cloudflare doesn't keep or learn from them." *(Wording changed in Plan 9 execution: the code sends the host.)*
 - **Turning it off** stops all requests: the web stops asking, and the API returns `[]` without calling Cloudflare even if an old tab asks.
 
 ### 5.5 Secrets and a dark launch *(Claude's call)*
@@ -158,8 +158,8 @@ Both pages change in the release that sets the token in production, and their "u
 **What is sent, exactly** (the pages must say no more and no less than this): for one item, its title, its note, the host of its link (not the link), the shop's description of the product on add (never for Etsy), and the names of the list's tags. Nothing identifying the owner (no email, name, account or IP address) and nothing from gifters or claims is sent.
 
 **`/privacy`:**
-- **"If you make a list":** a new sentence: "Unless you turn it off in Settings, Hanker sends an item's title, note, shop name and the shop's product description, with your list's tag names, to Cloudflare's AI to suggest tags for it."
-- **"Who else handles your information":** the Cloudflare entry gains: "Cloudflare's AI reads the title, note and shop details of items you add or edit, and your list's tag names, to suggest tags. It isn't told who you are, doesn't keep what it reads, and doesn't train on it. You can turn this off in Settings."
+- **"If you make a list":** a new sentence: "Unless you turn it off in Settings, Hanker sends an item's title, note, the shop's web address (not the full link) and the shop's product description, with your list's tag names, to Cloudflare's AI to suggest tags for it." *(Wording changed in Plan 9 execution: the code sends the host, not a shop name.)*
+- **"Who else handles your information":** the Cloudflare entry gains: "Cloudflare's AI reads the title and note of items you add or edit, the shop's web address and product description, and your list's tag names, to suggest tags. It isn't told who you are, doesn't keep what it reads, and doesn't train on it. You can turn this off in Settings." *(Same change: the code sends the host.)*
 - **"How long it's kept":** nothing new is stored, so nothing changes, unless the builder finds Cloudflare retention that contradicts §3.
 
 **`/terms`:**

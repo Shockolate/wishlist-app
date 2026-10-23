@@ -57,10 +57,10 @@ test('/privacy says what tag suggestions send to Cloudflare (tag suggestions §5
   // tag-suggest.service.ts sends the title, note, link host, unfurl description and the list's tag
   // names, and nothing else. The Settings card for it is "Tag suggestions".
   await expect(main).toContainText(
-    'Unless you turn it off in Settings, Hanker sends an item’s title, note, shop name and the shop’s product description, with your list’s tag names, to Cloudflare’s AI to suggest tags for it.',
+    'Unless you turn it off in Settings, Hanker sends an item’s title, note, the shop’s web address (not the full link) and the shop’s product description, with your list’s tag names, to Cloudflare’s AI to suggest tags for it.',
   );
   await expect(main).toContainText(
-    'Cloudflare’s AI reads the title, note and shop details of items you add or edit, and your list’s tag names, to suggest tags. It isn’t told who you are, doesn’t keep what it reads, and doesn’t train on it. You can turn this off in Settings.',
+    'Cloudflare’s AI reads the title and note of items you add or edit, the shop’s web address and product description, and your list’s tag names, to suggest tags. It isn’t told who you are, doesn’t keep what it reads, and doesn’t train on it. You can turn this off in Settings.',
   );
 });
 
