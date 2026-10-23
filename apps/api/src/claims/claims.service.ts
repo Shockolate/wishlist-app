@@ -24,6 +24,7 @@ import {
   claimNotFound,
   manageTokenInUse,
   ownerCannotClaim,
+  ownListClaim,
   shareLinkNotFound,
 } from './claims-errors.js';
 import { CLAIM_COLUMNS, SHARED_ITEM_COLUMNS, SNAPSHOT, claimedTotal } from './queries.js';
@@ -126,8 +127,11 @@ export class ClaimsService {
     return { claim, manageToken, manageUrl: manageUrl(this.env.APP_ORIGIN, manageToken) };
   }
 
-  /** The claimer's own view (spec §5.1): the manage token is the capability. */
-  async details(manageToken: string): Promise<ClaimDetailsResponse> {
+  /**
+   * The claimer's own view (spec §5.1): the manage token is the capability. The list's own owner,
+   * signed in, is refused with nothing about the claim (D82).
+   */
+  async details(manageToken: string, viewerId: string | null): Promise<ClaimDetailsResponse> {
     if (!CAPABILITY_TOKEN_PATTERN.test(manageToken)) throw claimNotFound();
     return this.db.transaction(async (tx) => {
       const [row] = await tx
@@ -136,6 +140,7 @@ export class ClaimsService {
           item: SHARED_ITEM_COLUMNS,
           wishlistTitle: wishlists.title,
           shareToken: wishlists.shareToken,
+          ownerId: wishlists.ownerId,
           ownerSeesClaims: wishlists.showClaimsToOwner,
           ownerDisplayName: users.displayName,
         })
@@ -145,6 +150,7 @@ export class ClaimsService {
         .innerJoin(users, eq(users.id, wishlists.ownerId))
         .where(eq(claims.manageTokenHash, hashToken(manageToken)));
       if (!row) throw claimNotFound();
+      if (viewerId === row.ownerId) throw ownListClaim();
       const claimed = await claimedTotal(tx, row.item.id);
       return {
         claim: row.claim,
@@ -161,18 +167,30 @@ export class ClaimsService {
 
   /**
    * A new name, a new quantity, or both (spec §5). The new quantity may be at most what's left
-   * plus what the claim holds (spec §2), so keeping or lowering it never fails (D19).
+   * plus what the claim holds (spec §2), so keeping or lowering it never fails (D19). The list's
+   * own owner is refused before the list's limit (D82, D43), as in `create`.
    */
-  async update(manageToken: string, input: UpdateClaimRequest, ip: string): Promise<Claim> {
+  async update(
+    manageToken: string,
+    input: UpdateClaimRequest,
+    ip: string,
+    viewerId: string | null,
+  ): Promise<Claim> {
     if (!CAPABILITY_TOKEN_PATTERN.test(manageToken)) throw claimNotFound();
     await this.limiter.enforce(claimsIpKey(ip), CLAIMS_PER_IP);
     const tokenHash = hashToken(manageToken);
     const [found] = await this.db
-      .select({ itemId: claims.itemId, wishlistId: items.wishlistId })
+      .select({
+        itemId: claims.itemId,
+        wishlistId: items.wishlistId,
+        ownerId: wishlists.ownerId,
+      })
       .from(claims)
       .innerJoin(items, eq(items.id, claims.itemId))
+      .innerJoin(wishlists, eq(wishlists.id, items.wishlistId))
       .where(eq(claims.manageTokenHash, tokenHash));
     if (!found) throw claimNotFound();
+    if (viewerId === found.ownerId) throw ownListClaim();
     await this.limiter.enforce(claimsListKey(found.wishlistId), CLAIMS_PER_LIST);
 
     return this.db.transaction(async (tx) => {
@@ -210,12 +228,27 @@ export class ClaimsService {
     });
   }
 
-  /** Cancels the claim (spec §5). No lock: removing a claim can't over-commit an item (§6.3). */
-  async cancel(manageToken: string): Promise<void> {
+  /**
+   * Cancels the claim (spec §5). No lock: removing a claim can't over-commit an item (§6.3). A
+   * guest's cancel is one `DELETE`; with a session, the claim's list owner is read first so the
+   * list's own owner is refused (D82).
+   */
+  async cancel(manageToken: string, viewerId: string | null): Promise<void> {
     if (!CAPABILITY_TOKEN_PATTERN.test(manageToken)) throw claimNotFound();
+    const tokenHash = hashToken(manageToken);
+    if (viewerId !== null) {
+      const [found] = await this.db
+        .select({ ownerId: wishlists.ownerId })
+        .from(claims)
+        .innerJoin(items, eq(items.id, claims.itemId))
+        .innerJoin(wishlists, eq(wishlists.id, items.wishlistId))
+        .where(eq(claims.manageTokenHash, tokenHash));
+      if (!found) throw claimNotFound();
+      if (found.ownerId === viewerId) throw ownListClaim();
+    }
     const deleted = await this.db
       .delete(claims)
-      .where(eq(claims.manageTokenHash, hashToken(manageToken)))
+      .where(eq(claims.manageTokenHash, tokenHash))
       .returning({ id: claims.id });
     if (deleted.length === 0) throw claimNotFound();
   }

@@ -14,6 +14,13 @@ export const shareLinkNotFound = (): AppError =>
 export const ownerCannotClaim = (): AppError =>
   new AppError(403, ErrorCode.OWNER_CANNOT_CLAIM, 'You cannot claim items on your own list.');
 
+/**
+ * The list's own owner opened a claim's manage link (D82). Carries nothing about the claim, so
+ * a forwarded link can't tell the owner who claimed what.
+ */
+export const ownListClaim = (): AppError =>
+  new AppError(403, ErrorCode.OWN_LIST_CLAIM, 'Claims on your own list are hidden from you.');
+
 /** A manage token that belongs to a claim on another item (D42). Says nothing more. */
 export const manageTokenInUse = (): AppError =>
   new AppError(409, ErrorCode.MANAGE_TOKEN_IN_USE, 'This claim link is already in use.');

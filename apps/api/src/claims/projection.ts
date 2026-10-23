@@ -14,7 +14,7 @@ export interface ClaimRow {
 
 export type ProjectedItem<T> = T & { remaining?: number; claimed?: number; claims?: Claim[] };
 
-/** Whether this viewer may see claim data: gifters always, the owner only after opting in. */
+/** Whether this viewer gets claim data: claims for gifters, totals for the owner after opting in. */
 export function seesClaims(viewer: Viewer): boolean {
   return viewer.kind === 'guest' || viewer.showClaims;
 }

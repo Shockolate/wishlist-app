@@ -126,7 +126,10 @@ export const UpdateWishlistRequestSchema = z
   );
 export type UpdateWishlistRequest = z.infer<typeof UpdateWishlistRequestSchema>;
 
-/** A claim as gifters, and an owner who opted in, see it (spec §5). Never its manage token. */
+/**
+ * A claim as gifters see it (spec §5). Never its manage token. Owners never get claims, only
+ * totals once they opt in (D75).
+ */
 export const ClaimSchema = z.object({
   id: z.uuid(),
   claimerName: z.string(),
