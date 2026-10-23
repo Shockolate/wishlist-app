@@ -108,7 +108,11 @@ describe('claim fields in the cache (Plan 4b rule 13, D75)', () => {
   });
 
   it('strips every claim field, and the setting, when the owner opts out', () => {
-    const stripped = stripClaims(optedIn(item(1, { claimed: 1, remaining: 0 }), item(2)));
+    // `claims` should never reach an owner's cache, but if it did, opting out must drop it too.
+    const claims = [
+      { id: '00000000-0000-4000-8000-0000000000c1', claimerName: 'Sue', quantity: 1 },
+    ];
+    const stripped = stripClaims(optedIn(item(1, { claimed: 1, remaining: 0, claims }), item(2)));
     expect(stripped.showClaimsToOwner).toBe(false);
     for (const each of stripped.items) {
       expect(each).not.toHaveProperty('claimed');

@@ -80,6 +80,43 @@ test('with claims on, the owner sees how many are claimed on /list and on their 
   ).toBeVisible();
 });
 
+test('the owner’s own link still says how many they want, and with claims on, how many are taken (D75)', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const base = baseURL ?? '';
+  await verifiedOwner(page, base, 'toggle-want');
+  await addItemViaApi(page.request, base, { title: 'Merino socks', quantity: 3 });
+  const mugs = await addItemViaApi(page.request, base, { title: 'Stoneware mugs', quantity: 2 });
+  await addItemViaApi(page.request, base, { title: 'Reading lamp' });
+  const token = await shareTokenOf(page.request);
+  const card = (title: string) => page.getByRole('listitem').filter({ hasText: title });
+
+  // Setting off: the quantity is all the owner's card says, as before D75.
+  await page.goto(`/s/${token}`);
+  await expect(card('Merino socks')).toContainText('You want 3.');
+  await expect(card('Merino socks')).not.toContainText(/claimed/i);
+  await expect(card('Reading lamp')).not.toContainText(/You want|claimed/i);
+
+  // Setting on: the total joins it, and a fully claimed item gets the "taken" strip.
+  await claimViaApi((await guest(browser, base)).request, base, token, mugs.id, {
+    claimerName: 'Aunt Sue',
+    quantity: 2,
+  });
+  const on = await page.request.patch('/api/wishlist', {
+    headers: { origin: base },
+    data: { showClaimsToOwner: true },
+  });
+  expect(on.status()).toBe(200);
+  await page.goto(`/s/${token}`);
+  await expect(card('Merino socks')).toContainText('You want 3.');
+  await expect(card('Merino socks')).toContainText('None claimed yet');
+  await expect(card('Stoneware mugs')).toContainText('You want 2.');
+  await expect(card('Stoneware mugs')).toContainText('All 2 claimed');
+  await expect(page.locator('main')).not.toContainText('Aunt Sue');
+});
+
 test('while on, an edit keeps its row’s claim line, and a new item has none yet (Plan 4b rule 13)', async ({
   page,
   browser,
@@ -109,6 +146,7 @@ test('while on, an edit keeps its row’s claim line, and a new item has none ye
   await expect(kettleRow).toContainText('3 of 5 claimed');
   await kettleRow.getByRole('button', { name: /^Enamel kettle/ }).click();
   await kettleRow.getByLabel('Title', { exact: true }).fill('Enamel stovetop kettle');
+  // 'More' is the quantity stepper's + button: 5 becomes 6.
   await kettleRow.getByRole('button', { name: 'More' }).click();
   await kettleRow.getByRole('button', { name: 'Save' }).click();
   await expect(

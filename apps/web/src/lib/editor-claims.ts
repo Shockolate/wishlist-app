@@ -1,4 +1,5 @@
 import type { Item } from '@wishlist/contracts';
+import { countLine } from './share-copy';
 
 export interface EditorClaimLine {
   text: string;
@@ -21,4 +22,18 @@ export function ownerClaimLine({
     return { text: quantity === 1 ? 'Claimed' : `All ${quantity} claimed`, kind: 'taken' };
   }
   return { text: `${claimed} of ${quantity} claimed`, kind: 'taken' };
+}
+
+/**
+ * What the owner's own share page says under a card: how many they want when it's more than one
+ * (as it did before D75), and, once they've opted in, how many are claimed.
+ */
+export function ownerShareLines(item: Pick<Item, 'quantity' | 'claimed'>): {
+  want: string | null;
+  claim: EditorClaimLine | null;
+} {
+  return {
+    want: countLine({ wants: 'You want', quantity: item.quantity }),
+    claim: ownerClaimLine(item),
+  };
 }

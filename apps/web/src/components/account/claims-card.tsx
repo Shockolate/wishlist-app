@@ -52,7 +52,7 @@ export function ClaimsCard({ showClaimsToOwner }: { showClaimsToOwner: boolean }
       if (savedOn) {
         updateCachedList((list) => ({ ...list, showClaimsToOwner: true }));
       }
-      // On: fetch the claims. Off: fetch the list again, so it is the server's, not the strip's.
+      // On: fetch the totals. Off: fetch the list again, so it is the server's, not the strip's.
       invalidateCachedList();
       setMessage((last) => ({
         text: savedOn ? 'You’ll see how many are claimed.' : 'Claims are hidden from you again.',
