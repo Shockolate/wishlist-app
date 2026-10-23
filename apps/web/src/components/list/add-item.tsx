@@ -36,7 +36,7 @@ type Step =
       retailer: Retailer | null;
       abort: AbortController;
     }
-  | { step: 'form'; values: ItemFormValues; message: string };
+  | { step: 'form'; values: ItemFormValues; message: string; description?: string | undefined };
 
 /**
  * The link-first add box (spec §7 Owner editor, Plan 3b rules 5 and 6). A link is read, then opens
@@ -108,6 +108,7 @@ export function AddItem() {
         step: 'form',
         values: prefill(input.url, input.titleHint, response),
         message: prefillMessage({ response }, input.url),
+        description: response.description,
       });
     } catch (error) {
       if (abort.signal.aborted) return;
@@ -151,7 +152,12 @@ export function AddItem() {
         ) : null}
       </div>
       {step.step === 'form' ? (
-        <AddForm initial={step.values} onAdded={added} onCancel={cancel} />
+        <AddForm
+          initial={step.values}
+          description={step.description}
+          onAdded={added}
+          onCancel={cancel}
+        />
       ) : (
         <form onSubmit={(event) => void submit(event)} noValidate className="mt-2">
           <div className="flex gap-2">

@@ -9,7 +9,9 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { fieldErrors } from '@/lib/messages';
 import { QuantityStepper } from './quantity-stepper';
+import { SuggestedTags } from './suggested-tags';
 import { TagField, type TagBox } from './tag-field';
+import type { TagSuggestions } from './use-tag-suggestions';
 
 /** The add and edit forms share one schema (Plan 3b rule 7). */
 export type ItemForm = UseFormReturn<
@@ -37,11 +39,14 @@ export function ItemFields({
   form,
   idPrefix,
   tagBox,
+  suggestions,
 }: {
   form: ItemForm;
   idPrefix: string;
   /** The tag field's handle, for adding what's typed in it before a save. */
   tagBox?: Ref<TagBox>;
+  /** Suggested tags for the "Suggested:" row, and the title field's blur that asks again. */
+  suggestions?: TagSuggestions;
 }) {
   const {
     register,
@@ -52,7 +57,13 @@ export function ItemFields({
   return (
     <div className="flex flex-col gap-3.5">
       <Field id={id('title')} label="Title" error={errors.title?.message}>
-        {(props) => <Input {...props} {...register('title')} autoComplete="off" />}
+        {(props) => (
+          <Input
+            {...props}
+            {...register('title', { onBlur: () => suggestions?.onTitleBlur() })}
+            autoComplete="off"
+          />
+        )}
       </Field>
       <Field id={id('url')} label="Link" error={errors.url?.message}>
         {(props) => (
@@ -96,7 +107,16 @@ export function ItemFields({
       >
         {(props) => <Textarea {...props} {...register('note')} rows={3} />}
       </Field>
-      <TagField form={form} id={`${idPrefix}-tags`} handle={tagBox} />
+      <div className="flex flex-col gap-2">
+        <TagField form={form} id={`${idPrefix}-tags`} handle={tagBox} />
+        {suggestions ? (
+          <SuggestedTags
+            form={form}
+            suggestions={suggestions.suggestions}
+            tagInputId={`${idPrefix}-tags`}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }

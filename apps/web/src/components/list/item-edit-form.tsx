@@ -24,6 +24,7 @@ import { TrashIcon } from './icons';
 import { ItemFields, showFieldErrors } from './item-fields';
 import { useListStatus } from './list-status';
 import { useListTags, type TagBox } from './tag-field';
+import { useTagSuggestions } from './use-tag-suggestions';
 import { useListMutations } from './use-list-mutations';
 
 /**
@@ -53,6 +54,7 @@ export function ItemEditForm({
     resolver: zodResolver(CreateItemRequestSchema, { error: formErrorMap }),
     defaultValues: formValuesOf(item),
   });
+  const suggestions = useTagSuggestions(form, {});
   const { isDirty } = form.formState;
   const { setFocus } = form;
   // Set when Delete is confirmed, so closing the dialog moves focus on instead of back to Delete.
@@ -102,7 +104,12 @@ export function ItemEditForm({
       aria-label={`Edit ${item.title}`}
       className="flex flex-col gap-3.5 px-3.5 pt-1.5 pb-4"
     >
-      <ItemFields form={form} idPrefix={`edit-${item.id}`} tagBox={tagBox} />
+      <ItemFields
+        form={form}
+        idPrefix={`edit-${item.id}`}
+        tagBox={tagBox}
+        suggestions={suggestions}
+      />
       <div className="flex flex-wrap items-center gap-2">
         <AlertDialog>
           <AlertDialogTrigger asChild>
