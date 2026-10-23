@@ -92,6 +92,50 @@ describe('extractMetadata (spec §6.8, Plan 3a rule 11)', () => {
   });
 });
 
+describe('description (Plan 9, for tag suggestions only)', () => {
+  const OG = '<meta property="og:description" content="From Open Graph">';
+  const LD =
+    '<script type="application/ld+json">{"@type":"Product","description":"From JSON-LD"}</script>';
+  const NAME = '<meta name="description" content="From the meta tag">';
+
+  it('prefers og:description, then the JSON-LD Product, then <meta name="description">', () => {
+    expect(extractMetadata(`${NAME}${LD}${OG}`, SHOP).description).toBe('From Open Graph');
+    expect(extractMetadata(`${NAME}${LD}`, SHOP).description).toBe('From JSON-LD');
+    expect(extractMetadata(NAME, SHOP).description).toBe('From the meta tag');
+  });
+
+  it('collapses whitespace and decodes entities', () => {
+    expect(
+      extractMetadata(
+        '<meta name="description" content="  Pour-over \n  kettle &amp; lid ">',
+        SHOP,
+      ),
+    ).toEqual({ description: 'Pour-over kettle & lid' });
+  });
+
+  it('cuts a 1500-character description to 1000', () => {
+    const html = `<meta property="og:description" content="${'a'.repeat(1500)}">`;
+    expect(extractMetadata(html, SHOP).description).toHaveLength(1000);
+  });
+
+  it('is present alongside the other fields', () => {
+    expect(extractMetadata(`${OPEN_GRAPH}${OG}`, SHOP)).toEqual({
+      title: 'Stovetop Kettle & Lid',
+      imageUrl: 'https://cdn.shop.example/kettle.jpg',
+      priceText: '$40.00',
+      description: 'From Open Graph',
+    });
+  });
+
+  it('gives a page with only a description just the description, and no title', () => {
+    expect(extractMetadata(NAME, SHOP)).toEqual({ description: 'From the meta tag' });
+  });
+
+  it('has no description when nothing visible is left', () => {
+    expect(extractMetadata('<meta property="og:description" content="  ">', SHOP)).toEqual({});
+  });
+});
+
 describe('images (Plan 3a Review Focus 4)', () => {
   it.each([
     ['/img/kettle.jpg', 'https://shop.example/img/kettle.jpg'],
@@ -269,8 +313,17 @@ describe('productMetadata (retailer lookups §5.2)', () => {
   });
 
   it('ignores fields that aren’t strings', () => {
-    expect(productMetadata({ title: 42, imageUrl: ['https://x.example/k.jpg'] }, AMAZON)).toEqual(
-      {},
+    expect(
+      productMetadata({ title: 42, imageUrl: ['https://x.example/k.jpg'], description: 7 }, AMAZON),
+    ).toEqual({});
+  });
+
+  it('cleans a description and cuts it to 1000', () => {
+    expect(productMetadata({ description: '  Pour-over \n kettle ' }, AMAZON)).toEqual({
+      description: 'Pour-over kettle',
+    });
+    expect(productMetadata({ description: 'a'.repeat(1500) }, AMAZON).description).toHaveLength(
+      1000,
     );
   });
 });

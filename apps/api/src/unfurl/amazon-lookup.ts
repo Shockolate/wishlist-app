@@ -69,6 +69,7 @@ export class BrightDataAmazonLookup implements AmazonLookup {
         imageUrl: fields.image_url ?? images[0],
         amount: fields.final_price,
         currency: fields.currency,
+        description: describe(fields),
       },
       new URL(url),
     );
@@ -76,4 +77,26 @@ export class BrightDataAmazonLookup implements AmazonLookup {
       ? { ok: true, metadata }
       : { ok: false, reason: 'NO_METADATA' };
   }
+}
+
+/**
+ * The text tag suggestions read from a record (Plan 9 ruling 7): `categories` joined with " > ",
+ * then ". ", then `description`. Whichever is missing is left out; `productMetadata` cleans and cuts it.
+ *
+ * Field names and types: Bright Data's own sample output for its Amazon product scraper
+ * (github.com/luminati-io/Amazon-scraper, "Sample Output Data") shows `description` as a string and
+ * `categories` as an array of strings, e.g. ["Home & Kitchen", "Kitchen & Dining", ...]. Bright
+ * Data's product page for the dataset also lists `description` as a string. The spike behind the
+ * title, image and price mapping (retailer lookups §3, 2026-10-22) did not record either field, and
+ * `categories` is not in the dataset page's sample, so it is unconfirmed against a live record in
+ * this repo. Anything that isn't a string, or an array's non-string entries, is skipped.
+ */
+function describe(fields: Record<string, unknown>): string {
+  const categories = Array.isArray(fields.categories)
+    ? (fields.categories as unknown[]).filter(
+        (entry): entry is string => typeof entry === 'string' && entry.trim() !== '',
+      )
+    : [];
+  const description = typeof fields.description === 'string' ? fields.description : '';
+  return [categories.join(' > '), description].filter((part) => part.trim() !== '').join('. ');
 }

@@ -91,6 +91,17 @@ describe('RoutingMetadataFetcher (retailer lookups §5.1–§5.4)', () => {
     expect(pages.urls).toEqual([]);
   });
 
+  it('passes an Amazon description through to the response (Plan 9)', async () => {
+    amazon.next = {
+      ok: true,
+      metadata: { title: 'Kettle', description: 'Home & Kitchen > Kettles. Pour-over kettle.' },
+    };
+    expect(await router().fetch(PRODUCT)).toEqual({
+      title: 'Kettle',
+      description: 'Home & Kitchen > Kettles. Pour-over kettle.',
+    });
+  });
+
   it('follows a short link to its product, then looks it up', async () => {
     amazon.next = found;
     links.next = { ok: true, url: new URL('https://www.amazon.com/dp/B0CB96ZFL8?ref=x') };

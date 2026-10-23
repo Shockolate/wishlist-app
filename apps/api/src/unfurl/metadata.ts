@@ -1,11 +1,16 @@
-import { visibleOnly } from '@wishlist/contracts';
+import { DESCRIPTION_MAX, visibleOnly } from '@wishlist/contracts';
 import { Parser } from 'htmlparser2';
 
-/** What a page says about the product on it. Every field is optional (spec §6.8). */
+/**
+ * What a page says about the product on it. Every field is optional (spec §6.8). The description
+ * is for tag suggestions only (Plan 9): it never counts as a prefill by itself, and it is never set
+ * from Etsy (D69).
+ */
 export interface PageMetadata {
   title?: string;
   imageUrl?: string;
   priceText?: string;
+  description?: string;
 }
 
 const TITLE_MAX = 200;
@@ -20,7 +25,8 @@ type JsonObject = Record<string, unknown>;
 /**
  * What a product page says about itself (spec §6.8). Each field comes from the first source that
  * has it: Open Graph tags, then a JSON-LD Product, then <title> (Plan 3a rule 11). A title that is
- * only the site's name doesn't count.
+ * only the site's name doesn't count. The description comes from og:description, then the JSON-LD
+ * Product, then <meta name="description"> (tag suggestions design §5.3).
  */
 export function extractMetadata(html: string, pageUrl: URL): PageMetadata {
   const page = scan(html);
@@ -43,7 +49,14 @@ export function extractMetadata(html: string, pageUrl: URL): PageMetadata {
       page.meta.get('product:price:currency') ?? page.meta.get('og:price:currency'),
     ) ?? offerPrice(product);
 
-  return assemble(title, imageUrl, priceText);
+  const description = [
+    text(page.meta.get('og:description')),
+    jsonText(product?.description),
+    // `meta` is keyed by `property ?? name`, so this is <meta name="description">.
+    text(page.meta.get('description')),
+  ].find((candidate) => candidate !== undefined);
+
+  return assemble(title, imageUrl, priceText, description);
 }
 
 /**
@@ -51,21 +64,34 @@ export function extractMetadata(html: string, pageUrl: URL): PageMetadata {
  * only, titles cut to 200, https images, and a display price. A field that isn't a string is dropped.
  */
 export function productMetadata(
-  fields: { title?: unknown; imageUrl?: unknown; amount?: unknown; currency?: unknown },
+  fields: {
+    title?: unknown;
+    imageUrl?: unknown;
+    amount?: unknown;
+    currency?: unknown;
+    description?: unknown;
+  },
   base: URL,
 ): PageMetadata {
   return assemble(
     typeof fields.title === 'string' ? text(fields.title) : undefined,
     httpsUrl(fields.imageUrl, base),
     formatPrice(fields.amount, fields.currency),
+    typeof fields.description === 'string' ? text(fields.description) : undefined,
   );
 }
 
-function assemble(title?: string, imageUrl?: string, priceText?: string): PageMetadata {
+function assemble(
+  title?: string,
+  imageUrl?: string,
+  priceText?: string,
+  description?: string,
+): PageMetadata {
   const metadata: PageMetadata = {};
   if (title) metadata.title = truncate(title, TITLE_MAX);
   if (imageUrl) metadata.imageUrl = imageUrl;
   if (priceText) metadata.priceText = priceText;
+  if (description) metadata.description = truncate(description, DESCRIPTION_MAX);
   return metadata;
 }
 

@@ -81,6 +81,25 @@ describe('HttpMetadataFetcher (spec §6.8)', () => {
     expect(await fetcher().fetch(at('/empty'))).toEqual({ failureReason: 'NO_METADATA' });
   });
 
+  it('says NO_METADATA when all a page has is a description (Plan 9 ruling 6)', async () => {
+    const descriptionOnly = new HttpMetadataFetcher(
+      new PageFetcher({ policy: FIXTURE, resolve: () => Promise.resolve(['127.0.0.1']) }),
+      () => ({ description: 'x' }),
+    );
+    expect(await descriptionOnly.fetch(at('/kettle'))).toEqual({ failureReason: 'NO_METADATA' });
+  });
+
+  it('returns a description found beside a title', async () => {
+    const withDescription = new HttpMetadataFetcher(
+      new PageFetcher({ policy: FIXTURE, resolve: () => Promise.resolve(['127.0.0.1']) }),
+      () => ({ title: 'Kettle', description: 'Pour-over kettle.' }),
+    );
+    expect(await withDescription.fetch(at('/kettle'))).toEqual({
+      title: 'Kettle',
+      description: 'Pour-over kettle.',
+    });
+  });
+
   it('reads a page past 1 MB from its first megabyte', async () => {
     expect(await fetcher().fetch(at('/huge-kettle'))).toEqual({ title: 'Kettle' });
   });
