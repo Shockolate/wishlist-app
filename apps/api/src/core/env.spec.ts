@@ -35,6 +35,37 @@ describe('parseEnv', () => {
     expect(() => parseEnv({ ...base, ETSY_API_KEY: '' })).toThrow(/ETSY_API_KEY/);
   });
 
+  describe('CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AI_TOKEN (tag suggestions §5.5)', () => {
+    const both = { CLOUDFLARE_ACCOUNT_ID: 'acct', CLOUDFLARE_AI_TOKEN: 'tok' };
+
+    it('are optional, and unset together', () => {
+      const env = parseEnv(base);
+      expect(env.CLOUDFLARE_ACCOUNT_ID).toBeUndefined();
+      expect(env.CLOUDFLARE_AI_TOKEN).toBeUndefined();
+    });
+
+    it('are read when both are set', () => {
+      const env = parseEnv({ ...base, ...both });
+      expect(env.CLOUDFLARE_ACCOUNT_ID).toBe('acct');
+      expect(env.CLOUDFLARE_AI_TOKEN).toBe('tok');
+    });
+
+    it('refuse to be set one without the other', () => {
+      expect(() => parseEnv({ ...base, CLOUDFLARE_ACCOUNT_ID: 'acct' })).toThrow(
+        /set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AI_TOKEN together/,
+      );
+      expect(() => parseEnv({ ...base, CLOUDFLARE_AI_TOKEN: 'tok' })).toThrow(
+        /set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AI_TOKEN together/,
+      );
+    });
+
+    it('refuse an empty value', () => {
+      expect(() => parseEnv({ ...base, ...both, CLOUDFLARE_AI_TOKEN: '' })).toThrow(
+        /CLOUDFLARE_AI_TOKEN/,
+      );
+    });
+  });
+
   it('names the offending variable when the environment is invalid', () => {
     expect(() => parseEnv({ ...base, PORT: 'not-a-port' })).toThrow(/PORT/);
   });
