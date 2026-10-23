@@ -5,7 +5,7 @@
 - **Author:** Ted Armstrong (with Claude)
 - **Repo:** `github.com/Shockolate/wishlist-app` (public; not yet created)
 - **Product name:** **Hanker**, at `hanker.dev` (decided 2026-10-09, D26). Internal identifiers keep the domain noun `wishlist`.
-- **Amended by:** [item tags and share-page filters](2026-10-21-item-tags-and-filters-design.md) (2026-10-21; D58 on). Plan 7a amends §2, §4 and §5 for the tags API, and Plan 7b §7 for the web. [Retailer lookups](2026-10-22-retailer-lookups-design.md) (2026-10-22; D64 on): Plan 8a amends §6.8 and §7 for Amazon, and narrows D34. Plan 8b amends §6.8 for Etsy (D69). [Tag suggestions](2026-10-23-tag-suggestions-design.md) (2026-10-23; D70 on): Plan 9 amends §7 so an idea opens the add form.
+- **Amended by:** [item tags and share-page filters](2026-10-21-item-tags-and-filters-design.md) (2026-10-21; D58 on). Plan 7a amends §2, §4 and §5 for the tags API, and Plan 7b §7 for the web. [Retailer lookups](2026-10-22-retailer-lookups-design.md) (2026-10-22; D64 on): Plan 8a amends §6.8 and §7 for Amazon, and narrows D34. Plan 8b amends §6.8 for Etsy (D69). [Tag suggestions](2026-10-23-tag-suggestions-design.md) (2026-10-23; D70 on): Plan 9 amends §7 so an idea opens the add form. [Your gifts and owner totals](2026-10-23-your-gifts-and-owner-totals-design.md) (2026-10-23; D75 on): Plan 10a, its Part 1, amends §1, §2, §5, §5.1 and §7 so an owner never sees who claimed what, and D33 and D40 with them.
 
 ## 1. Intent
 
@@ -24,7 +24,7 @@ apart from a domain at roughly $10–15 a year.
 1. An owner can sign up, verify their email, build and order a list, and share it in under five minutes from a phone.
 2. A gifter who opens a share link from a text message can claim an item in three taps, and get back to their claim later from any device.
 3. Two gifters claiming the last unit at the same moment never both succeed.
-4. An owner who hasn't opted in never receives claim data from the server, not just in the UI.
+4. An owner who hasn't opted in never receives claim data from the server, not just in the UI, and an owner never sees who claimed what (D75).
 5. A merge to `main` reaches production with no manual steps. A bad deploy is rolled back with Vercel Instant Rollback, and a bad data change is recoverable from a backup up to 30 days old.
 6. The running cost is $0 per month beyond the domain.
 
@@ -96,7 +96,8 @@ These are explicit so they don't creep in:
 ### Spoilers
 
 - By default, the owner never receives claim data from any endpoint, including when they view their own share link while signed in.
-- If `showClaimsToOwner = true`, the owner sees remaining counts and claimer names in both the editor and the share view.
+- If `showClaimsToOwner = true`, the owner sees, for each item, how many are claimed and how many remain, in both the editor and the share view. They never see a claimer's name, and `claims[]` is never sent to an owner (D75).
+- An owner who opens a manage link for a claim on their own list, while signed in, gets no claim data and can't change or cancel the claim from that session (`403 OWN_LIST_CLAIM`, D82). Without this, a manage link a gifter forwarded would show them a name.
 - The UI asks for confirmation before turning the setting on.
 - Gifters are told which way it's set (D40). The share page, the claim sheet and the manage page say whether the owner can see who's getting what, so nobody claims a surprise the owner is watching.
 - The guarantee is about the owner's own session. An owner who opens their link signed out, or in a private window, is a guest like anyone else; that's a deliberate act, and the server can't tell it apart from a gifter.
@@ -320,7 +321,7 @@ These require a session and a verified email. The list is always derived from th
 
 | Method & path | Body | Result |
 |---|---|---|
-| `GET /wishlist` | none | The wishlist, its items, and the share URL. Claim data appears only if `showClaimsToOwner` |
+| `GET /wishlist` | none | The wishlist, its items, and the share URL. Claim totals (`claimed`, `remaining`) appear only if `showClaimsToOwner`; `claims[]` never does (D75) |
 | `PATCH /wishlist` | `{title?, showClaimsToOwner?}` | Updated wishlist |
 | `POST /wishlist/share-token/rotate` | none | `{shareUrl}` |
 | `POST /wishlist/unfurl` | `{url}` | `{title?, imageUrl?, priceText?, failureReason?}`, always `200`. A prefill only; nothing is saved |
@@ -347,12 +348,12 @@ An item or tag ID that belongs to another user's list, or isn't a UUID, returns 
 |---|---|---|
 | `GET /shared/:shareToken` | none | `{title, ownerDisplayName, viewerIsOwner, ownerSeesClaims, tags[], items[]}`, or `404 SHARE_LINK_NOT_FOUND` |
 | `POST /shared/:shareToken/items/:itemId/claims` | `{claimerName, quantity, manageToken?}` (quantity 1–99, default 1) | `201 {claim, manageToken, manageUrl}`, `409 CLAIM_EXCEEDS_REMAINING {remaining}`, `409 MANAGE_TOKEN_IN_USE`, `403 OWNER_CANNOT_CLAIM`, `404 SHARE_LINK_NOT_FOUND` (the link), or `404 NOT_FOUND` (the item) |
-| `GET /claims/:manageToken` | none | `{claim, item, wishlistTitle, ownerDisplayName, remaining, shareUrl, ownerSeesClaims}`, or `404 NOT_FOUND` |
-| `PATCH /claims/:manageToken` | `{claimerName?, quantity?}`, at least one | Updated claim, `409 CLAIM_EXCEEDS_REMAINING {remaining}`, or `404 NOT_FOUND` |
-| `DELETE /claims/:manageToken` | none | `204`, or `404 NOT_FOUND` |
+| `GET /claims/:manageToken` | none | `{claim, item, wishlistTitle, ownerDisplayName, remaining, shareUrl, ownerSeesClaims}`, `403 OWN_LIST_CLAIM` for the list's own signed-in owner (D82), or `404 NOT_FOUND` |
+| `PATCH /claims/:manageToken` | `{claimerName?, quantity?}`, at least one | Updated claim, `409 CLAIM_EXCEEDS_REMAINING {remaining}`, `403 OWN_LIST_CLAIM` (D82), or `404 NOT_FOUND` |
+| `DELETE /claims/:manageToken` | none | `204`, `403 OWN_LIST_CLAIM` (D82), or `404 NOT_FOUND` |
 
 - `shareUrl` in the claim response is the wishlist's **current** share URL, so it stays correct after a rotation. The manage token itself is the authorization.
-- Each item in the `GET /shared` response has: `id, title, url, imageUrl, priceText, note, quantity, tagIds`, and `remaining` and `claims[] {id, claimerName, quantity}` when the viewer may see them (§5.1). The `item` in `GET /claims` has the same fields, without `claims[]` and `tagIds`.
+- Each item in the `GET /shared` response has: `id, title, url, imageUrl, priceText, note, quantity, tagIds`, and `remaining`, `claimed` and `claims[] {id, claimerName, quantity}` when the viewer may see them (§5.1). The `item` in `GET /claims` has the same fields, without `claims[]`, `claimed` and `tagIds`.
 - Claims are only ever changed by **manage token**. A claim ID grants nothing.
 - `ownerSeesClaims` is the list's `showClaimsToOwner`, sent to every viewer so the pages can say which way it's set (D40). It's a setting, not claim data.
 - `manageUrl` is `APP_ORIGIN/c/<manageToken>`, built by the API next to `shareUrl` so both links come from one place. The token is stored only as its SHA-256 (§4).
@@ -365,7 +366,8 @@ An item or tag ID that belongs to another user's list, or isn't a UUID, returns 
 - **Malformed is unknown.** A share or manage token that isn't 22 base64url characters gets the same `404` as an unknown one, and a malformed item ID gets `404 NOT_FOUND`, as on the owner endpoints.
 - **Two 404s for a claim.** The link and the item get different codes because the claim sheet says different things: a rotated link means asking the owner for the new one, and a deleted item means the list is reloaded. Telling them apart reveals only that a link is dead, to someone who already holds it.
 - **The order of a claim's checks.** A malformed token or item ID is refused before any rate limit or lookup (the session guard and body validation run earlier, as on every route). Then the per-IP limit, then the list by its token, then the owner check, then the list's limit, then the transaction (§6.3). The owner is refused **before** anything is summed, because a `409` carries `remaining`, and before the list's limit, because a `429` would tell them gifters have been claiming (D43). A change to a claim runs the same way: the per-IP limit, then the claim by its token's hash, then its list's limit, then the transaction.
-- **Reads are one snapshot.** `GET /shared`, `GET /claims` and an opted-in `GET /wishlist` read the list, its items and its claims in one `REPEATABLE READ, READ ONLY` transaction, so `remaining` always agrees with the items beside it. For an owner who hasn't opted in, the claims aren't queried at all; the projection removes the fields anyway.
+- **A signed-in owner holding a manage link (D82).** `GET`, `PATCH` and `DELETE /claims/:manageToken` resolve the session through the same never-refusing guard. After the claim is found by its token's hash, and before anything is changed or returned, a session that owns the claim's list (verified or not, as on `/shared`) gets `403 OWN_LIST_CLAIM` with no claim data, and the list's limit is not consulted first, for D43's reason. A `PATCH` answer carries the name and a `409` carries `remaining`, so the check can't wait. Signed out, the owner is a guest (§2).
+- **Reads are one snapshot.** `GET /shared`, `GET /claims` and an opted-in `GET /wishlist` read the list, its items and its claims in one `REPEATABLE READ, READ ONLY` transaction, so `remaining` always agrees with the items beside it. For an owner, the claims are queried only to sum them, and only when they've opted in (D75); the projection removes the fields anyway.
 - Every public response is `Cache-Control: no-store`. The gifters' writes pass the CSRF guard like any other (§6.2), and need no session.
 
 ### 5.1 Spoiler projection
@@ -377,16 +379,17 @@ type Viewer = { kind: 'guest' } | { kind: 'owner'; showClaims: boolean };
 projectWishlist(wishlist, items, claims, viewer): WishlistView
 ```
 
-| Viewer | `remaining` | `claims[]` |
-|---|---|---|
-| guest | included | included |
-| owner, `showClaims = false` | **omitted** | **omitted** |
-| owner, `showClaims = true` | included | included |
+| Viewer | `remaining` | `claimed` | `claims[]` |
+|---|---|---|---|
+| guest | included | omitted | included |
+| owner, `showClaims = false` | **omitted** | **omitted** | **omitted** |
+| owner, `showClaims = true` | included | included | **omitted** |
 
+- `claimed` is the sum of an item's claim quantities. It is not clamped (D19): when an owner lowers a quantity below what's claimed, `claimed` is reported as it is ("3 of 2 claimed") and `remaining` stays 0.
 - `GET /wishlist` always uses an owner viewer.
 - `GET /shared/:token` uses an owner viewer when the session's user owns the list, and a guest viewer otherwise.
-- The function is unit-tested exhaustively, and the integration tests assert the fields are **absent** from the JSON, not just empty.
-- `GET /claims/:manageToken` is the claimer's own view: the manage token is the capability, so it always includes `remaining`, and never other people's claims.
+- The function is unit-tested exhaustively, and the integration tests assert the fields are **absent** from the JSON, not just empty. That includes `claims` for an owner who has opted in.
+- `GET /claims/:manageToken` is the claimer's own view: the manage token is the capability, so it always includes `remaining`, and never other people's claims. It is refused to the list's own signed-in owner (D82, §5).
 
 ## 6. Auth and security
 
@@ -563,10 +566,12 @@ The share page, the claim sheet and the manage page say whether the owner can se
 These follow the Plan 4b mockups, on the same canvas as the editor's.
 
 - **Server render, client islands.** `/s` and `/c` are Server Components. The claim sheet (a Radix Dialog shaped as a bottom sheet on a phone, and from 640px a centered dialog, since a sheet flush on the bottom edge of a wide window looks cut off), the manage form and the `localStorage` strips are client components, and every write goes through the `/api` rewrite. After a write the page calls `router.refresh()`, so the server stays the only source of the list; TanStack Query isn't used on these pages.
-- **The owner on their own link** (`viewerIsOwner`) sees the cards without claim controls, a note that says whether claims are hidden from them, and a link back to the editor.
+- **The owner on their own link** (`viewerIsOwner`) sees the cards without claim controls, a note that says whether claims are hidden from them, a claim line on each item when they've opted in (the editor's, below), and a link back to the editor.
+- **A signed-in owner on a manage link (D82).** `/c` shows the heading "Your claim" and "This link is for a claim on your own list, so Hanker keeps it hidden from you.", with a link back to the editor. It shows no claim data and saves nothing to `hanker:claims`.
 - **A dead share link** gets its own page: the link may be mistyped or replaced, and a saved claim link still works. A dead manage link says *"This claim no longer exists."* (§2). Cancelling a claim shows its confirmation in the browser, since the link stops working.
-- **The spoiler toggle** is a switch on `/settings`. Turning it on asks first; turning it off doesn't, and removes the claim fields from the editor's cache before the request returns, so the browser never keeps claim data the owner has turned off (§1, criterion 4).
-- **The editor's claim lines,** when the owner has opted in: "No claims yet", "Aunt Sue is getting this", or "Sam ×1, Priya ×1 · 1 left". Item writes don't return claims, so the cache keeps an item's claims across an edit and recomputes `remaining` with the shared `remainingOf` from `contracts`.
+- **The spoiler toggle** is a switch on `/settings`, labelled "Show how many are claimed" (D75). Turning it on asks first, and the confirmation says names are never shown; turning it off doesn't, and removes the claim fields (`claimed` and `remaining`) from the editor's cache before the request returns, so the browser never keeps claim data the owner has turned off (§1, criterion 4).
+- **The claim lines on the owner's list and share page,** when the owner has opted in, are counts and never names (D75): "None claimed yet", "3 of 5 claimed", "All 5 claimed" ("Claimed" for a quantity of 1). Over-claimed (D19) reads "3 of 2 claimed". Item writes don't return claims, so the cache keeps an item's `claimed` across an edit and recomputes `remaining` from it with the shared `remainingOf` from `contracts`.
+- **The gifter lines (D40)** say "Sam can see how many are claimed, but never who's getting them" when the setting is on.
 
 ### Owner editor (Plan 3b)
 
@@ -643,7 +648,8 @@ These follow the tags design ([§3, §4](2026-10-21-item-tags-and-filters-design
 - **Claim race.** 20 concurrent claims against an item with quantity 1. Exactly one `201` and nineteen `409`s, and the claims sum to 1.
 - **Claim replay (D42).** The same `manageToken` sent again returns the same claim and writes no second row, including for the last unit; sent for another item, it's refused.
 - **SSRF refusal through the real fetcher.** Unfurl against `127.0.0.1`, `[::1]`, `169.254.169.254` and `[::ffff:127.0.0.1]`, plus a redirect chain from a public fixture to a private address. All refused.
-- **Spoilers.** Claim fields are absent from the JSON for an owner who hasn't opted in, on both `GET /wishlist` and `GET /shared/:token`.
+- **Spoilers.** Claim fields are absent from the JSON for an owner who hasn't opted in, on both `GET /wishlist` and `GET /shared/:token`. For an owner who has, `claims` is absent and `claimed` is present (D75).
+- **An owner holding a manage link (D82).** A signed-in owner, verified or not, gets `403 OWN_LIST_CLAIM` on `GET`, `PATCH` and `DELETE /claims/:manageToken` with no claim field in the body, whatever the setting, even when the list's limit is spent; a `PATCH` or `DELETE` from them changes nothing. Signed out, they get the guest view.
 - **Reorder conflict.** Sending a stale item set returns `409`.
 - **Session revocation.** Revocation works on reset, password change and account deletion.
 - **Enumeration resistance.** Signup and reset-request return identical responses for known and unknown emails.
@@ -884,3 +890,5 @@ As of 2026-10-07 on the development machine:
 | D72 | `suggestTags` is per list, on by default, enforced by the API (Ted, 2026-10-23) | Off by default |
 | D73 | An idea opens the add form (Ted, 2026-10-23) | Saving at once and suggesting on the new row; suggestions on edit only |
 | D74 | Unfurl returns a description for suggestions only, never for Etsy, per D69 (Ted, 2026-10-23) | Sending Etsy's description |
+| D75 | An owner never sees claimer names. With the setting on, they see how many of each item are claimed (`claimed`, `remaining`); amends D33 and D40 ([design](2026-10-23-your-gifts-and-owner-totals-design.md), Ted, 2026-10-23) | Names when opted in (D33 as built); a third setting state |
+| D82 | A signed-in owner who opens a manage link for a claim on their own list gets no claim data, and can't change or cancel it from that session (`403 OWN_LIST_CLAIM`); signed out, they're a guest (Ted: hide the name; Claude: hide everything, 2026-10-23) | Hiding only the name, which still tells an owner with the setting off that something is claimed; leaving `/c` as the capability holder's view |
