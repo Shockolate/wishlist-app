@@ -2,6 +2,7 @@ import 'server-only';
 import {
   CAPABILITY_TOKEN_PATTERN,
   ClaimDetailsResponseSchema,
+  ErrorCode,
   SharedWishlistResponseSchema,
   type ClaimDetailsResponse,
   type SharedWishlistResponse,
@@ -10,6 +11,7 @@ import { notFound } from 'next/navigation';
 import { cache } from 'react';
 import { ApiError } from './api-client';
 import { serverApi } from './api.server';
+import { hasCode } from './messages';
 
 /**
  * No such list or claim: any 404, and the router's 400 for an undecodable escape (Plan 4a's ruling
@@ -34,13 +36,24 @@ export const loadSharedList = cache(async (shareToken: string): Promise<SharedWi
   }
 });
 
-/** A claim, by its manage link (spec §5): the claimer's own view. */
-export const loadClaim = cache(async (manageToken: string): Promise<ClaimDetailsResponse> => {
-  if (!CAPABILITY_TOKEN_PATTERN.test(manageToken)) notFound();
-  try {
-    return await (await serverApi()).get(`/claims/${manageToken}`, ClaimDetailsResponseSchema);
-  } catch (error) {
-    if (isDeadLink(error)) notFound();
-    throw error;
-  }
-});
+/**
+ * A claim, by its manage link (spec §5): the claimer's own view. The list's own signed-in owner is
+ * refused with `403 OWN_LIST_CLAIM` and gets no claim data (D82), which is `own-list` here.
+ */
+export const loadClaim = cache(
+  async (
+    manageToken: string,
+  ): Promise<{ kind: 'claim'; details: ClaimDetailsResponse } | { kind: 'own-list' }> => {
+    if (!CAPABILITY_TOKEN_PATTERN.test(manageToken)) notFound();
+    try {
+      const details = await (
+        await serverApi()
+      ).get(`/claims/${manageToken}`, ClaimDetailsResponseSchema);
+      return { kind: 'claim', details };
+    } catch (error) {
+      if (hasCode(error, ErrorCode.OWN_LIST_CLAIM)) return { kind: 'own-list' };
+      if (isDeadLink(error)) notFound();
+      throw error;
+    }
+  },
+);
