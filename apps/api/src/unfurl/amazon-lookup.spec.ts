@@ -59,6 +59,55 @@ describe('BrightDataAmazonLookup (retailer lookups §5.2)', () => {
     });
   });
 
+  describe('description (Plan 9 ruling 7, for tag suggestions only)', () => {
+    it('joins categories with " > ", then ". ", then the description', async () => {
+      const record = {
+        title: 'Kettle',
+        categories: ['Home & Kitchen', 'Kettles'],
+        description: 'Pour-over kettle.',
+      };
+      expect(await lookUp(() => json([record]))).toEqual({
+        ok: true,
+        metadata: { title: 'Kettle', description: 'Home & Kitchen > Kettles. Pour-over kettle.' },
+      });
+    });
+
+    it('skips categories that aren’t strings', async () => {
+      const record = {
+        title: 'Kettle',
+        categories: ['Kettles', 7, null, ''],
+        description: 'Nice.',
+      };
+      expect(await lookUp(() => json([record]))).toEqual({
+        ok: true,
+        metadata: { title: 'Kettle', description: 'Kettles. Nice.' },
+      });
+    });
+
+    it('uses either part alone', async () => {
+      expect(await lookUp(() => json([{ title: 'K', categories: ['A', 'B'] }]))).toEqual({
+        ok: true,
+        metadata: { title: 'K', description: 'A > B' },
+      });
+      expect(await lookUp(() => json([{ title: 'K', description: 'Only this.' }]))).toEqual({
+        ok: true,
+        metadata: { title: 'K', description: 'Only this.' },
+      });
+    });
+
+    it('cuts the whole thing to 1000 characters', async () => {
+      const record = { title: 'K', categories: ['A'], description: 'b'.repeat(1500) };
+      const result = await lookUp(() => json([record]));
+      expect(result.ok === true && result.metadata.description).toHaveLength(1000);
+    });
+
+    it('is NO_METADATA when a record has only a description', async () => {
+      expect(
+        await lookUp(() => json([{ categories: ['Kettles'], description: 'Pour-over kettle.' }])),
+      ).toEqual({ ok: false, reason: 'NO_METADATA' });
+    });
+  });
+
   describe('sparse records (Review Focus 2)', () => {
     it('keeps a title when there is no price', async () => {
       expect(await lookUp(() => json([{ title: 'X', final_price: null }]))).toEqual({

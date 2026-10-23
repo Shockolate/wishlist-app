@@ -59,6 +59,7 @@ export class EtsyOpenApiLookup implements EtsyLookup {
     // A listing that's sold out, removed, a draft or expired isn't prefilled as if it were for sale.
     if (listing.state !== 'active') return { ok: false, reason: 'NO_METADATA' };
     const price = priceOf(listing.price);
+    // No description is passed: Etsy's data is for the prefill only (D69, tag suggestions D74).
     const metadata = productMetadata(
       {
         // Etsy returns titles with HTML entities encoded, such as `&#39;` and `&amp;`.

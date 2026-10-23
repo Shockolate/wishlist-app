@@ -62,6 +62,14 @@ describe('EtsyOpenApiLookup (retailer lookups §5.3)', () => {
     });
   });
 
+  it('never passes on a description, which Etsy’s terms keep to the one prefill (D69)', async () => {
+    const result = await lookUp(() => json({ ...LISTING, description: 'A lovely handmade mug.' }));
+    expect(result).toEqual({
+      ok: true,
+      metadata: { title: "Hand'thrown mug & saucer", imageUrl: IMAGE_1, priceText: '$24.50' },
+    });
+  });
+
   it('falls back to the full-size image when the listing size is missing', async () => {
     const images = [{ rank: 1, url_fullxfull: 'https://i.etsystatic.com/1/il_full.jpg' }];
     const result = await lookUp(() => json({ ...LISTING, images }));
