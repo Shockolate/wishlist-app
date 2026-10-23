@@ -32,7 +32,7 @@
     "rxjs": "7.8.2",
     "undici": "8.12.3",
     "uuid": "14.0.3",
-    "zod": "4.6.5"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@nestjs/cli": "12.0.8",
