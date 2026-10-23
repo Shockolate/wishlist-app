@@ -61,7 +61,8 @@ export function extractMetadata(html: string, pageUrl: URL): PageMetadata {
 
 /**
  * A lookup service's answer, cleaned exactly as a page's is (retailer lookups §5.2): visible text
- * only, titles cut to 200, https images, and a display price. A field that isn't a string is dropped.
+ * only, titles cut to 200, https images, a display price, and a description cut to `DESCRIPTION_MAX`.
+ * A field that isn't a string is dropped.
  */
 export function productMetadata(
   fields: {
@@ -259,8 +260,9 @@ function withoutControls(value: string): string {
 const HIDDEN_FORMAT = /(?![\u200C\u200D])\p{Cf}/gu;
 
 /**
- * A title, or a price's amount or currency, as the item contract accepts it (D35, D36): visible
- * characters only, whitespace collapsed and trimmed. Empty, or nothing visible, is "nothing".
+ * A title, a description, or a price's amount or currency, as the item contract accepts it (D35,
+ * D36): visible characters only, whitespace collapsed and trimmed. Empty, or nothing visible, is
+ * "nothing".
  */
 function text(value: string | undefined): string | undefined {
   if (value === undefined) return undefined;
