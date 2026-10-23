@@ -107,14 +107,26 @@ describe('SuggestionAsker (tag suggestions design §5.1, ruling 2)', () => {
     expect(changes).toEqual([[]]);
   });
 
-  it('gives each title its own answer, in order', async () => {
+  it('gives each title its own answer, in order, clearing the old one while it asks', async () => {
     const { asker, calls, changes } = setup();
     asker.ask({ title: 'Kettle' });
     calls[0]?.resolve([{ id: KITCHEN }]);
     await settle();
     asker.ask({ title: 'Teapot' });
+    // The old title's chips go as soon as the new request is sent (design §5.1).
+    expect(changes).toEqual([[{ id: KITCHEN }], []]);
     calls[1]?.resolve([{ name: 'Tea' }]);
     await settle();
-    expect(changes).toEqual([[{ id: KITCHEN }], [{ name: 'Tea' }]]);
+    expect(changes).toEqual([[{ id: KITCHEN }], [], [{ name: 'Tea' }]]);
+  });
+
+  it('clears nothing when it skips a re-ask', async () => {
+    const { asker, calls, changes } = setup();
+    asker.ask({ title: 'Kettle' });
+    calls[0]?.resolve([{ id: KITCHEN }]);
+    await settle();
+    asker.ask({ title: 'Kettle' });
+    asker.ask({ title: '' });
+    expect(changes).toEqual([[{ id: KITCHEN }]]);
   });
 });
