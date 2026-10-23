@@ -2,9 +2,11 @@ import type { ItemTagRef, Tag } from '@wishlist/contracts';
 import { describe, expect, it } from 'vitest';
 import {
   addPendingTags,
+  addSuggestedTag,
   addTypedTag,
   itemBody,
   liveTags,
+  openSuggestions,
   shownTags,
   suggestTags,
 } from './tag-input';
@@ -169,5 +171,49 @@ describe('itemBody (Plan 7b ruling 5)', () => {
     expect(itemBody(values, true)).toEqual(values);
     expect(itemBody(values, false)).toEqual({ title: 'Kettle' });
     expect('tags' in itemBody(values, false)).toBe(false);
+  });
+});
+
+describe('addSuggestedTag (tag suggestions design §5.1)', () => {
+  const kitchen = tag('Kitchen');
+  const all = [kitchen, tag('Books')];
+
+  it('appends an existing tag by id', () => {
+    expect(addSuggestedTag([], { id: kitchen.id }, all)).toEqual([{ id: kitchen.id }]);
+  });
+
+  it('leaves the tags alone when it is already chosen', () => {
+    const chosen = [{ id: kitchen.id }];
+    expect(addSuggestedTag(chosen, { id: kitchen.id }, all)).toEqual(chosen);
+  });
+
+  it('turns a new name that matches a tag on the list into that tag', () => {
+    expect(addSuggestedTag([], { name: 'kitchen' }, all)).toEqual([{ id: kitchen.id }]);
+  });
+
+  it('adds a new name as a name', () => {
+    expect(addSuggestedTag([], { name: 'Coffee' }, all)).toEqual([{ name: 'Coffee' }]);
+  });
+});
+
+describe('openSuggestions (Plan 9 ruling 5)', () => {
+  const kitchen = tag('Kitchen');
+  const books = tag('Books');
+  const all = [kitchen, books];
+
+  it('hides a suggestion already chosen, by key', () => {
+    expect(openSuggestions([{ name: 'kitchen' }], [{ id: kitchen.id }], all)).toEqual([]);
+    expect(openSuggestions([{ id: kitchen.id }], [{ name: 'KITCHEN' }], all)).toEqual([]);
+  });
+
+  it('keeps the ones not chosen, in order', () => {
+    expect(
+      openSuggestions([{ id: kitchen.id }, { name: 'Coffee' }], [{ id: books.id }], all),
+    ).toEqual([{ id: kitchen.id }, { name: 'Coffee' }]);
+  });
+
+  it('shows none once the item holds the most tags', () => {
+    const ten = Array.from({ length: 10 }, (_, i) => ({ name: `Tag ${String(i)}` }));
+    expect(openSuggestions([{ name: 'Coffee' }], ten, all)).toEqual([]);
   });
 });
