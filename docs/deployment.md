@@ -496,10 +496,10 @@ Etsy listing links are looked up through Etsy's Open API (D65), only while `ETSY
 Tag suggestions come from Cloudflare Workers AI (D70), only while `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AI_TOKEN` are both set on the API. `/privacy` and `/terms` say what is sent, so set both **before** merging the release that carries those pages (Plan 9). Previews and CI never hold them, so they show no suggestions.
 
 1. **C1. Confirm the Workers plan is Free.** In the Cloudflare dashboard, Workers & Pages → Plans, check the account is on **Workers Free**, not Workers Paid. On Paid, usage past the allowance is billed. This is the step that makes "no surprise bill" true. R2 is billed separately and isn't affected.
-2. **C2. Create the API token** (when the feature is ready to turn on). My Profile → API Tokens → Create Token → Custom token:
+2. **C2. Create an account API token** (when the feature is ready to turn on). Manage Account → Account API Tokens → Create Token → Custom token. An account token belongs to the account, not to your login, and Workers AI accepts it (checked live, 2026-10-23):
    - Permissions: Account → **Workers AI** → **Read** and **Edit**.
-   - Account resources: only this account.
-   - No IP filtering, and a TTL is optional.
+   - No IP filtering.
+   - TTL: **one year**. An expired token makes every call answer `401`: suggestions stop and Sentry warns `Workers AI answered 401`, but nothing else breaks. The yearly rotation in [operations.md](operations.md) renews it first.
 
    Copy the token, and the **Account ID** from the account's overview page. Don't paste them anywhere yet.
 
@@ -516,7 +516,7 @@ Tag suggestions come from Cloudflare Workers AI (D70), only while `CLOUDFLARE_AC
 
 **To turn it off for everyone,** remove both variables (`npx --yes vercel@64.5.0 env rm CLOUDFLARE_AI_TOKEN production --project wishlist-api --scope shockolate`, then the same for `CLOUDFLARE_ACCOUNT_ID`) and redeploy. The route answers `[]` and the settings switch stays. Then take Cloudflare's AI out of `/privacy` and `/terms`. An owner can turn it off for their own list in Settings.
 
-**To rotate the token,** create a new one, `env rm` then step 3, redeploy, then delete the old token in Cloudflare.
+**To rotate the token** (yearly, before it expires): create a new account token as in C2, `npx --yes vercel@64.5.0 env rm CLOUDFLARE_AI_TOKEN production --project wishlist-api --scope shockolate`, store the new one with the token half of C3, redeploy, then delete the old token in Cloudflare.
 
 ## GitHub configuration
 

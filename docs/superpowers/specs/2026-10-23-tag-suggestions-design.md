@@ -190,10 +190,10 @@ The README describes the feature and its screenshots are refreshed in the releas
 
 **C1. Confirm the Workers plan is Free.** In the Cloudflare dashboard, Workers & Pages → Plans, check the account is on **Workers Free**, not Workers Paid. On Paid, usage past the allowance is billed. *This is the step that makes "no surprise bill" true.* R2 is billed separately and isn't affected.
 
-**C2. Create the API token** (when the feature is ready to turn on). My Profile → API Tokens → Create Token → Custom token:
+**C2. Create an account API token** (when the feature is ready to turn on). Manage Account → Account API Tokens → Create Token → Custom token. *(Changed in Plan 9 execution: an account token, which Workers AI accepted in the 2026-10-23 live check, rather than a user token, and a one-year expiry, rotated yearly.)*
 - Permissions: Account → **Workers AI** → **Read** and **Edit**.
-- Account resources: only this account.
-- No IP filtering, and a TTL is optional.
+- No IP filtering.
+- TTL: one year.
 
 Copy the token, and the **Account ID** from the account's overview page. Don't paste them anywhere yet.
 
