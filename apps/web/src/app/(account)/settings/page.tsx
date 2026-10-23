@@ -6,6 +6,7 @@ import { ListNameForm } from '@/components/account/list-name-form';
 import { NameForm } from '@/components/account/name-form';
 import { PasswordForm } from '@/components/account/password-form';
 import { ShareLinkCard } from '@/components/account/share-link-card';
+import { SuggestTagsCard } from '@/components/account/suggest-tags-card';
 import { requireMe } from '@/lib/require-me';
 import { loadWishlist } from '@/lib/wishlist.server';
 
@@ -28,6 +29,7 @@ export default async function SettingsPage() {
               <ListNameForm title={list.title} />
               <ShareLinkCard shareUrl={list.shareUrl} />
               <ClaimsCard showClaimsToOwner={list.showClaimsToOwner === true} />
+              <SuggestTagsCard suggestTags={list.suggestTags !== false} />
             </>
           ) : null}
           <PasswordForm />

@@ -182,3 +182,31 @@ test('an unconfirmed owner gets no list settings', async ({ page, baseURL }) => 
   await expect(page.getByRole('heading', { name: 'Share link' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Your name' })).toBeVisible();
 });
+
+test('turns tag suggestions off and on, and a reload keeps the choice', async ({
+  page,
+  baseURL,
+}) => {
+  await verifiedOwner(page, baseURL ?? '', 'suggest-tags');
+  await page.goto('/settings');
+  const toggle = page.getByRole('switch', { name: 'Suggest tags' });
+  // On by default.
+  await expect(page.getByRole('heading', { name: 'Tag suggestions' })).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await expectAccessible(page);
+
+  await toggle.click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Tag suggestions are off.' }),
+  ).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await page.reload();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+
+  await toggle.click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Hanker will suggest tags.' }),
+  ).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await expectAccessible(page);
+});
