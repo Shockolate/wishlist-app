@@ -107,12 +107,23 @@ export const ReorderItemsRequestSchema = z.object({
 });
 export type ReorderItemsRequest = z.infer<typeof ReorderItemsRequestSchema>;
 
-/** A new title, the spoiler setting, or both (spec §5, D33). */
+/**
+ * A new title, the spoiler setting, the tag-suggestions setting, or any mix (spec §5, D33; tag
+ * suggestions design §5.2).
+ */
 export const UpdateWishlistRequestSchema = z
-  .object({ title: WishlistTitleSchema.optional(), showClaimsToOwner: z.boolean().optional() })
-  .refine((body) => body.title !== undefined || body.showClaimsToOwner !== undefined, {
-    message: 'Change the title or the spoiler setting',
-  });
+  .object({
+    title: WishlistTitleSchema.optional(),
+    showClaimsToOwner: z.boolean().optional(),
+    suggestTags: z.boolean().optional(),
+  })
+  .refine(
+    (body) =>
+      body.title !== undefined ||
+      body.showClaimsToOwner !== undefined ||
+      body.suggestTags !== undefined,
+    { message: 'Change the title or a setting' },
+  );
 export type UpdateWishlistRequest = z.infer<typeof UpdateWishlistRequestSchema>;
 
 /** A claim as gifters, and an owner who opted in, see it (spec §5). Never its manage token. */
@@ -163,6 +174,8 @@ export const WishlistResponseSchema = z.object({
   title: z.string(),
   shareUrl: z.url(),
   showClaimsToOwner: z.boolean().optional(),
+  /** Optional for expand/contract (tag suggestions design §5.2). */
+  suggestTags: z.boolean().optional(),
   tags: z.array(TagSchema).optional(),
   items: z.array(ItemSchema),
 });
@@ -172,6 +185,8 @@ export const WishlistSettingsResponseSchema = z.object({
   title: z.string(),
   shareUrl: z.url(),
   showClaimsToOwner: z.boolean().optional(),
+  /** Optional for expand/contract (tag suggestions design §5.2). */
+  suggestTags: z.boolean().optional(),
 });
 export type WishlistSettingsResponse = z.infer<typeof WishlistSettingsResponseSchema>;
 
@@ -203,6 +218,8 @@ export const UnfurlResponseSchema = z.object({
   title: z.string().optional(),
   imageUrl: z.string().optional(),
   priceText: z.string().optional(),
+  /** The page's own description, a hint for tag suggestions only (tag suggestions design §5.3). */
+  description: z.string().optional(),
   failureReason: UnfurlFailureReasonSchema.optional(),
 });
 export type UnfurlResponse = z.infer<typeof UnfurlResponseSchema>;
