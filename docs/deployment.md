@@ -511,7 +511,7 @@ Tag suggestions come from Cloudflare Workers AI (D70), only while `CLOUDFLARE_AC
      | npx --yes vercel@64.5.0 env add CLOUDFLARE_AI_TOKEN production --sensitive --project wishlist-api --scope shockolate
    unset A T
    ```
-   Then redeploy: `gh workflow run deploy.yml --ref main`, and wait for every job to pass.
+   Then redeploy: `gh workflow run deploy.yml --ref main`, and wait for every job to pass. The redeploy is only needed when turning the feature on after its code is already merged; when both are stored before merging (the planned path), the merge's own deploy picks them up.
 4. **V1. After it's turned on,** in production on your own list: add an Amazon link, a page-fetch link, an Etsy link and an idea, and edit one existing item. Check that each gets sensible suggestions, that existing tags are reused, and that turning the setting off removes the row. Within the hour, the API's runtime logs should have no `tag-suggest UNAVAILABLE` line, and Sentry no `Workers AI answered` warning.
 
 **To turn it off for everyone,** remove both variables (`npx --yes vercel@64.5.0 env rm CLOUDFLARE_AI_TOKEN production --project wishlist-api --scope shockolate`, then the same for `CLOUDFLARE_ACCOUNT_ID`) and redeploy. The route answers `[]` and the settings switch stays. Then take Cloudflare's AI out of `/privacy` and `/terms`. An owner can turn it off for their own list in Settings.
