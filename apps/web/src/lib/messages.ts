@@ -144,6 +144,8 @@ export const AMAZON_WAIT_HINT = 'Amazon can take up to half a minute.';
 export const SKIP_LOOKUP = 'Skip, I’ll type them';
 /** Above the form after Skip. */
 export const LOOKUP_SKIPPED = 'Fill in the details yourself.';
+/** Above the form an idea opens (Plan 9 ruling 1): the idea is already the title. */
+export const IDEA_FORM = 'Add any details, then add it to your list.';
 
 /** The sentence above a new item's form: what unfurl found, or why it found nothing. */
 export function prefillMessage(

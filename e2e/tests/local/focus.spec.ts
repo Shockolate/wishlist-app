@@ -44,14 +44,11 @@ test('a failed add of an idea puts focus on the error', async ({ page, baseURL }
     route.request().method() === 'POST' ? serverError(route) : route.fallback(),
   );
   await page.getByLabel('Add to your list').fill('Pottery class');
-  const add = page.getByRole('button', { name: 'Add', exact: true });
-  await add.click();
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  // An idea opens the add form, so the request is sent from there, not from the box's button.
+  await page.getByRole('button', { name: 'Add to list' }).click();
   await expect(errorNotice(page)).toBeVisible();
-  // The button disables itself while the request runs. Whether the browser drops focus from it in
-  // that blink depends on whether a frame was rendered meanwhile; if not, focus is still on the
-  // button, which is a fine place for it. What must not happen is focus falling to <body>.
-  await expect(add).toBeEnabled();
-  await expect.poll(() => whereIsFocus(page)).toMatch(/^(the error|the Add button)$/);
+  await expect(errorNotice(page)).toBeFocused();
 });
 
 test('a failed add from the form puts focus on the error', async ({ page, baseURL }) => {

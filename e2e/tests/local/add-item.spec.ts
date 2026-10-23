@@ -11,15 +11,35 @@ async function addThroughTheBox(page: Page, text: string) {
   await page.getByRole('button', { name: 'Add', exact: true }).click();
 }
 
-test('adds an idea in one step, and is ready for the next', async ({ page, baseURL }) => {
+test('an idea opens the add form, titled with the text', async ({ page, baseURL }) => {
   await verifiedOwner(page, baseURL ?? '', 'idea');
   await page.goto('/list');
   await addThroughTheBox(page, 'Pottery class for two');
+  await expect(status(page, 'Add any details, then add it to your list.')).toBeVisible();
+  await expect(page.getByRole('form', { name: 'New item' })).toBeVisible();
+  const title = page.getByLabel('Title', { exact: true });
+  await expect(title).toHaveValue('Pottery class for two');
+  await expect(title).toBeFocused();
+  await expect(page.getByLabel('Link', { exact: true })).toHaveValue('');
+  await expect(rowsOf(page)).toHaveCount(0);
+  await page.getByLabel('Note').fill('Saturday mornings');
+  await page.getByRole('button', { name: 'Add to list' }).click();
   await expect(status(page, 'Added “Pottery class for two”.')).toBeVisible();
   await expect(rowsOf(page)).toHaveCount(1);
   await expect(rowsOf(page).first()).toContainText('An idea');
   const box = page.getByLabel('Add to your list');
   await expect(box).toHaveValue('');
+  await expect(box).toBeFocused();
+});
+
+test('Cancel on an idea’s form keeps the text in the box', async ({ page, baseURL }) => {
+  await verifiedOwner(page, baseURL ?? '', 'idea-cancel');
+  await page.goto('/list');
+  await addThroughTheBox(page, 'Kayak lessons');
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(rowsOf(page)).toHaveCount(0);
+  const box = page.getByLabel('Add to your list');
+  await expect(box).toHaveValue('Kayak lessons');
   await expect(box).toBeFocused();
 });
 

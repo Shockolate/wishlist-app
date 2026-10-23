@@ -104,6 +104,7 @@ test('while on, an edit keeps its row’s claim line, and a new item has none ye
 
   await page.getByLabel('Add to your list').fill('Pottery class for two');
   await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await page.getByRole('button', { name: 'Add to list' }).click();
   await expect(row(page, 'Pottery class for two')).toContainText('No claims yet');
 });
 
