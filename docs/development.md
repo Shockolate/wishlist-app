@@ -48,6 +48,14 @@ This starts Postgres, rebuilds `packages/contracts` on change, and runs the API 
 
 Testcontainers looks for Docker at `/var/run/docker.sock`. With Docker Desktop on Linux, point it at Desktop's socket: `DOCKER_HOST=unix://$HOME/.docker/desktop/docker.sock TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock pnpm test:integration`.
 
+### Refreshing the README screenshots
+
+`docs/images/*.png` come from `e2e/screenshots/readme.spec.ts`, which seeds a made-up list through the API, stubs the link preview and the tag suggestions, and writes the four images. It is not part of CI. Run it the way `scripts/e2e.sh` runs the tests, then look at each image before committing:
+
+```bash
+scripts/e2e.sh --config playwright.screenshots.config.ts
+```
+
 ## Database
 
 - Change the schema in `apps/api/src/db/schema.ts`, then generate a migration: `pnpm --filter @wishlist/api db:generate --name <what_changed>`.

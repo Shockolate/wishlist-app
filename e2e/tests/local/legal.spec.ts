@@ -48,3 +48,30 @@ test('/terms carries Etsy’s trademark statement, verbatim (retailer lookups §
     "The term 'Etsy' is a trademark of Etsy, Inc. This Application uses Etsy's API, but is not endorsed or certified by Etsy.",
   );
 });
+
+test('/privacy says what tag suggestions send to Cloudflare (tag suggestions §5.6)', async ({
+  page,
+}) => {
+  await page.goto('/privacy');
+  const main = page.getByRole('main');
+  // tag-suggest.service.ts sends the title, note, link host, unfurl description and the list's tag
+  // names, and nothing else. The Settings card for it is "Tag suggestions".
+  await expect(main).toContainText(
+    'Unless you turn it off in Settings, Hanker sends an item’s title, note, shop name and the shop’s product description, with your list’s tag names, to Cloudflare’s AI to suggest tags for it.',
+  );
+  await expect(main).toContainText(
+    'Cloudflare’s AI reads the title, note and shop details of items you add or edit, and your list’s tag names, to suggest tags. It isn’t told who you are, doesn’t keep what it reads, and doesn’t train on it. You can turn this off in Settings.',
+  );
+});
+
+test('/terms covers tag suggestions (tag suggestions §5.6)', async ({ page }) => {
+  await page.goto('/terms');
+  const main = page.getByRole('main');
+  await expect(main).toContainText(
+    'You give Hanker only the right to store it, show it to anyone with your link, and, unless you turn tag suggestions off, send an item’s details to Cloudflare to suggest tags.',
+  );
+  await expect(main.getByRole('heading', { name: 'Suggested tags' })).toBeVisible();
+  await expect(main).toContainText(
+    'Tag suggestions are written by an AI model and can be wrong or odd. They’re only suggestions: nothing is tagged unless you tap it.',
+  );
+});

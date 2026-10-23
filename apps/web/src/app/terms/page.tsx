@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: 'Terms' };
 /** `/terms` (D54, D55). */
 export default function TermsPage() {
   return (
-    <LegalPage title="Terms" updated="2026-10-22">
+    <LegalPage title="Terms" updated="2026-10-23">
       <p>
         Hanker is a free wishlist site that Ted Armstrong runs as a personal project. Using it means
         agreeing to these terms.
@@ -32,8 +32,15 @@ export default function TermsPage() {
 
       <h2>Your list is yours</h2>
       <p>
-        You own what you put on your list. You give Hanker only the right to store it and show it to
-        anyone with your link.
+        You own what you put on your list. You give Hanker only the right to store it, show it to
+        anyone with your link, and, unless you turn tag suggestions off, send an item’s details to
+        Cloudflare to suggest tags.
+      </p>
+
+      <h2>Suggested tags</h2>
+      <p>
+        Tag suggestions are written by an AI model and can be wrong or odd. They’re only
+        suggestions: nothing is tagged unless you tap it.
       </p>
 
       <h2>Shops and gifts</h2>

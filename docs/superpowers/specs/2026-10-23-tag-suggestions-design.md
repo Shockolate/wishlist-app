@@ -147,7 +147,7 @@ Adding an optional field is additive: an older web build ignores it.
 
 Two new optional variables in the API's env schema, set together or not at all:
 - `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_AI_TOKEN`: an API token scoped to **Workers AI: Read** (which covers running models), on that account only.
+- `CLOUDFLARE_AI_TOKEN`: an API token scoped to **Workers AI: Read and Edit** (Cloudflare's REST guide says a custom token needs both to run models), on that account only.
 
 **Unset** means the port's "unconfigured" adapter, which always returns `[]`. That's how it ships, and how previews and CI behave. The settings switch shows regardless.
 
@@ -191,7 +191,7 @@ The README describes the feature and its screenshots are refreshed in the releas
 **C1. Confirm the Workers plan is Free.** In the Cloudflare dashboard, Workers & Pages → Plans, check the account is on **Workers Free**, not Workers Paid. On Paid, usage past the allowance is billed. *This is the step that makes "no surprise bill" true.* R2 is billed separately and isn't affected.
 
 **C2. Create the API token** (when the feature is ready to turn on). My Profile → API Tokens → Create Token → Custom token:
-- Permissions: Account → **Workers AI** → **Read**.
+- Permissions: Account → **Workers AI** → **Read** and **Edit**.
 - Account resources: only this account.
 - No IP filtering, and a TTL is optional.
 

@@ -5,7 +5,7 @@
 - **Author:** Ted Armstrong (with Claude)
 - **Repo:** `github.com/Shockolate/wishlist-app` (public; not yet created)
 - **Product name:** **Hanker**, at `hanker.dev` (decided 2026-10-09, D26). Internal identifiers keep the domain noun `wishlist`.
-- **Amended by:** [item tags and share-page filters](2026-10-21-item-tags-and-filters-design.md) (2026-10-21; D58 on). Plan 7a amends §2, §4 and §5 for the tags API, and Plan 7b §7 for the web. [Retailer lookups](2026-10-22-retailer-lookups-design.md) (2026-10-22; D64 on): Plan 8a amends §6.8 and §7 for Amazon, and narrows D34. Plan 8b amends §6.8 for Etsy (D69).
+- **Amended by:** [item tags and share-page filters](2026-10-21-item-tags-and-filters-design.md) (2026-10-21; D58 on). Plan 7a amends §2, §4 and §5 for the tags API, and Plan 7b §7 for the web. [Retailer lookups](2026-10-22-retailer-lookups-design.md) (2026-10-22; D64 on): Plan 8a amends §6.8 and §7 for Amazon, and narrows D34. Plan 8b amends §6.8 for Etsy (D69). [Tag suggestions](2026-10-23-tag-suggestions-design.md) (2026-10-23; D70 on): Plan 9 amends §7 so an idea opens the add form.
 
 ## 1. Intent
 
@@ -574,7 +574,7 @@ The editor is layout A from the Plan 3b mockups: compact rows, edited in place (
 
 - **Adding is link-first.** One box takes "a link or an idea":
   - An `http(s)` URL, or text shaped like a domain (`shop.com/x`, given `https://`), is unfurled, and a prefilled form opens for the owner to check and save.
-  - Anything else becomes an item at once, titled with the text.
+  - Anything else opens the add form, titled with the text.
   - A failed or rate-limited unfurl opens the same form with the link kept, and one sentence per failure reason says why.
 - **Rows:** a drag handle, the photo (or an idea tile), the title and price, and up and down buttons. Tapping a row opens its form in place, one row at a time. Quantity is a form field, saved with the rest. Delete asks for confirmation in a dialog.
 - **Sharing from `/list`:** Copy share link, and Share where the Web Share API exists. Both appear once the list has an item.
@@ -879,3 +879,8 @@ As of 2026-10-07 on the development machine:
 | D67 | An Amazon link shows a waiting panel, "Amazon can take up to half a minute", with a Skip button (Ted, 2026-10-22) | Today's "Reading the page…" line alone; a message that changes after 8 seconds |
 | D68 | No money is kept on deposit with Bright Data, and there's no global lookup cap: spent credits degrade to typing the details in (Ted, 2026-10-22) | Pay-as-you-go |
 | D69 | Etsy's details are used once, to prefill the add form. A saved item is the owner's own entry and is never refreshed from Etsy (Ted, 2026-10-22, after Etsy's terms limited displayed listing content to 6 hours old) | Refreshing Etsy items every 6 hours; not building Etsy lookups |
+| D70 | Tag suggestions come from Cloudflare Workers AI on the Workers Free plan, behind a `TagSuggester` port (Ted, 2026-10-23) | Gemini free tier (may train on inputs); Vercel AI Gateway on Hobby (no zero data retention); Neon AI Gateway (paid only); Groq (training terms not stated) |
+| D71 | Suggestions are optional help: always `200`, silent on failure, never applied without a tap, at most three, existing tags first (Ted, 2026-10-23) | Automatic tagging |
+| D72 | `suggestTags` is per list, on by default, enforced by the API (Ted, 2026-10-23) | Off by default |
+| D73 | An idea opens the add form (Ted, 2026-10-23) | Saving at once and suggesting on the new row; suggestions on edit only |
+| D74 | Unfurl returns a description for suggestions only, never for Etsy, per D69 (Ted, 2026-10-23) | Sending Etsy's description |
