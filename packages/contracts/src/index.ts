@@ -6,6 +6,7 @@ export * from './health.js';
 export * from './patterns.js';
 export * from './price.js';
 export * from './problem.js';
+export * from './tag-suggestions.js';
 export * from './tags.js';
 export * from './text.js';
 export * from './wishlist.js';

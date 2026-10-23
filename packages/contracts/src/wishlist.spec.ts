@@ -15,6 +15,8 @@ import {
   UnfurlResponseSchema,
   UpdateItemRequestSchema,
   UpdateWishlistRequestSchema,
+  WishlistResponseSchema,
+  WishlistSettingsResponseSchema,
   WishlistTitleSchema,
   defaultWishlistTitle,
 } from './wishlist.js';
@@ -177,8 +179,15 @@ describe('UpdateWishlistRequestSchema (spec §5, D33)', () => {
     });
   });
 
+  it('takes the tag-suggestions setting alone (tag suggestions design §5.2)', () => {
+    expect(UpdateWishlistRequestSchema.parse({ suggestTags: false })).toEqual({
+      suggestTags: false,
+    });
+  });
+
   it.each([
     {},
+    { suggestTags: 'yes' },
     { showClaimsToOwner: 'yes' },
     { title: '' },
     { title: '  ' },
@@ -200,6 +209,14 @@ describe('UnfurlRequestSchema and UnfurlResponseSchema (spec §5, §6.8)', () =>
   it('only knows the fixed failure codes', () => {
     expect(UnfurlResponseSchema.safeParse({ failureReason: 'UNREACHABLE' }).success).toBe(true);
     expect(UnfurlResponseSchema.safeParse({ failureReason: 'SOMETHING_ELSE' }).success).toBe(false);
+  });
+
+  it('carries an optional description (tag suggestions design §5.3)', () => {
+    expect(UnfurlResponseSchema.parse({ title: 'X', description: 'Y' })).toEqual({
+      title: 'X',
+      description: 'Y',
+    });
+    expect(UnfurlResponseSchema.safeParse({ title: 'X' }).success).toBe(true);
   });
 
   it('knows LOOKUP_UNAVAILABLE, for a lookup service that can’t answer (retailer lookups §5.4)', () => {
@@ -326,5 +343,17 @@ describe('defaultWishlistTitle (spec §2, Plan 4a rule 11)', () => {
 
   it('is the title sign-up gives', () => {
     expect(defaultWishlistTitle('Ada')).toBe("Ada's wishlist");
+  });
+});
+
+describe('the suggestTags setting on the wishlist responses (tag suggestions design §5.2)', () => {
+  const base = { title: 'Birthday', shareUrl: 'https://hanker.example/s/abc' };
+
+  it('is optional, for expand/contract, and a boolean when present', () => {
+    for (const schema of [WishlistResponseSchema, WishlistSettingsResponseSchema]) {
+      expect(schema.safeParse({ ...base, items: [] }).success).toBe(true);
+      expect(schema.safeParse({ ...base, items: [], suggestTags: false }).success).toBe(true);
+      expect(schema.safeParse({ ...base, items: [], suggestTags: 'no' }).success).toBe(false);
+    }
   });
 });
