@@ -4,6 +4,7 @@ import type { EmailMessage, EmailSender } from '../email/email-sender.js';
 import type { ErrorContext, ErrorReporter } from '../observability/error-reporter.js';
 import type { BreachedPasswordChecker } from '../security/breached-passwords.js';
 import type { CaptchaVerdict, CaptchaVerifier } from '../security/captcha.js';
+import type { SuggestInput, SuggestResult, TagSuggester } from '../tag-suggest/tag-suggester.js';
 import type { AmazonLookup } from '../unfurl/amazon-lookup.js';
 import type { EtsyLookup } from '../unfurl/etsy-lookup.js';
 import type { LookupResult } from '../unfurl/lookup-result.js';
@@ -100,6 +101,17 @@ export class FakeEtsyLookup implements EtsyLookup {
 
   lookUp(listingId: string): Promise<LookupResult> {
     this.listingIds.push(listingId);
+    return Promise.resolve(this.next);
+  }
+}
+
+/** Tag suggester stand-in: answers `next`, records every input it was given. */
+export class FakeTagSuggester implements TagSuggester {
+  next: SuggestResult = { ok: true, names: [] };
+  readonly inputs: SuggestInput[] = [];
+
+  suggest(input: SuggestInput): Promise<SuggestResult> {
+    this.inputs.push(input);
     return Promise.resolve(this.next);
   }
 }

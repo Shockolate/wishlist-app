@@ -43,8 +43,20 @@ const EnvSchema = z
     BRIGHT_DATA_API_KEY: z.string().min(1).optional(),
     /** Etsy's `keystring:shared_secret`. Unset means Etsy links take the page fetch (§5.6). */
     ETSY_API_KEY: z.string().min(1).optional(),
+    /** Unset means no tag suggestions (tag suggestions design §5.5). Set with CLOUDFLARE_AI_TOKEN. */
+    CLOUDFLARE_ACCOUNT_ID: z.string().min(1).optional(),
+    /** Unset means no tag suggestions (tag suggestions design §5.5). Set with CLOUDFLARE_ACCOUNT_ID. */
+    CLOUDFLARE_AI_TOKEN: z.string().min(1).optional(),
   })
   .superRefine((env, ctx) => {
+    // One without the other would ship tag suggestions silently off, with no sign of why.
+    if (!env.CLOUDFLARE_ACCOUNT_ID !== !env.CLOUDFLARE_AI_TOKEN) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [env.CLOUDFLARE_ACCOUNT_ID ? 'CLOUDFLARE_AI_TOKEN' : 'CLOUDFLARE_ACCOUNT_ID'],
+        message: 'set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AI_TOKEN together',
+      });
+    }
     if (env.EMAIL_TRANSPORT === 'resend' && !env.RESEND_API_KEY) {
       ctx.addIssue({
         code: 'custom',
