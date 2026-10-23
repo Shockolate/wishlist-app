@@ -6,6 +6,7 @@ import { DatabaseModule } from './db/database.module.js';
 import { HealthModule } from './health/health.module.js';
 import { HttpSecurityModule } from './http/http-security.module.js';
 import { OpsModule } from './ops/ops.module.js';
+import { TagSuggestModule } from './tag-suggest/tag-suggest.module.js';
 import { WishlistModule } from './wishlist/wishlist.module.js';
 
 @Module({
@@ -16,6 +17,7 @@ import { WishlistModule } from './wishlist/wishlist.module.js';
     HealthModule,
     AuthModule,
     WishlistModule,
+    TagSuggestModule,
     ClaimsModule,
     OpsModule,
   ],
