@@ -1,7 +1,7 @@
 import type { SharedWishlistResponse } from '@wishlist/contracts';
 import { ownerSeesLine } from '@/lib/share-copy';
-import { CardStatus } from './card-status';
 import { GifterFooter } from './gifter-footer';
+import { OwnerClaimStatus } from './owner-claim-status';
 import { OwnerNote } from './owner-note';
 import { ShareClaimsProvider } from './share-claims';
 import { ItemCardBody } from './share-card';
@@ -18,7 +18,6 @@ export function SharePage({
   shareToken: string;
 }) {
   const owner = list.ownerDisplayName;
-  const wants = list.viewerIsOwner ? 'You want' : `${owner} wants`;
   // The provider holds the claim sheet, so it stays mounted even when the last item goes while the
   // sheet is open: the sheet says so, rather than vanishing with the list.
   const items =
@@ -44,13 +43,7 @@ export function SharePage({
               item={item}
               footer={
                 list.viewerIsOwner ? (
-                  <CardStatus
-                    status={{
-                      wants,
-                      quantity: item.quantity,
-                      ...(item.claims ? { claims: item.claims } : {}),
-                    }}
-                  />
+                  <OwnerClaimStatus item={item} />
                 ) : (
                   <GifterFooter item={item} ownerName={owner} />
                 )

@@ -16,13 +16,13 @@ const total = (claims: readonly Claim[]) => claims.reduce((sum, claim) => sum + 
 /** What gifters are told about the owner's spoiler setting (D40). */
 export function ownerSeesLine(owner: string, ownerSeesClaims: boolean): string {
   return ownerSeesClaims
-    ? `${owner} can see who’s getting what.`
+    ? `${owner} can see how many are claimed, but never who’s getting them.`
     : `${owner} can’t see who’s getting what, so the surprise is safe.`;
 }
 
 /** An item's claims as one viewer sees them. */
 export interface ItemClaims {
-  /** "Ada wants" for gifters, "You want" for the owner. */
+  /** "Ada wants": the gifter's view. */
   wants: string;
   quantity: number;
   /** Absent when the viewer may not see claims (spec §5.1). */

@@ -2,8 +2,8 @@ import { CheckIcon } from '@/components/list/icons';
 import { countLine, isTaken, mineOf, takenLine, type ItemClaims } from '@/lib/share-copy';
 
 /**
- * What a card says about its claims: who has it covered, or how many are left. Rendered on the
- * server for the owner, and inside the gifter's footer in the browser.
+ * What a card says about its claims: who has it covered, or how many are left. Rendered
+ * inside the gifter's footer in the browser. The owner sees a count instead (`OwnerClaimStatus`).
  */
 export function CardStatus({ status }: { status: ItemClaims }) {
   if (isTaken(status) && mineOf(status) === 0) {

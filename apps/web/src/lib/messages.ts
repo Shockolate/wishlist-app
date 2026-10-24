@@ -47,6 +47,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   [ErrorCode.MANAGE_TOKEN_IN_USE]:
     'Something went wrong with this claim. Close this and try again.',
   [ErrorCode.SHARE_LINK_NOT_FOUND]: 'This list’s link doesn’t work any more.',
+  [ErrorCode.OWN_LIST_CLAIM]: 'Claims on your own list are hidden from you.',
   [ErrorCode.TAG_NAME_TAKEN]: 'You already have a tag called that.',
   [ErrorCode.TAG_LIMIT_REACHED]: 'Your list has 50 tags, the most it can hold.',
   [ErrorCode.ITEM_TAG_LIMIT_REACHED]: ITEM_TAG_LIMIT,

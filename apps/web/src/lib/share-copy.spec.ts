@@ -43,7 +43,9 @@ describe('share page copy', () => {
     expect(ownerSeesLine('Ada', false)).toBe(
       'Ada can’t see who’s getting what, so the surprise is safe.',
     );
-    expect(ownerSeesLine('Ada', true)).toBe('Ada can see who’s getting what.');
+    expect(ownerSeesLine('Ada', true)).toBe(
+      'Ada can see how many are claimed, but never who’s getting them.',
+    );
   });
 
   it('says nothing about one unclaimed item, and how many are wanted when it’s more', () => {

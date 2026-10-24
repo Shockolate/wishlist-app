@@ -32,9 +32,10 @@ export default function PrivacyPage() {
       <h2>If you claim a gift</h2>
       <p>
         Hanker keeps the name you type and how many you’re getting. Anyone with the list’s link sees
-        your name next to the item, so nobody doubles up. The list’s owner sees it only if they’ve
-        turned that on. Your browser keeps your claim link so you can change or cancel your claim
-        later; Hanker keeps only a scrambled copy of it.
+        your name next to the item, so nobody doubles up. Hanker never shows it to the list’s owner
+        while they’re signed in. If they’ve turned it on, they see only how many have been claimed.
+        Your browser keeps your claim link so you can change or cancel your claim later; Hanker
+        keeps only a scrambled copy of it.
       </p>
 
       <h2>What Hanker doesn’t do</h2>

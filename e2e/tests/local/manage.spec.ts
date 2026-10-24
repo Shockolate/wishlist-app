@@ -130,6 +130,45 @@ test('opening the manage link on another device puts the claim on that device’
   await expect(laptop.getByRole('listitem').first()).toContainText('You’re getting 1');
 });
 
+test('the owner opening a claim’s link on their own list sees it’s hidden, and nothing about it (D82)', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const base = baseURL ?? '';
+  await verifiedOwner(page, base, 'manage-own-list');
+  const added = await addItemViaApi(page.request, base, { title: 'Merino socks', quantity: 3 });
+  const token = await shareTokenOf(page.request);
+  const signedOut = await guest(browser, base);
+  const { manageToken } = await claimViaApi(signedOut.request, base, token, added.id, {
+    claimerName: 'Sue',
+  });
+
+  await page.goto(`/c/${manageToken}`);
+  const main = page.getByRole('main');
+  await expect(page.getByRole('heading', { level: 1, name: 'Your claim' })).toBeVisible();
+  await expect(
+    main.getByText(
+      'This link is for a claim on your own list, so Hanker keeps it hidden from you.',
+    ),
+  ).toBeVisible();
+  await expect(main.getByRole('link', { name: 'Back to your list' })).toHaveAttribute(
+    'href',
+    '/list',
+  );
+  await expect(main).not.toContainText('Sue');
+  await expect(main).not.toContainText('Merino socks');
+  await expect(main.getByRole('button')).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('hanker:claims'))).toBeNull();
+  await expectAccessible(page);
+
+  // Signed out, the same link is the gifter's own claim, as ever.
+  const gifter = await signedOut.newPage();
+  await gifter.goto(`/c/${manageToken}`);
+  await expect(gifter.getByLabel('Your name')).toHaveValue('Sue');
+  await expect(gifter.getByRole('button', { name: 'Cancel my claim' })).toBeVisible();
+});
+
 test('a dead or mangled manage link gets the gone page with a 404', async ({
   browser,
   baseURL,

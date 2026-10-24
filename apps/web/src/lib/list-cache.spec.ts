@@ -65,49 +65,57 @@ describe('list cache operations (Plan 3b rule 2)', () => {
   });
 });
 
-const claimOf = (n: number, claimerName: string, quantity = 1) => ({
-  id: `00000000-0000-4000-8000-0000000001${String(n).padStart(2, '0')}`,
-  claimerName,
-  quantity,
-});
 const optedIn = (...items: Item[]): WishlistResponse => ({
   ...list(...items),
   showClaimsToOwner: true,
 });
 
-describe('claim fields in the cache (Plan 4b rule 13)', () => {
-  it('keeps an item’s claims across an edit, and recomputes what is left', () => {
-    const before = optedIn(item(1, { quantity: 3, claims: [claimOf(1, 'Sam')], remaining: 2 }));
-    const after = replaceItem(before, item(1, { quantity: 2, title: 'Kettle' }));
+describe('claim fields in the cache (Plan 4b rule 13, D75)', () => {
+  it('keeps an item’s claimed total across an edit, and recomputes what is left', () => {
+    const before = optedIn(item(1, { quantity: 3, claimed: 2, remaining: 1 }));
+    const after = replaceItem(before, item(1, { quantity: 5, title: 'Kettle' }));
     expect(after.items[0]).toMatchObject({
       title: 'Kettle',
-      quantity: 2,
-      claims: [claimOf(1, 'Sam')],
-      remaining: 1,
+      quantity: 5,
+      claimed: 2,
+      remaining: 3,
+    });
+    expect(after.items[0]).not.toHaveProperty('claims');
+  });
+
+  it('leaves nothing negative when the quantity drops below what is claimed (D19)', () => {
+    const before = optedIn(item(1, { quantity: 5, claimed: 3, remaining: 2 }));
+    expect(replaceItem(before, item(1, { quantity: 2 })).items[0]).toMatchObject({
+      claimed: 3,
+      remaining: 0,
     });
   });
 
-  it('gives a new item no claims and all of it left', () => {
+  it('gives a new item 0 claimed and all of it left', () => {
     expect(appendItem(optedIn(), item(2, { quantity: 3 })).items[0]).toMatchObject({
-      claims: [],
+      claimed: 0,
       remaining: 3,
     });
   });
 
   it('adds nothing for an owner who hasn’t opted in (spec §5.1)', () => {
     const appended = appendItem(list(), item(2)).items[0];
-    expect(appended).not.toHaveProperty('claims');
+    expect(appended).not.toHaveProperty('claimed');
     expect(appended).not.toHaveProperty('remaining');
     const replaced = replaceItem(list(item(1)), item(1, { title: 'Kettle' })).items[0];
-    expect(replaced).not.toHaveProperty('claims');
+    expect(replaced).not.toHaveProperty('claimed');
+    expect(replaced).not.toHaveProperty('remaining');
   });
 
   it('strips every claim field, and the setting, when the owner opts out', () => {
-    const stripped = stripClaims(
-      optedIn(item(1, { claims: [claimOf(1, 'Sam')], remaining: 0 }), item(2)),
-    );
+    // `claims` should never reach an owner's cache, but if it did, opting out must drop it too.
+    const claims = [
+      { id: '00000000-0000-4000-8000-0000000000c1', claimerName: 'Sue', quantity: 1 },
+    ];
+    const stripped = stripClaims(optedIn(item(1, { claimed: 1, remaining: 0, claims }), item(2)));
     expect(stripped.showClaimsToOwner).toBe(false);
     for (const each of stripped.items) {
+      expect(each).not.toHaveProperty('claimed');
       expect(each).not.toHaveProperty('claims');
       expect(each).not.toHaveProperty('remaining');
     }
@@ -172,15 +180,12 @@ describe('tags in the cache (Plan 7b rulings 4, 8)', () => {
 
   it('keeps the tags and each item’s tagIds when the owner opts out of claims (Plan 7b ruling 8)', () => {
     const before: WishlistResponse = {
-      ...withTags(
-        [tag(1)],
-        item(1, { claims: [claimOf(1, 'Sam')], remaining: 0, tagIds: [tag(1).id] }),
-      ),
+      ...withTags([tag(1)], item(1, { claimed: 1, remaining: 0, tagIds: [tag(1).id] })),
       showClaimsToOwner: true,
     };
     const stripped = stripClaims(before);
     expect(stripped.tags).toEqual([tag(1)]);
     expect(stripped.items[0]?.tagIds).toEqual([tag(1).id]);
-    expect(stripped.items[0]).not.toHaveProperty('claims');
+    expect(stripped.items[0]).not.toHaveProperty('claimed');
   });
 });

@@ -54,7 +54,7 @@ function Editor({ initial }: { initial: WishlistResponse }) {
       </p>
       {list.showClaimsToOwner ? (
         <p className="mt-2 text-[15px] text-muted-foreground">
-          You can see who’s getting what.{' '}
+          You can see how many are claimed.{' '}
           <Link href="/settings" className="font-medium text-foreground underline">
             Turn this off in Settings
           </Link>

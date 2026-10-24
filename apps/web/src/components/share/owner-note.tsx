@@ -12,7 +12,7 @@ export function OwnerNote({ ownerSeesClaims }: { ownerSeesClaims: boolean }) {
       <p>
         This is your list as people you share it with see it.{' '}
         {ownerSeesClaims
-          ? 'You’ve chosen to see who’s getting what.'
+          ? 'You’ve chosen to see how many are claimed, but never by whom.'
           : 'Claims are hidden from you, so nothing’s spoiled.'}{' '}
         <Link href="/settings" className="font-medium underline">
           Change this in Settings

@@ -52,10 +52,10 @@ export function ClaimsCard({ showClaimsToOwner }: { showClaimsToOwner: boolean }
       if (savedOn) {
         updateCachedList((list) => ({ ...list, showClaimsToOwner: true }));
       }
-      // On: fetch the claims. Off: fetch the list again, so it is the server's, not the strip's.
+      // On: fetch the totals. Off: fetch the list again, so it is the server's, not the strip's.
       invalidateCachedList();
       setMessage((last) => ({
-        text: savedOn ? 'You’ll see who’s getting what.' : 'Claims are hidden from you again.',
+        text: savedOn ? 'You’ll see how many are claimed.' : 'Claims are hidden from you again.',
         id: (last?.id ?? 0) + 1,
       }));
       router.refresh();
@@ -80,12 +80,12 @@ export function ClaimsCard({ showClaimsToOwner }: { showClaimsToOwner: boolean }
       </h2>
       <p className="mt-1.5 text-[15px] text-muted-foreground">
         {on
-          ? 'You can see who claimed each item, on your list and on your share page. Gifters are told you can see.'
+          ? 'You can see how many of each item are claimed, on your list and on your share page, but never who claimed them. Gifters are told you can see the counts.'
           : 'Gifters claim items so nobody buys the same thing twice. You can’t see their claims, so your gifts stay a surprise.'}
       </p>
       <div className="mt-4 flex min-h-11 items-center gap-3">
         <span id="claims-switch-label" className="flex-1 text-[15px] font-semibold">
-          Show me who’s getting what
+          Show how many are claimed
         </span>
         <button
           ref={toggle}
@@ -113,11 +113,11 @@ export function ClaimsCard({ showClaimsToOwner }: { showClaimsToOwner: boolean }
             toggle.current?.focus();
           }}
         >
-          <AlertDialogTitle>See who’s getting what?</AlertDialogTitle>
+          <AlertDialogTitle>See how many are claimed?</AlertDialogTitle>
           <AlertDialogDescription>
-            Your list and your share page will show who claimed each item, and how many are left.
-            Gifters will see a note that you can see their claims. You can turn this off again, but
-            you can’t unsee what you’ve seen.
+            Your list and your share page will show how many of each item are claimed. You’ll never
+            see who claimed them. Gifters will see a note that you can see the counts. You can turn
+            this off again, but you can’t unsee what you’ve seen.
           </AlertDialogDescription>
           <AlertDialogFooter>
             <AlertDialogCancel>Keep it a surprise</AlertDialogCancel>
