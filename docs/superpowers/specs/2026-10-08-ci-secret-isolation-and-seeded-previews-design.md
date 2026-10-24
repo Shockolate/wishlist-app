@@ -100,6 +100,8 @@ settings ──► build-api ──► provision ──► build-web ──► d
 
 ### 3.3 Seed branch (`preview-seed.yml`)
 
+> **Amended 2026-10-24 ([D87](2026-10-24-operations-hardening-design.md)):** previews moved to their own Neon project, `wishlist-preview`. `preview-seed` is now an ordinary child of that project's empty default branch, wiped and rebuilt on every run; the schema-only creation, the `init_source` input and the parent-data fallback below are gone, because schema-only branching can't cross projects and the preview project holds no production rows. The seed and sweep scripts refuse production's project ID (`NEON_PRODUCTION_PROJECT_ID`). The rest of this section is kept as history.
+
 - **Triggers:** `workflow_dispatch`, with input `reset` (boolean, default false), and `push` to `main` with `paths: apps/api/drizzle/**`. This workflow isn't a required check, so a path filter is fine.
 - **Job:** `seed` (environment `preview`, `NEON_API_KEY`, `if: github.ref == 'refs/heads/main'`) does the following:
   1. **Look up** the branches `main` and `preview-seed` by name (Neon API).

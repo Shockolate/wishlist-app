@@ -4,6 +4,8 @@ set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
 fx="$here/testdata/neon-seed"
+# Previews live in their own Neon project (D87); every call names both projects.
+export NEON_PROJECT_ID=prj-preview NEON_PRODUCTION_PROJECT_ID=prj-prod
 seed() { "$here/preview-seed.sh" "$@"; }
 fail() { echo "preview-seed: FAIL: $1" >&2; exit 1; }
 
@@ -14,20 +16,25 @@ out=$(NEON_BRANCHES_FILE="$fx/with-seed.json" seed ensure)
 out=$(NEON_BRANCHES_FILE="$fx/seed-with-parent.json" seed ensure)
 [[ "$out" == $'id=br-seed\ncreated=false\nroot=false' ]] || fail "seed with a parent: got '$out'"
 
+# D87: the seed is an ordinary child of the preview project's (empty) default branch, so it is
+# never a root branch and is wiped and rebuilt on every run. No schema-only mode crosses projects.
 err=$(NEON_BRANCHES_FILE="$fx/no-seed.json" DRY_RUN=1 seed ensure 2>&1 >/dev/null)
 out=$(NEON_BRANCHES_FILE="$fx/no-seed.json" DRY_RUN=1 seed ensure 2>/dev/null)
-[[ "$out" == $'id=dry-run\ncreated=true\nroot=true' ]] || fail "create when missing: got '$out'"
-for want in '"name":"preview-seed"' '"parent_id":"br-main"' '"init_source":"schema-only"'; do
+[[ "$out" == $'id=dry-run\ncreated=true\nroot=false' ]] || fail "create when missing: got '$out'"
+for want in '"name":"preview-seed"' '"parent_id":"br-main"'; do
   [[ "$err" == *"$want"* ]] || fail "create body missing $want: $err"
 done
+[[ "$err" != *init_source* ]] || fail "create body still sets init_source: $err"
 
-err=$(NEON_BRANCHES_FILE="$fx/no-seed.json" DRY_RUN=1 SEED_INIT_SOURCE=parent-data seed ensure 2>&1 >/dev/null)
-[[ "$err" == *'"init_source":"parent-data"'* ]] || fail "fallback init_source: $err"
-out=$(NEON_BRANCHES_FILE="$fx/no-seed.json" DRY_RUN=1 SEED_INIT_SOURCE=parent-data seed ensure 2>/dev/null)
-[[ "$out" == *$'\nroot=false' ]] || fail "fallback seed is not a root branch: got '$out'"
-
-if NEON_BRANCHES_FILE="$fx/no-seed.json" DRY_RUN=1 SEED_INIT_SOURCE=bogus seed ensure >/dev/null 2>&1; then
-  fail "accepted an unknown SEED_INIT_SOURCE"
+# Review Focus 4: the preview secrets pasted with production's project ID.
+for cmd in ensure check; do
+  if err=$(NEON_PROJECT_ID=prj-prod NEON_BRANCHES_FILE="$fx/with-seed.json" seed "$cmd" 2>&1); then
+    fail "$cmd ran against the production project"
+  fi
+  [[ "$err" == *"production project"* ]] || fail "$cmd production-project message: $err"
+done
+if NEON_PRODUCTION_PROJECT_ID='' NEON_BRANCHES_FILE="$fx/with-seed.json" seed check >/dev/null 2>&1; then
+  fail "ran without NEON_PRODUCTION_PROJECT_ID, so the guard was off"
 fi
 
 if err=$(NEON_BRANCHES_FILE="$fx/seed-is-main.json" seed ensure 2>&1); then fail "returned production as the seed"; fi

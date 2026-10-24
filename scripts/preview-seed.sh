@@ -8,8 +8,8 @@
 #   scripts/preview-seed.sh uri <branch-id>              # direct (unpooled) connection string
 #   scripts/preview-seed.sh describe <name>              # name, id, parent_id and default flag
 #   scripts/preview-seed.sh assert-child <child> <parent>
-# Env: NEON_API_KEY, NEON_PROJECT_ID, SEED_INIT_SOURCE (schema-only | parent-data; default
-# schema-only; parent-data is the approved fallback, §3.3).
+# Env: NEON_API_KEY, NEON_PROJECT_ID (the wishlist-preview project, D87) and
+# NEON_PRODUCTION_PROJECT_ID (production's, which every subcommand refuses).
 # Test seams: NEON_BRANCHES_FILE replaces the branch listing; DRY_RUN=1 prints the create request
 # to stderr instead of sending it.
 set -euo pipefail
@@ -19,6 +19,13 @@ api="https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID:-}"
 auth=(-H "Authorization: Bearer ${NEON_API_KEY:-}" -H "Accept: application/json")
 
 die() { echo "preview-seed: $*" >&2; exit 1; }
+
+# D87: previews live in their own Neon project. Refuse production's, and refuse to run without knowing
+# which project that is, so preview secrets pasted with production's ID can't send previews back in.
+[[ -n "${NEON_PRODUCTION_PROJECT_ID:-}" ]] ||
+  die "NEON_PRODUCTION_PROJECT_ID is unset, so the production project can't be refused (docs/deployment.md)"
+[[ "${NEON_PROJECT_ID:-}" != "$NEON_PRODUCTION_PROJECT_ID" ]] ||
+  die "refusing: NEON_PROJECT_ID is the production project; previews live in their own project (D87)"
 
 list_branches() {
   if [[ -n "${NEON_BRANCHES_FILE:-}" ]]; then cat "$NEON_BRANCHES_FILE"; else curl -fsS "${auth[@]}" "$api/branches"; fi
@@ -40,21 +47,20 @@ wait_ready() {
 
 case "${1:-}" in
   ensure)
-    init_source="${SEED_INIT_SOURCE:-schema-only}"
-    [[ "$init_source" == schema-only || "$init_source" == parent-data ]] ||
-      die "SEED_INIT_SOURCE must be schema-only or parent-data, got '$init_source'"
     branches=$(list_branches)
     main_id=$(jq -r '[.branches[] | select(.default == true)][0].id // empty' <<<"$branches")
-    [[ -n "$main_id" ]] || die "no default (production) branch found"
+    [[ -n "$main_id" ]] || die "no default branch found"
     seed_id=$(field_by_name "$branches" "$seed_name" id)
     created=false
     if [[ -z "$seed_id" ]]; then
-      body=$(jq -nc --arg n "$seed_name" --arg p "$main_id" --arg s "$init_source" \
-        '{branch: {name: $n, parent_id: $p, init_source: $s}, endpoints: [{type: "read_write"}]}')
+      # An ordinary child of the preview project's default branch, which is empty: the project
+      # holds no production data, so neither can the seed (D87). The workflow wipes and rebuilds it.
+      body=$(jq -nc --arg n "$seed_name" --arg p "$main_id" \
+        '{branch: {name: $n, parent_id: $p}, endpoints: [{type: "read_write"}]}')
       if [[ "${DRY_RUN:-}" == "1" ]]; then
         echo "would create: $body" >&2
         seed_id="dry-run"
-        if [[ "$init_source" == schema-only ]]; then seed_parent=""; else seed_parent="$main_id"; fi
+        seed_parent="$main_id"
       else
         seed_id=$(curl -fsS -X POST "${auth[@]}" -H "Content-Type: application/json" -d "$body" "$api/branches" | jq -r '.branch.id')
         wait_ready "$seed_id"
@@ -64,12 +70,12 @@ case "${1:-}" in
     else
       seed_parent=$(field_by_name "$branches" "$seed_name" parent_id)
     fi
-    # The check that matters most: never hand production's branch to a job that wipes.
+    # Never hand the project's default branch to a job that wipes.
     [[ "$seed_id" != "$main_id" ]] || die "refusing: '$seed_name' resolved to the production branch ($main_id)"
     echo "id=$seed_id"
     echo "created=$created"
-    # A seed with a parent may hold that parent's (production) rows: the parent-data fallback, a run
-    # that failed before its wipe, or a branch made by hand. The workflow wipes it on every run.
+    # A seed with a parent may hold that parent's rows, so the workflow wipes it on every run. Since
+    # D87 every seed has one, so every run wipes and rebuilds it from the migrations.
     if [[ -z "$seed_parent" ]]; then echo "root=true"; else echo "root=false"; fi
     ;;
   check)
