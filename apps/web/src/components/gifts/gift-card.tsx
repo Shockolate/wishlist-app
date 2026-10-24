@@ -2,14 +2,15 @@
 
 import { ErrorCode, GiftSchema, type Gift } from '@wishlist/contracts';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ExternalIcon, IdeaIcon, PhotoIcon } from '@/components/list/icons';
-import { buttonVariants } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
 import { browserApi } from '@/lib/browser-api';
 import { giftLine } from '@/lib/gifts-copy';
 import { errorMessage, hasCode } from '@/lib/messages';
 import { cn } from '@/lib/utils';
+import { ChangeGiftForm } from './change-gift-form';
 
 /**
  * One claim on Your gifts (design §5.7, mockup A): the item as the share page shows it, the
@@ -23,6 +24,16 @@ export function GiftCard({ gift }: { gift: Gift }) {
   // What was asked, kept until the refresh brings the server's own answer in `gift.bought`. It
   // remembers which server value it was made against, so a newer one wins without an effect.
   const [asked, setAsked] = useState<{ from: boolean; bought: boolean } | null>(null);
+  const [changing, setChanging] = useState(false);
+  // Close and Save hand focus back to Change, which is only on the card while the form is shut.
+  const change = useRef<HTMLButtonElement>(null);
+  const refocus = useRef(false);
+  useEffect(() => {
+    if (!changing && refocus.current) {
+      refocus.current = false;
+      change.current?.focus();
+    }
+  }, [changing]);
   const bought = asked?.from === gift.bought ? asked.bought : gift.bought;
   const { item } = gift;
 
@@ -95,7 +106,28 @@ export function GiftCard({ gift }: { gift: Gift }) {
           />
           Bought
         </label>
+        {changing ? null : (
+          <Button
+            ref={change}
+            variant="secondary"
+            size="compact"
+            className="ml-auto"
+            onClick={() => setChanging(true)}
+          >
+            Change
+            <span className="sr-only"> {item.title}</span>
+          </Button>
+        )}
       </div>
+      {changing ? (
+        <ChangeGiftForm
+          gift={gift}
+          onClose={() => {
+            refocus.current = true;
+            setChanging(false);
+          }}
+        />
+      ) : null}
       {error ? (
         <Notice tone="error" className="mt-2">
           {error}

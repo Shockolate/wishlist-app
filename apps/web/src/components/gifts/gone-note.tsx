@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
 import { NoContentSchema } from '@/lib/api-client';
 import { browserApi } from '@/lib/browser-api';
-import { GIFTS_HEADING_ID, goneLine } from '@/lib/gifts-copy';
+import { goneLine } from '@/lib/gifts-copy';
+import { focusGiftsHeading } from '@/lib/gifts-focus';
 import { errorMessage, hasCode } from '@/lib/messages';
 
 /**
@@ -33,7 +34,7 @@ export function GoneNote({ note }: { note: GoneGift }) {
       }
     }
     // The card and its button are about to go, so focus moves somewhere that stays.
-    document.getElementById(GIFTS_HEADING_ID)?.focus();
+    focusGiftsHeading();
     router.refresh();
   }
 

@@ -31,6 +31,11 @@ export function goneLine(note: GoneGift): string {
     : 'This claim was cancelled through its link.';
 }
 
+/** What the Let it go confirmation says: the item goes back to the owner's list for others. */
+export function letGoText(ownerDisplayName: string): string {
+  return `Someone else can get this for ${ownerDisplayName} instead.`;
+}
+
 /**
  * The page heading's id: where focus goes when a note clears and its button goes with it. A plain
  * module, because a constant exported from a 'use client' file reaches a Server Component as a

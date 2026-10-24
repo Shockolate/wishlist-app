@@ -2,7 +2,6 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
-  ClaimConflictProblemSchema,
   ClaimerNameSchema,
   CreateClaimResponseSchema,
   ErrorCode,
@@ -28,6 +27,7 @@ import {
 } from '@/components/ui/sheet';
 import { ApiError } from '@/lib/api-client';
 import { browserApi } from '@/lib/browser-api';
+import { remainingFromConflict } from '@/lib/claim-conflict';
 import { pendingTokenFor, readClaimerName, writeClaimerName } from '@/lib/claim-records';
 import { formErrorMap } from '@/lib/form-errors';
 import { mintManageToken } from '@/lib/manage-token';
@@ -158,10 +158,7 @@ export function ClaimSheet({
   function failed(error: unknown) {
     setRetry(false);
     if (hasCode(error, ErrorCode.CLAIM_EXCEEDS_REMAINING)) {
-      const left =
-        error instanceof ApiError
-          ? (ClaimConflictProblemSchema.safeParse(error.problem).data?.remaining ?? 0)
-          : 0;
+      const left = remainingFromConflict(error);
       router.refresh();
       if (left === 0) {
         setPhase({ kind: 'ended', message: LAST_ONE_GONE });

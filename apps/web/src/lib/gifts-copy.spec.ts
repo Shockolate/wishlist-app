@@ -1,6 +1,6 @@
 import type { Gift, GoneGift } from '@wishlist/contracts';
 import { describe, expect, it } from 'vitest';
-import { giftLine, goneLine, summaryLine } from './gifts-copy';
+import { giftLine, goneLine, letGoText, summaryLine } from './gifts-copy';
 
 function gift(over: {
   shareUrl?: string;
@@ -90,5 +90,11 @@ describe('goneLine', () => {
 
   it('says it was cancelled through its link', () => {
     expect(goneLine(note('cancelled'))).toBe('This claim was cancelled through its link.');
+  });
+});
+
+describe('letGoText (Plan 10b copy table)', () => {
+  it('says the item goes back to the owner’s list', () => {
+    expect(letGoText('Mom')).toBe('Someone else can get this for Mom instead.');
   });
 });
