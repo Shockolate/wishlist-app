@@ -1,10 +1,15 @@
-import { CleanupResultSchema } from '@wishlist/contracts';
+import {
+  CleanupResultSchema,
+  CreateClaimResponseSchema,
+  GiftsResponseSchema,
+} from '@wishlist/contracts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { http } from '../src/testing/app.js';
 import { ADA, logIn, signUp, signUpVerified, type Account } from './support/accounts.js';
 import { createAuthTestApp, type AuthTestApp } from './support/auth-app.js';
 import { client } from './support/client.js';
 import { openTestDatabase } from './support/database.js';
+import { seedItem, shareTokenOf } from './support/lists.js';
 
 const SECRET = 'c'.repeat(48);
 const BOB: Account = {
@@ -88,5 +93,79 @@ describe('GET /api/internal/cron/daily (spec §10)', () => {
     expect(result).toMatchObject({ unverifiedUsers: 0, sessions: 0, giftNotes: 0 });
     expect(await count('users')).toBe(2);
     expect((await client(t.app, bob).get('/me')).status).toBe(200);
+  });
+
+  it('stamps gone_at on new notes, and deletes notes older than 30 days (Plan 10b, D79)', async () => {
+    await signUpVerified(t);
+    await signUpVerified(t, BOB);
+    const bob = await logIn(t, BOB);
+    const shareToken = await shareTokenOf(db, ADA.email);
+    const kettle = await seedItem(db, ADA.email, 'Kettle');
+    const mug = await seedItem(db, ADA.email, 'Mug');
+    // Bob has two linked claims; the owner deleting the kettle leaves a note no code stamped.
+    for (const item of [kettle, mug]) {
+      const res = await client(t.app, bob).post(`/shared/${shareToken}/items/${item}/claims`, {
+        claimerName: 'Bob',
+        quantity: 1,
+      });
+      expect(CreateClaimResponseSchema.parse(res.body).onYourGifts).toBe(true);
+    }
+    await db.pool.query('delete from items where id = $1', [kettle]);
+    const noteGoneAt = async () =>
+      (
+        await db.pool.query<{ gone_at: Date | null }>(
+          'select gone_at from claim_links where claim_id is null',
+        )
+      ).rows.map((r) => r.gone_at);
+    expect(await noteGoneAt()).toEqual([null]);
+
+    // Day 0: the note is stamped with today, and nothing is old enough to delete.
+    const stamped = t.clock.now();
+    const day0 = CleanupResultSchema.parse((await runCron(t.app, `Bearer ${SECRET}`)).body);
+    expect(day0.giftNotes).toBe(0);
+    expect(await noteGoneAt()).toEqual([stamped]);
+
+    // Day 29: still a note, and the stamp isn't moved by another run.
+    t.clock.advance(29 * DAY);
+    const day29 = CleanupResultSchema.parse((await runCron(t.app, `Bearer ${SECRET}`)).body);
+    expect(day29.giftNotes).toBe(0);
+    expect(await noteGoneAt()).toEqual([stamped]);
+
+    // Day 31: the note goes. The live link on the mug is never touched.
+    t.clock.advance(2 * DAY);
+    const day31 = CleanupResultSchema.parse((await runCron(t.app, `Bearer ${SECRET}`)).body);
+    expect(day31.giftNotes).toBe(1);
+    expect(await noteGoneAt()).toEqual([]);
+    const { rows } = await db.pool.query<{ claim_id: string | null; gone_at: Date | null }>(
+      'select claim_id, gone_at from claim_links',
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.claim_id).not.toBeNull();
+    expect(rows[0]?.gone_at).toBeNull();
+    expect(await count('claims')).toBe(1);
+  });
+
+  it('stamps the notes an unverified-account purge makes in the same run', async () => {
+    await signUp(t, ADA); // never verified; owns a list
+    await signUpVerified(t, BOB);
+    const bob = await logIn(t, BOB);
+    const shareToken = await shareTokenOf(db, ADA.email);
+    const item = await seedItem(db, ADA.email, 'Kettle');
+    await client(t.app, bob).post(`/shared/${shareToken}/items/${item}/claims`, {
+      claimerName: 'Bob',
+      quantity: 1,
+    });
+
+    t.clock.advance(8 * DAY);
+    const stamped = t.clock.now();
+    const result = CleanupResultSchema.parse((await runCron(t.app, `Bearer ${SECRET}`)).body);
+
+    expect(result).toMatchObject({ unverifiedUsers: 1, giftNotes: 0 });
+    const { rows } = await db.pool.query<{ gone_at: Date | null }>(
+      'select gone_at from claim_links where claim_id is null',
+    );
+    expect(rows.map((r) => r.gone_at)).toEqual([stamped]);
+    const bobsSession = await client(t.app, bob).get('/me/gifts');
+    expect(GiftsResponseSchema.parse(bobsSession.body).gone).toHaveLength(1);
   });
 });
