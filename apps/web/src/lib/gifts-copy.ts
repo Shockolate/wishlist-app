@@ -31,6 +31,13 @@ export function goneLine(note: GoneGift): string {
     : 'This claim was cancelled through its link.';
 }
 
+/**
+ * The page heading's id: where focus goes when a note clears and its button goes with it. A plain
+ * module, because a constant exported from a 'use client' file reaches a Server Component as a
+ * client reference, not as its string.
+ */
+export const GIFTS_HEADING_ID = 'gifts-heading';
+
 /** Shown when there are no gifts and no notes. */
 export const NOTHING_YET =
   'Nothing here yet. Claims you make while signed in appear here, and so does a claim whose link you open while signed in.';

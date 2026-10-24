@@ -7,11 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
 import { NoContentSchema } from '@/lib/api-client';
 import { browserApi } from '@/lib/browser-api';
-import { goneLine } from '@/lib/gifts-copy';
+import { GIFTS_HEADING_ID, goneLine } from '@/lib/gifts-copy';
 import { errorMessage, hasCode } from '@/lib/messages';
-
-/** Where focus goes when a note clears and its button goes with it. */
-export const GIFTS_HEADING_ID = 'gifts-heading';
 
 /**
  * What is left of a claim that went (design §5.6): a dashed card with the item's title as Your

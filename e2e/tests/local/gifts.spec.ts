@@ -127,6 +127,8 @@ test('Shop opens the item’s link safely, and a removed claim is a note the gif
   await expectAccessible(gifter);
 
   await note.getByRole('button', { name: /^Clear/ }).click();
+  // The button went with the card, so focus is on the heading rather than dropped to the body.
+  await expect(gifter.getByRole('heading', { level: 1, name: 'Your gifts' })).toBeFocused();
   await expect(gifter.getByText('Botanical bonsai')).toHaveCount(0);
   await gifter.reload();
   await expect(gifter.getByText('Botanical bonsai')).toHaveCount(0);

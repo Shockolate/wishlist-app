@@ -1,8 +1,8 @@
 import type { GiftsResponse } from '@wishlist/contracts';
 import { groupByList } from '@/lib/gift-groups';
-import { NOTHING_YET, summaryLine } from '@/lib/gifts-copy';
+import { GIFTS_HEADING_ID, NOTHING_YET, summaryLine } from '@/lib/gifts-copy';
 import { GiftCard } from './gift-card';
-import { GoneNote, GIFTS_HEADING_ID } from './gone-note';
+import { GoneNote } from './gone-note';
 
 /**
  * Your gifts (design §5.7, mockup A): the heading and summary, a group per list in the API's order,
