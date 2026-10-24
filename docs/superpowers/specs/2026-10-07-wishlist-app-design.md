@@ -5,7 +5,7 @@
 - **Author:** Ted Armstrong (with Claude)
 - **Repo:** `github.com/Shockolate/wishlist-app` (public; not yet created)
 - **Product name:** **Hanker**, at `hanker.dev` (decided 2026-10-09, D26). Internal identifiers keep the domain noun `wishlist`.
-- **Amended by:** [item tags and share-page filters](2026-10-21-item-tags-and-filters-design.md) (2026-10-21; D58 on). Plan 7a amends §2, §4 and §5 for the tags API, and Plan 7b §7 for the web. [Retailer lookups](2026-10-22-retailer-lookups-design.md) (2026-10-22; D64 on): Plan 8a amends §6.8 and §7 for Amazon, and narrows D34. Plan 8b amends §6.8 for Etsy (D69). [Tag suggestions](2026-10-23-tag-suggestions-design.md) (2026-10-23; D70 on): Plan 9 amends §7 so an idea opens the add form. [Your gifts and owner totals](2026-10-23-your-gifts-and-owner-totals-design.md) (2026-10-23; D75 on): Plan 10a, its Part 1, amends §1, §2, §5, §5.1 and §7 so an owner never sees who claimed what, and D33 and D40 with them.
+- **Amended by:** [item tags and share-page filters](2026-10-21-item-tags-and-filters-design.md) (2026-10-21; D58 on). Plan 7a amends §2, §4 and §5 for the tags API, and Plan 7b §7 for the web. [Retailer lookups](2026-10-22-retailer-lookups-design.md) (2026-10-22; D64 on): Plan 8a amends §6.8 and §7 for Amazon, and narrows D34. Plan 8b amends §6.8 for Etsy (D69). [Tag suggestions](2026-10-23-tag-suggestions-design.md) (2026-10-23; D70 on): Plan 9 amends §7 so an idea opens the add form. [Your gifts and owner totals](2026-10-23-your-gifts-and-owner-totals-design.md) (2026-10-23; D75 on): Plan 10a, its Part 1, amends §1, §2, §5, §5.1 and §7 so an owner never sees who claimed what, and D33 and D40 with them. Plan 10b, its Part 2 (D76–D81), amends §2, §4, §5, §7, §8 and §10 so a signed-in gifter's claims are kept on **Your gifts**.
 
 ## 1. Intent
 
@@ -46,7 +46,7 @@ These are explicit so they don't creep in:
 ### Actors
 
 - **Owner:** a signed-in user with a verified email. They own exactly one wishlist.
-- **Gifter:** anyone holding a share link. A gifter has no account and is identified only by the display name they type when claiming.
+- **Gifter:** anyone holding a share link. A gifter needs no account and is identified only by the display name they type when claiming. A gifter who is signed in with a verified email, and isn't the list's owner, may also have their claims kept on **Your gifts** (§2 Claims, D76).
 
 ### Wishlist
 
@@ -90,6 +90,14 @@ These are explicit so they don't creep in:
   - change the quantity, as long as the new quantity is at least 1 and at most remaining plus their current quantity,
   - or delete the claim.
 - If the item, the list, or the owner's account is deleted, the claim is deleted with it. The manage page then says: *"This claim no longer exists. The owner may have removed the item."*
+- **Your gifts (Plan 10b, D76–D81).** A claim can be **linked** to a signed-in gifter's account, and the account's linked claims appear on one page, across lists.
+  - **Who gets links:** a session whose user has a verified email and isn't the list's owner. Everyone else claims as before, and nothing is linked.
+  - **When a claim is linked:** at once, when it is made while signed in; or when its manage link is opened while signed in, by a request the page sends once it has loaded, never by the server render. Opening a page changes nothing by itself (D77).
+  - **First list wins.** A claim already on one account's gifts stays there. Another signed-in opener is told so, and the manage link keeps all its powers. **Not mine** takes a claim off the opener's own gifts and leaves the claim alone.
+  - **Bought** is a tick on the link, private to its account (D78). It is in no response to an owner or to another gifter, and it never locks a claim.
+  - **The name** on a signed-in claim is prefilled from the account's display name, editable, and kept per claim (D81).
+  - **Notes (D80).** A linked claim that disappears (the item, list or owner is deleted, or someone else cancels it through its manage link) leaves a note on Your gifts with the item's title and the owner's display name as the gifter last saw them. It stays until the gifter clears it, or for 30 days from when it started. Letting a claim go from Your gifts, or cancelling it on `/c` as its own gifter, leaves none.
+  - **Account deletion (D79)** deletes the account's links, ticks and notes. The claims stay, as anonymous claims with their names, quantities and manage links, so no item is freed by accident.
 - Gifters can see other gifters' names and quantities (e.g. "Aunt Sue ×1"), so they can coordinate.
 - An owner can't claim items on their own list. The UI hides the claim controls, and the API rejects the request with `403 OWNER_CANNOT_CLAIM`.
 
@@ -187,7 +195,7 @@ Only `apps/api` has database credentials. The web app has no database connection
 
 ## 4. Data model
 
-All timestamps are `timestamptz`. All foreign keys are `ON DELETE CASCADE`.
+All timestamps are `timestamptz`. All foreign keys are `ON DELETE CASCADE`, except `claim_links.claim_id` (Plan 10b, D80).
 
 ```sql
 users (
@@ -249,6 +257,20 @@ claims (
 );
 CREATE INDEX ON claims (item_id);
 
+claim_links (                                          -- Plan 10b (D76, D80)
+  id                  uuid PRIMARY KEY,
+  claim_id            uuid REFERENCES claims ON DELETE SET NULL,   -- null once the claim is gone
+  user_id             uuid NOT NULL REFERENCES users ON DELETE CASCADE,
+  bought_at           timestamptz,                     -- the private Bought tick (D78)
+  cancelled_at        timestamptz,                     -- set when someone else cancels through the manage link
+  gone_at             timestamptz,                     -- when the note started
+  item_title          text NOT NULL,                   -- as Your gifts last showed it
+  owner_display_name  text NOT NULL,                   -- likewise
+  created_at, updated_at,
+  UNIQUE (claim_id)                                    -- first list wins
+);
+CREATE INDEX ON claim_links (user_id);
+
 tags (
   id            uuid PRIMARY KEY,
   wishlist_id   uuid NOT NULL REFERENCES wishlists,
@@ -287,6 +309,11 @@ rate_limits (
 
 - **Reorder uses a plain integer `position`, rewritten in full by the reorder endpoint (§5).** Rejected: fractional indexing, which solves write amplification this app doesn't have (at most 200 items) and adds key growth and rebalancing.
 - **Rate limits live in Postgres** as fixed-window counters, written with an upsert. Rejected: Redis or Upstash, which would be a second stateful free-tier service to keep alive.
+- **`claim_links` holds the one foreign key that doesn't cascade (D80).** `claim_id … ON DELETE SET NULL` is what lets a note outlive its claim; `user_id` cascades, so deleting an account removes its links, ticks and notes (D79). It is a table of its own so the claim stays exactly what it was and an account deletion can't touch it.
+  - **Telling the reasons apart.** A cascade (item, list or owner deleted) leaves `claim_id` and `cancelled_at` null, which reads as *removed*. `DELETE /claims/:manageToken` by anyone but the linked gifter sets `cancelled_at` and `gone_at` on the link before the claim is deleted; by the linked gifter, or from Your gifts, the link is deleted too.
+  - **Aging.** `SET NULL` can't stamp a time, so the daily cron (§10) first sets `gone_at = now()` on notes with none, then deletes notes whose `gone_at` is over 30 days old. A cascaded note lives 30 to 31 days.
+  - **The snapshot** (`item_title`, `owner_display_name`) is written when the claim is linked. After `GET /me/gifts` has read, one separate statement updates the snapshots that differ from what it showed; if that fails, it is logged without values and the page is still served.
+  - **Lock order.** A write that touches both a claim and its link takes row locks in the order item → claim → link, the order the cascade from an item, list or account delete uses, so a gifter's write can't deadlock with an owner's delete. `cancel` and Let it go delete the claim first and then touch the link by its ID.
 - **There's no `kind` column on items.** "Idea versus link" is `url IS NULL`.
 - **Tags are rows, not a `text[]` on `items` (D58).** A rename is one row, a tag can exist with no items, and `UNIQUE (wishlist_id, name_key)` makes case-insensitive identity the database's job. The API computes `name_key`: `keyOfCleanName` for a name that has been through `TagNameSchema`, and `tagKey()` from `packages/contracts` for raw input.
 - **`item_tags` doesn't tie a tag's list to its item's.** The API guarantees both are on the session's list, because it looks both up through that list under the list lock. A composite foreign key isn't needed.
@@ -346,11 +373,13 @@ An item or tag ID that belongs to another user's list, or isn't a UUID, returns 
 
 | Method & path | Body | Result |
 |---|---|---|
-| `GET /shared/:shareToken` | none | `{title, ownerDisplayName, viewerIsOwner, ownerSeesClaims, tags[], items[]}`, or `404 SHARE_LINK_NOT_FOUND` |
-| `POST /shared/:shareToken/items/:itemId/claims` | `{claimerName, quantity, manageToken?}` (quantity 1–99, default 1) | `201 {claim, manageToken, manageUrl}`, `409 CLAIM_EXCEEDS_REMAINING {remaining}`, `409 MANAGE_TOKEN_IN_USE`, `403 OWNER_CANNOT_CLAIM`, `404 SHARE_LINK_NOT_FOUND` (the link), or `404 NOT_FOUND` (the item) |
-| `GET /claims/:manageToken` | none | `{claim, item, wishlistTitle, ownerDisplayName, remaining, shareUrl, ownerSeesClaims}`, `403 OWN_LIST_CLAIM` for the list's own signed-in owner (D82), or `404 NOT_FOUND` |
+| `GET /shared/:shareToken` | none | `{title, ownerDisplayName, viewerIsOwner, ownerSeesClaims, viewer?, tags[], items[]}`, or `404 SHARE_LINK_NOT_FOUND` |
+| `POST /shared/:shareToken/items/:itemId/claims` | `{claimerName, quantity, manageToken?}` (quantity 1–99, default 1) | `201 {claim, manageToken, manageUrl, onYourGifts?}`, `409 CLAIM_EXCEEDS_REMAINING {remaining}`, `409 MANAGE_TOKEN_IN_USE`, `403 OWNER_CANNOT_CLAIM`, `404 SHARE_LINK_NOT_FOUND` (the link), or `404 NOT_FOUND` (the item) |
+| `GET /claims/:manageToken` | none | `{claim, item, wishlistTitle, ownerDisplayName, remaining, shareUrl, ownerSeesClaims, link?}`, `403 OWN_LIST_CLAIM` for the list's own signed-in owner (D82), or `404 NOT_FOUND` |
 | `PATCH /claims/:manageToken` | `{claimerName?, quantity?}`, at least one | Updated claim, `409 CLAIM_EXCEEDS_REMAINING {remaining}`, `403 OWN_LIST_CLAIM` (D82), or `404 NOT_FOUND` |
 | `DELETE /claims/:manageToken` | none | `204`, `403 OWN_LIST_CLAIM` (D82), or `404 NOT_FOUND` |
+| `POST /claims/:manageToken/link` | `{}`; a verified session | `200 {link: 'yours' \| 'someone-else'}`, `403 OWN_LIST_CLAIM` for the list's owner, `403 EMAIL_NOT_VERIFIED`, or `404 NOT_FOUND` |
+| `DELETE /claims/:manageToken/link` | none; a verified session | **Not mine.** `204`, and a no-op unless the link is the session's. `404 NOT_FOUND` |
 
 - `shareUrl` in the claim response is the wishlist's **current** share URL, so it stays correct after a rotation. The manage token itself is the authorization.
 - Each item in the `GET /shared` response has: `id, title, url, imageUrl, priceText, note, quantity, tagIds`, and `remaining`, `claimed` and `claims[] {id, claimerName, quantity}` as §5.1's table says (guests get `remaining` and `claims[]`; an opted-in owner gets `remaining` and `claimed`). The `item` in `GET /claims` has the same fields, without `claims[]`, `claimed` and `tagIds`.
@@ -368,7 +397,28 @@ An item or tag ID that belongs to another user's list, or isn't a UUID, returns 
 - **The order of a claim's checks.** A malformed token or item ID is refused before any rate limit or lookup (the session guard and body validation run earlier, as on every route). Then the per-IP limit, then the list by its token, then the owner check, then the list's limit, then the transaction (§6.3). The owner is refused **before** anything is summed, because a `409` carries `remaining`, and before the list's limit, because a `429` would tell them gifters have been claiming (D43). A change to a claim runs the same way: the per-IP limit, then the claim by its token's hash, then the owner check (D82), then its list's limit, then the transaction.
 - **A signed-in owner holding a manage link (D82).** `GET`, `PATCH` and `DELETE /claims/:manageToken` resolve the session through the same never-refusing guard. After the claim is found by its token's hash, and before anything is changed or returned, a session that owns the claim's list (verified or not, as on `/shared`) gets `403 OWN_LIST_CLAIM` with no claim data, and the list's limit is not consulted first, for D43's reason. A `PATCH` answer carries the name and a `409` carries `remaining`, so the check can't wait. Signed out, the owner is a guest (§2).
 - **Reads are one snapshot.** `GET /shared`, `GET /claims` and an opted-in `GET /wishlist` read the list, its items and its claims in one `REPEATABLE READ, READ ONLY` transaction, so `remaining` always agrees with the items beside it. For an owner, the claims are queried only to sum them, and only when they've opted in (D75); the projection removes the fields anyway.
+- **Your gifts fields (Plan 10b, D76, D77, D81).** All are optional and present only for a session whose user has a verified email and isn't the list's owner; a guest's response is byte-for-byte what it was.
+  - `GET /shared` adds `viewer: {displayName}` (the viewer's own name, so the sheet can prefill it and say where the claim will go). Nothing about any claim's link.
+  - `POST …/claims` adds `onYourGifts: true` when the claim's link is the session's. The claim and its link are written in one transaction. A replay of the same manage token (D42) links the claim if it has no link, and reports whether it ended up on this session's gifts.
+  - `GET /claims/:manageToken` adds `link: 'none' | 'yours' | 'someone-else'`.
+  - `POST …/link` inserts one row and takes no lock a claim write doesn't already take. Under `UNIQUE (claim_id)` two accounts linking at once means one wins and the other is told `someone-else`. A link insert that finds the claim just deleted answers `404 NOT_FOUND`, never a `500`. The checks run in `PATCH /claims`' order: the token's shape (a malformed one is `404`), the per-IP limit, the claim by its token's hash, the owner (`403 OWN_LIST_CLAIM`, like every owner call on `/claims/*`, D82), the list's limit, and only then the write. A session without a verified email is refused `403 EMAIL_NOT_VERIFIED` before any of that.
+  - `POST` and `DELETE …/link` count against the claim rate limits (§6.6), like `PATCH /claims`.
 - Every public response is `Cache-Control: no-store`. The gifters' writes pass the CSRF guard like any other (§6.2), and need no session.
+
+### Your gifts endpoints (Plan 10b)
+
+These require a session and a verified email. A link ID that isn't the session's is `404 NOT_FOUND`, like any unknown ID. All responses are `Cache-Control: no-store`.
+
+| Method & path | Body | Result |
+|---|---|---|
+| `GET /me/gifts` | none | `{gifts[], gone[]}`. Each gift is `{linkId, claim, item, remaining, wishlistTitle, ownerDisplayName, shareUrl, bought}`, with the item fields `GET /claims` returns. Each note is `{linkId, itemTitle, ownerDisplayName, reason: 'removed' \| 'cancelled'}` |
+| `PATCH /me/gifts/:linkId` | `{claimerName?, quantity?, bought?}`, at least one | The updated gift. Name and quantity run `PATCH /claims`' transaction and rules (§6.3), including `409 CLAIM_EXCEEDS_REMAINING {remaining}`; `bought` only sets the link's `bought_at` and never touches the claim. `404` once the claim is gone |
+| `DELETE /me/gifts/:linkId` | none | `204`. On a live claim, **Let it go**: the claim and its link are deleted, with no note. On a note, **Clear** |
+
+- **Order.** Gifts are grouped by list, in the order of each list's earliest link, and follow `items.position` within a list; the server orders and the web keeps that order. Notes come after, newest first.
+- **One snapshot.** `GET /me/gifts` reads in one `REPEATABLE READ, READ ONLY` transaction, then refreshes the stored snapshots in a separate statement (§4).
+- **Rate limits.** `PATCH` and `DELETE` charge the per-IP claim bucket and, while the link still has a claim, the claim's list bucket. Clearing a note, which has no list any more, charges only the IP bucket. `GET /me/gifts` is not limited.
+- **The privacy rule (D75, D78, D82).** No owner response, meaning `GET /wishlist`, the owner's `GET /shared` and any `/claims/*` call (already `403 OWN_LIST_CLAIM`), ever carries a link, a Bought tick, a note, or whether a claim is linked; and gifters see nothing about other gifters' links or ticks.
 
 ### 5.1 Spoiler projection
 
@@ -389,6 +439,7 @@ projectWishlist(wishlist, items, claims, viewer): WishlistView
 - `GET /wishlist` always uses an owner viewer.
 - `GET /shared/:token` uses an owner viewer when the session's user owns the list, and a guest viewer otherwise.
 - The function is unit-tested exhaustively, and the integration tests assert the fields are **absent** from the JSON, not just empty. That includes `claims` for an owner who has opted in.
+- Links, Bought ticks and notes are not part of the projection: `projectWishlist` never sees them, and none of them is added to `GET /wishlist` or to any response to an owner (Plan 10b).
 - `GET /claims/:manageToken` is the claimer's own view: the manage token is the capability, so it always includes `remaining`, and never other people's claims. It is refused to the list's own signed-in owner (D82, §5).
 
 ## 6. Auth and security
@@ -460,7 +511,7 @@ These are the initial values. They're configurable, and every limited endpoint r
 |---|---|
 | `POST /auth/login` | 10 per 15 minutes per email, and 50 per 15 minutes per IP |
 | signup, resend-verification, reset-request | 3 per hour per email, and 20 per hour per IP |
-| `POST …/claims`, `PATCH /claims/*` | 30 per hour per list, and 20 per hour per IP (amended in Plan 4a: the list, not the share token) |
+| `POST …/claims`, `PATCH /claims/*` | 30 per hour per list, and 20 per hour per IP (amended in Plan 4a: the list, not the share token). `POST` and `DELETE /claims/*/link` and `PATCH` and `DELETE /me/gifts/*` count against the same buckets (Plan 10b) |
 | `POST /wishlist/unfurl` | 60 per hour per user |
 
 **Buckets and order (Plan 2a).** Signup, resend-verification and reset-request share one per-address and one per-IP bucket: together they cap the mail one inbox or one IP can trigger. Those endpoints check the per-IP limit, then Turnstile, then the per-address limit, so failed challenges can't use up a victim's budget. Password confirmations on `/me` count against login's per-address bucket. Keys store a SHA-256 of the email or IP, never the raw value.
@@ -532,7 +583,8 @@ These are the initial values. They're configurable, and every limited endpoint r
 | `/list` | Server-rendered first load + client editor (TanStack Query) | Reorder, delete and tag ticks show at once; a failed change refetches the list (D37) |
 | `/settings` | Client | Display name; list name; share link (copy, and rotate after a confirmation); change password; delete account (confirmation dialog). The spoiler toggle, with its confirmation, arrives in Plan 4b (D33, D39) |
 | `/s/[shareToken]` | Server Component | Readable before JavaScript loads. Claim controls and the filter row hydrate afterwards |
-| `/c/[manageToken]` | Server Component + client form | Manage one claim |
+| `/c/[manageToken]` | Server Component + client form | Manage one claim. Signed in, it also links the claim to Your gifts once loaded (Plan 10b) |
+| `/gifts` | Server Component + client islands | **Your gifts** (Plan 10b). Signed in only; sends `Referrer-Policy: no-referrer` and `X-Robots-Tag: noindex`, like `/s` and `/c` |
 
 **How the web app calls the API:**
 
@@ -572,6 +624,17 @@ These follow the Plan 4b mockups, on the same canvas as the editor's.
 - **The spoiler toggle** is a switch on `/settings`, labelled "Show how many are claimed" (D75). Turning it on asks first, and the confirmation says names are never shown; turning it off doesn't, and removes the claim fields (`claimed` and `remaining`) from the editor's cache before the request returns, so the browser never keeps claim data the owner has turned off (§1, criterion 4).
 - **The claim lines on the owner's list and share page,** when the owner has opted in, are counts and never names (D75): "None claimed yet", "3 of 5 claimed", "All 5 claimed" ("Claimed" for a quantity of 1). Over-claimed (D19) reads "3 of 2 claimed". Item writes don't return claims, so the cache keeps an item's `claimed` across an edit and recomputes `remaining` from it with the shared `remainingOf` from `contracts`.
 - **The gifter lines (D40)** say "Sam can see how many are claimed, but never who's getting them" when the setting is on.
+
+### Your gifts (Plan 10b)
+
+- **The page.** A **Your gifts** tab sits in the signed-in header between **Your list** and **Settings**. `/gifts` is a Server Component with client islands, like `/s` and `/c`: every write goes through `browserApi` and then `router.refresh()`, and TanStack Query isn't used. An unconfirmed email gets the confirm-email notice instead of the page. A signed-out visitor is sent to log in and returns to `/gifts`.
+- **Layout.** A heading, then a line such as "7 things for 3 people · 2 bought" (the "· 0 bought" is left out). Groups per list are headed by the owner's display name, with an **Open list** link to the list's current share URL. A card shows the photo or idea tile, title, price, "you’re getting N", the owner's note when there is one, **Shop** (the one terracotta action, only when the item has a link, `rel="noopener noreferrer"`), a **Bought** checkbox that saves at once and needs no confirmation, and **Change**.
+- **Change** opens the card in place: the name, a quantity stepper capped at remaining plus the current quantity (with the `/c` hint), **Let it go** (after a confirmation: "Someone else can get this for Sam instead"), **Close** and **Save**. A `409` resets the stepper to the new maximum and says why, as on `/c`. A `404` (the claim went meanwhile) refreshes the page, and the card turns into a note.
+- **A note** is a dashed card with the item's title, its reason ("Sam took this off their list. Your claim is gone." or "This claim was cancelled through its link.") and **Clear**.
+- **Empty state:** "Nothing here yet. Claims you make while signed in appear here, and so does a claim whose link you open while signed in."
+- **The claim sheet, signed in.** With `viewer`, the name is prefilled from the account's display name, which wins over `hanker:claimerName` while signed in (D81), and one line reads "This goes on Your gifts." After a `201` with `onYourGifts`, the done state adds **See Your gifts** beside the manage link. The sheet still mints the token and writes `hanker:claims` first (D42, D45). Without `viewer`, nothing changes.
+- **`/c`, signed in.** A client island sends `POST …/link` after load when `link` is `'none'`, then says "Added to Your gifts." with **Not mine** ("Taken off Your gifts." after it). A claim already on someone else's gifts says "This claim is on someone else’s gifts in Hanker, so it won’t appear on yours. You can still change or cancel it here." and names no account. A claim already `'yours'` shows nothing extra. Neither shows for a guest, and the owner of the list gets the hidden view (D82).
+- **Shared tablets.** A device signed in as Mum, on which Grandma opens her own manage link, adds the claim to Mum's gifts. **Not mine** takes it off, and Grandma's own account can then link it.
 
 ### Owner editor (Plan 3b)
 
@@ -650,6 +713,14 @@ These follow the tags design ([§3, §4](2026-10-21-item-tags-and-filters-design
 - **SSRF refusal through the real fetcher.** Unfurl against `127.0.0.1`, `[::1]`, `169.254.169.254` and `[::ffff:127.0.0.1]`, plus a redirect chain from a public fixture to a private address. All refused.
 - **Spoilers.** Claim fields are absent from the JSON for an owner who hasn't opted in, on both `GET /wishlist` and `GET /shared/:token`. For an owner who has, `claims` is absent and `claimed` is present (D75).
 - **An owner holding a manage link (D82).** A signed-in owner, verified or not, gets `403 OWN_LIST_CLAIM` on `GET`, `PATCH` and `DELETE /claims/:manageToken` with no claim field in the body, whatever the setting, even when the list's limit is spent; a `PATCH` or `DELETE` from them changes nothing. Signed out, they get the guest view.
+- **No owner leak of links (Plan 10b).** With linked, bought and noted claims on the list, `GET /wishlist` and the owner's `GET /shared` carry no link, tick, note, name, or `claimed` for an owner who hasn't opted in; a claim's `GET /shared` and `GET /claims` responses are identical before and after Bought is ticked.
+- **First list wins.** Two accounts open one manage link at once: exactly one gets `yours` and the other `someone-else`. A shared tablet's **Not mine** frees the claim for the next account.
+- **Linking.** A verified, non-owner session's claim is linked in the same transaction (`onYourGifts: true`); an unverified session's and a guest's is not; the list's owner gets `403 OWN_LIST_CLAIM` from `POST …/link`. A replayed manage token links an unlinked claim. A claim deleted between the lookup and the insert answers `404`.
+- **Your gifts.** `GET`, `PATCH` and `DELETE /me/gifts`: order, `409` with `remaining`, Bought touching no claim, `404` for another account's link ID, and a `404` after the owner deletes the item.
+- **Notes.** Item, list and owner deletion, and a cancel by someone else, each leave the right note; letting go from Your gifts, or cancelling as the linked gifter, leaves none; the cron stamps and then purges notes after 30 days, using the `Clock` fake, and reports `giftNotes`.
+- **Account deletion** keeps every claim and its quantity and removes the account's links, ticks and notes; the owner's account deletion leaves each gifter's claims as notes naming the owner and the item.
+- **No write on render.** The `/c` server render never links; only the client's request does.
+- **E2E (Plan 10b).** A claim made signed in appears on Your gifts, grouped by person; Bought, Change (including a `409` reset) and Let it go work; a removed item becomes a note the gifter can Clear; a manage link opened signed in joins, and Not mine takes it off; a second account sees the someone-else notice; the shared-tablet path; a guest's sheet and `/c` are unchanged. `/privacy` carries the new section.
 - **Reorder conflict.** Sending a stale item set returns `409`.
 - **Session revocation.** Revocation works on reset, password change and account deletion.
 - **Enumeration resistance.** Signup and reset-request return identical responses for known and unknown emails.
@@ -757,7 +828,7 @@ When a dependency fails, the behavior is fixed per service:
 - **Why the frequent checks avoid the database.** `/api/health` queries Neon and so wakes it, and Neon Free stops compute only after 5 idle minutes and allows 100 CU-hours per project per month. A deep check every 3–5 minutes would keep a 0.25 CU compute awake all month, about 180 CU-hours, and Neon would suspend the database once the quota ran out. `/api/health/live` returns `{ status, sha }` and never touches the pool. The 30-minute deep check costs about 30 CU-hours a month, since Neon sleeps for 25 of every 30 minutes. If Neon's usage trends past about 70% of the quota, pause the deep monitor: the backup heartbeat still proves the database daily (Plan 5a go-live, 2026-10-20).
 - **Why the backup needs a heartbeat.** GitHub disables scheduled workflows in a public repository after 60 days without activity, and a failed nightly run alerts nobody. The heartbeat alerts when the pings stop for any reason.
 - `/api/health` checks database connectivity and returns the applied migration version and the git SHA.
-- A daily Vercel cron at `/api/internal/cron/daily`, authenticated with `CRON_SECRET`. It purges expired rate-limit windows, expired email tokens, expired sessions, and unverified accounts older than 7 days.
+- A daily Vercel cron at `/api/internal/cron/daily`, authenticated with `CRON_SECRET`. It purges expired rate-limit windows, expired email tokens, expired sessions, and unverified accounts older than 7 days. It also ages Your gifts notes (§4): it stamps `gone_at` on notes that have none, then deletes those older than 30 days, and reports the number deleted as `giftNotes`.
 
 ### Repository settings (all free on public repos)
 
@@ -891,4 +962,10 @@ As of 2026-10-07 on the development machine:
 | D73 | An idea opens the add form (Ted, 2026-10-23) | Saving at once and suggesting on the new row; suggestions on edit only |
 | D74 | Unfurl returns a description for suggestions only, never for Etsy, per D69 (Ted, 2026-10-23) | Sending Etsy's description |
 | D75 | An owner never sees claimer names. With the setting on, they see how many of each item are claimed (`claimed`, `remaining`); amends D33 and D40 ([design](2026-10-23-your-gifts-and-owner-totals-design.md), Ted, 2026-10-23) | Names when opted in (D33 as built); a third setting state |
+| D76 | A verified, signed-in gifter's claims are linked to their account in `claim_links`, and appear on Your gifts; claiming without an account is unchanged ([design](2026-10-23-your-gifts-and-owner-totals-design.md), Ted, 2026-10-23) | Requiring an account to claim; a browser-only page over `hanker:claims` |
+| D77 | Opening a manage link while signed in links an unlinked claim, by a request the page sends after it loads; the first list wins, and **Not mine** unlinks ([design](2026-10-23-your-gifts-and-owner-totals-design.md), Ted, 2026-10-23; Not mine Claude's, approved in the mockup) | Moving the claim to the newest opener; showing it on both lists; linking during the server render |
+| D78 | Bought is a private per-claim tick, never sent to anyone but its gifter ([design](2026-10-23-your-gifts-and-owner-totals-design.md), Ted, 2026-10-23) | Showing "has bought this" to other gifters |
+| D79 | Deleting an account deletes its links, ticks and notes; its claims survive as anonymous claims ([design](2026-10-23-your-gifts-and-owner-totals-design.md), Ted, 2026-10-23) | Deleting the claims with the account, which frees items silently |
+| D80 | A linked claim that disappears leaves a note on Your gifts until cleared, for at most 30 days, through `claim_id … ON DELETE SET NULL` ([design](2026-10-23-your-gifts-and-owner-totals-design.md), Claude's call, 2026-10-23) | Silently dropping it; keeping notes forever |
+| D81 | A signed-in claim's name is prefilled from the display name and editable, and kept per claim ([design](2026-10-23-your-gifts-and-owner-totals-design.md), Ted, 2026-10-23) | Always the account's display name |
 | D82 | A signed-in owner who opens a manage link for a claim on their own list gets no claim data, and can't change or cancel it from that session (`403 OWN_LIST_CLAIM`); signed out, they're a guest (Ted: hide the name; Claude: hide everything, 2026-10-23) | Hiding only the name, which still tells an owner with the setting off that something is claimed; leaving `/c` as the capability holder's view |

@@ -10,7 +10,7 @@ const Contact = () => <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>;
 /** `/privacy` (D54). Every claim here was checked against the code and the services (Plan 6). */
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Privacy" updated="2026-10-23">
+    <LegalPage title="Privacy" updated="2026-10-24">
       <p>
         Hanker is a small wishlist site run by Ted Armstrong in Portland, Maine, USA. This page says
         what Hanker keeps about you, who else handles it, and for how long. Questions go to{' '}
@@ -37,6 +37,30 @@ export default function PrivacyPage() {
         Your browser keeps your claim link so you can change or cancel your claim later; Hanker
         keeps only a scrambled copy of it.
       </p>
+
+      <h2>If you’re signed in when you claim</h2>
+      <p>
+        If your email is confirmed, Hanker can keep your claims on Your gifts, a page that follows
+        you to any device you sign in on. Hanker never shows anyone else which claims are on your
+        gifts, whether they own the list or are another gifter.
+      </p>
+      <ul>
+        <li>
+          When you claim while signed in, or open a claim’s link while signed in and the page has
+          loaded, Hanker links that claim to your account so it appears on Your gifts. Not mine
+          takes it off again and leaves the claim alone.
+        </li>
+        <li>Bought ticks are stored and seen only by you.</li>
+        <li>
+          When a claim disappears (the list’s owner removes the item, the list or their account, or
+          someone cancels it through its link), Hanker keeps the item’s title and its owner’s name
+          on Your gifts for about 30 days, or until you clear it.
+        </li>
+        <li>
+          Deleting your account deletes these links, ticks and notes. Your claims stay, so the
+          people you’re buying for aren’t affected.
+        </li>
+      </ul>
 
       <h2>What Hanker doesn’t do</h2>
       <p>
