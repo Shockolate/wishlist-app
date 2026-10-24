@@ -47,6 +47,8 @@ const EnvSchema = z
     CLOUDFLARE_ACCOUNT_ID: z.string().min(1).optional(),
     /** Unset means no tag suggestions (tag suggestions design §5.5). Set with CLOUDFLARE_ACCOUNT_ID. */
     CLOUDFLARE_AI_TOKEN: z.string().min(1).optional(),
+    /** The daily cron's Better Stack heartbeat, a secret (D86). Unset means no ping. https only. */
+    CRON_HEARTBEAT_URL: z.url({ protocol: /^https$/ }).optional(),
   })
   .superRefine((env, ctx) => {
     // One without the other would ship tag suggestions silently off, with no sign of why.
