@@ -90,4 +90,13 @@ test('/privacy says what Your gifts keeps (Your gifts §5.11)', async ({ page })
   await expect(main).toContainText('on Your gifts for about 30 days, or until you clear it');
   // user_id cascades; claim_id is SET NULL, so a claim outlives the link.
   await expect(main).toContainText('Deleting your account deletes these links, ticks and notes.');
+  // No response says which account holds a claim (D75, D82).
+  await expect(main).toContainText(
+    'Hanker never shows anyone else whose gifts a claim is on, whether they own the list or are another gifter.',
+  );
+  // An owner's account delete cascades to the claims, but each gifter's link keeps the snapshot
+  // of item_title and owner_display_name until the cron purges it (D79, D80).
+  await expect(main).toContainText(
+    'A gifter who had one of your items on Your gifts keeps a note with its title and your display name for about 30 days, or until they clear it.',
+  );
 });

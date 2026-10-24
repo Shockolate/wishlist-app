@@ -41,8 +41,8 @@ export default function PrivacyPage() {
       <h2>If you’re signed in when you claim</h2>
       <p>
         If your email is confirmed, Hanker can keep your claims on Your gifts, a page that follows
-        you to any device you sign in on. Hanker never shows anyone else which claims are on your
-        gifts, whether they own the list or are another gifter.
+        you to any device you sign in on. Hanker never shows anyone else whose gifts a claim is on,
+        whether they own the list or are another gifter.
       </p>
       <ul>
         <li>
@@ -126,7 +126,9 @@ export default function PrivacyPage() {
       <ul>
         <li>
           Delete your account in <Link href="/settings">Settings</Link>, and your account, your list
-          and every claim on it are removed straight away.
+          and every claim on it are removed straight away. A gifter who had one of your items on
+          Your gifts keeps a note with its title and your display name for about 30 days, or until
+          they clear it.
         </li>
         <li>Cancel a claim from your claim link, and it’s removed straight away.</li>
         <li>Encrypted backups keep a copy for up to 30 days, and then it’s gone.</li>
