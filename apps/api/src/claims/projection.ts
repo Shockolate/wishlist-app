@@ -26,10 +26,12 @@ export function seesClaims(viewer: Viewer): boolean {
  * | viewer              | gets                              |
  * | ------------------- | --------------------------------- |
  * | guest               | `remaining` and `claims`          |
- * | owner, opted in     | `remaining` and `claimed`         |
+ * | owner, opted in     | `remaining`, `claimed` and `claims` |
  * | owner, not opted in | nothing: the fields are absent    |
  *
- * An owner never gets `claims`, so no claimer's name or claim ID can reach them. Where a field is
+ * Expand step (D75): an opted-in owner still gets `claims` beside the new `claimed`, so a web app
+ * that reads `claims` keeps working while the web moves to `claimed`; the stack's contract layer
+ * stops sending owners `claims`. Where a field is
  * not sent it is absent, not empty, so not even "nothing is claimed yet" reaches an owner who has
  * not opted in (success criterion 4). `claimed` is the sum of the quantities, unclamped, so it can
  * exceed an item's quantity after the owner lowers it (D19); `remaining` never goes below 0.
@@ -54,7 +56,7 @@ export function projectWishlist<T extends { id: string; quantity: number }>(
     const claimed = own.reduce((sum, claim) => sum + claim.quantity, 0);
     const remaining = remainingOf(item.quantity, claimed);
     return viewer.kind === 'owner'
-      ? { ...item, remaining, claimed }
+      ? { ...item, remaining, claimed, claims: own }
       : { ...item, remaining, claims: own };
   });
 }

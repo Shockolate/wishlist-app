@@ -38,16 +38,13 @@ describe('projectWishlist (spec §5.1)', () => {
     for (const item of items) expect(item).not.toHaveProperty('claimed');
   });
 
-  it('shows an owner who opted in how many are claimed and what is left, and never who (D75)', () => {
+  it('shows an owner who opted in how many are claimed, beside the claims until the contract step (D75)', () => {
     const items = projectWishlist(ITEMS, CLAIMS, OWNER_OPTED_IN);
     expect(items).toEqual([
-      { ...KETTLE, remaining: 1, claimed: 2 },
-      { ...SOCKS, remaining: 1, claimed: 0 },
-      { ...LAMP, remaining: 0, claimed: 2 },
+      { ...WITH_CLAIMS[0], claimed: 2 },
+      { ...WITH_CLAIMS[1], claimed: 0 },
+      { ...WITH_CLAIMS[2], claimed: 2 },
     ]);
-    const json = JSON.stringify(items);
-    expect(json).not.toContain('Sue');
-    expect(json).not.toContain('c1');
   });
 
   it('leaves the claim fields out, not empty, for an owner who has not opted in', () => {

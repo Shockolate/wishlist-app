@@ -162,16 +162,14 @@ describe('GET /shared/:shareToken (spec §5)', () => {
     expect(JSON.stringify(res.body)).not.toContain('Sue');
   });
 
-  it('shows the owner who opted in how many are claimed, and never who (D75)', async () => {
-    const { token, sue, sam } = await adasList();
+  it('shows the owner who opted in how many are claimed, beside the claims until the contract step (D75)', async () => {
+    const { token } = await adasList();
     await setShowClaims(db, ADA.email, true);
     const res = await shared(token, await logIn(t));
     const body = SharedWishlistResponseSchema.parse(res.body);
     expect([body.viewerIsOwner, body.ownerSeesClaims]).toEqual([true, true]);
     expect(body.items[0]).toMatchObject({ remaining: 1, claimed: 2 });
-    expect(body.items[0]).not.toHaveProperty('claims');
-    const json = JSON.stringify(res.body);
-    for (const secret of ['Sue', 'Sam', sue.id, sam.id]) expect(json).not.toContain(secret);
+    expect(body.items[0]?.claims?.map((claim) => claim.claimerName)).toEqual(['Sue', 'Sam']);
   });
 
   it('still gives a guest every claim’s name when the owner opted in', async () => {
