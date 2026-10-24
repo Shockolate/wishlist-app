@@ -1,0 +1,9 @@
+{
+  "name": "@wishlist/vercel-cli",
+  "private": true,
+  "type": "module",
+  "description": "The Vercel CLI, pinned with its whole dependency tree by the lockfile. Jobs that hold deploy secrets install only this package (D85)",
+  "dependencies": {
+    "vercel": "64.7.0"
+  }
+}

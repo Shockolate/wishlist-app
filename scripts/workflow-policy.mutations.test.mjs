@@ -13,6 +13,7 @@ const policy = join(root, 'scripts/workflow-policy.test.mjs');
 const PINNED_CACHE = 'actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830';
 const PINNED_DOWNLOAD = 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333';
 const PINNED_UPLOAD = 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9';
+const VERCEL_BIN = 'tools/vercel-cli/node_modules/.bin/vercel';
 
 function find(job, predicate) {
   const step = job.steps.find(predicate);
@@ -25,11 +26,29 @@ const usesStep = (job, prefix) => find(job, (s) => String(s.uses).startsWith(pre
 // [name, file, mutate(parsed file)]
 const mutations = [
   [
-    'vercel@latest in a deploy job',
+    'the Vercel CLI fetched through npx in a deploy job (D85)',
     'deploy.yml',
     (wf) => {
       const s = runStep(wf.jobs['deploy-api'], /deploy --prebuilt/);
-      s.run = s.run.replace('vercel@"$VERCEL_CLI_VERSION"', 'vercel@latest');
+      s.run = s.run.replace(VERCEL_BIN, 'npx --yes vercel@64.7.0');
+    },
+  ],
+  [
+    'the Vercel CLI installed with its install scripts (D85)',
+    'preview.yml',
+    (wf) => {
+      const s = runStep(wf.jobs['deploy-web'], /--filter @wishlist\/vercel-cli/);
+      s.run = s.run.replace(' --ignore-scripts', '');
+    },
+  ],
+  [
+    'the Vercel CLI run before it is installed (D85)',
+    'deploy.yml',
+    (wf) => {
+      const steps = wf.jobs.settings.steps;
+      const at = steps.findIndex((s) => /--filter @wishlist\/vercel-cli/.test(s.run ?? ''));
+      if (at === -1) throw new Error('mutation target not found');
+      steps.push(...steps.splice(at, 1));
     },
   ],
   [
@@ -132,9 +151,16 @@ const mutations = [
   ],
   [
     'an unpinned Vercel CLI version',
+    'tools/vercel-cli/package.json',
+    (pkg) => {
+      pkg.dependencies.vercel = '^64.7.0';
+    },
+  ],
+  [
+    'the Vercel CLI back in the root package.json',
     'package.json',
     (pkg) => {
-      pkg.devDependencies.vercel = '^62.5.0';
+      pkg.devDependencies.vercel = '64.7.0';
     },
   ],
   [
@@ -367,7 +393,12 @@ const mutations = [
 function copyRoot() {
   const dir = mkdtempSync(join(tmpdir(), 'policy-'));
   cpSync(join(root, '.github/workflows'), join(dir, '.github/workflows'), { recursive: true });
-  for (const f of ['renovate.json', 'package.json', 'e2e/package.json'])
+  for (const f of [
+    'renovate.json',
+    'package.json',
+    'e2e/package.json',
+    'tools/vercel-cli/package.json',
+  ])
     cpSync(join(root, f), join(dir, f));
   return dir;
 }

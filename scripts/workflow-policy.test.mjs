@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Asserts the CI/CD trust model (spec addendum 2026-10-08 §2, §5; Plan 1 review I-1, I-2, M-1,
 // M-3) so a later edit can't quietly undo it. Run: node scripts/workflow-policy.test.mjs
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 
@@ -16,7 +16,13 @@ const workflows = readdirSync(dir)
   .map((file) => ({ file, wf: parse(readFileSync(join(dir, file), 'utf8')) }));
 const byFile = Object.fromEntries(workflows.map(({ file, wf }) => [file, wf]));
 
-const VERCEL_CLI = 'npx --yes vercel@"$VERCEL_CLI_VERSION"';
+// D85: secret jobs run the Vercel CLI from the lockfile, never through npx, so its whole
+// dependency tree is pinned by integrity hash, and they install it without install scripts.
+// It runs by path from the repo root: `pnpm --filter … exec` would run it in tools/vercel-cli, where
+// there's no .vercel/output to deploy.
+const VERCEL_CLI = 'tools/vercel-cli/node_modules/.bin/vercel';
+const VERCEL_INSTALL =
+  'pnpm install --prod --frozen-lockfile --ignore-scripts --filter @wishlist/vercel-cli';
 const PROD_INSTALL =
   'pnpm install --prod --frozen-lockfile --ignore-scripts --filter @wishlist/api';
 const MIGRATOR = 'apps/api/src/db/migrate-cli.ts';
@@ -97,9 +103,9 @@ for (const { file, wf } of workflows) {
     } else if (secrets.length > 0 || job.environment) {
       for (const line of commandLines(job)) {
         const runsPackages = PACKAGE_RUNNER.test(line.replaceAll(VERCEL_CLI, ''));
-        if (runsPackages && line !== PROD_INSTALL)
+        if (runsPackages && line !== PROD_INSTALL && line !== VERCEL_INSTALL)
           fail(
-            `${where}: secret-holding job may only run "${PROD_INSTALL}" or ${VERCEL_CLI}: ${line}`,
+            `${where}: secret-holding job may only run "${PROD_INSTALL}", "${VERCEL_INSTALL}" or ${VERCEL_CLI}: ${line}`,
           );
         if (/\bvercel\s+[a-z]/.test(line) && !line.includes(VERCEL_CLI))
           fail(`${where}: invoke the Vercel CLI as ${VERCEL_CLI}: ${line}`);
@@ -403,10 +409,37 @@ for (const [file, jobName] of [
     fail(`${where}: the Playwright image already has the browser; don't run playwright install`);
 }
 
-// Secret jobs run `npx vercel@<this version>`; a range would float in token-holding jobs.
+// D85: no workflow fetches the Vercel CLI on the fly, and every job that runs it installs it from
+// the lockfile first, in an earlier step.
+for (const { file, wf } of workflows) {
+  for (const [jobName, job] of Object.entries(wf.jobs ?? {})) {
+    const where = `${file}#${jobName}`;
+    let installed = false;
+    for (const step of job.steps ?? []) {
+      const lines = String(step.run ?? '').split('\n');
+      for (const line of lines) {
+        if (/\b(npx|pnpx|pnpm dlx|bunx)\b.*\bvercel\b/.test(line))
+          fail(
+            `${where}: run the Vercel CLI as ${VERCEL_CLI}, never through a package fetcher: ${line.trim()}`,
+          );
+        if (line.includes(VERCEL_CLI) && !installed)
+          fail(`${where}: run "${VERCEL_INSTALL}" in an earlier step before ${VERCEL_CLI}`);
+      }
+      if (lines.some((line) => line.trim() === VERCEL_INSTALL)) installed = true;
+    }
+  }
+}
+
+// The CLI's version is exact, in its own package; a range would float in token-holding jobs.
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-if (!/^\d+\.\d+\.\d+$/.test(pkg.devDependencies?.vercel ?? ''))
-  fail('package.json: devDependencies.vercel must be an exact x.y.z version');
+if (pkg.devDependencies?.vercel || pkg.dependencies?.vercel)
+  fail('package.json: vercel lives in tools/vercel-cli (@wishlist/vercel-cli), not the root (D85)');
+const cliPkgPath = join(root, 'tools/vercel-cli/package.json');
+const cliPkg = existsSync(cliPkgPath) ? JSON.parse(readFileSync(cliPkgPath, 'utf8')) : {};
+if (cliPkg.name !== '@wishlist/vercel-cli')
+  fail('tools/vercel-cli/package.json: name must be @wishlist/vercel-cli');
+if (!/^\d+\.\d+\.\d+$/.test(cliPkg.dependencies?.vercel ?? ''))
+  fail('tools/vercel-cli/package.json: dependencies.vercel must be an exact x.y.z version');
 
 const renovate = JSON.parse(readFileSync(join(root, 'renovate.json'), 'utf8'));
 if (!renovate.extends?.includes('helpers:pinGitHubActionDigests'))

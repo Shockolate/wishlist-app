@@ -48,22 +48,22 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           package-manager-cache: false
-      - name: Pin the Vercel CLI to the repo's version
-        run: echo "VERCEL_CLI_VERSION=$(jq -r '.devDependencies.vercel' package.json)" >> "$GITHUB_ENV"
+      # The CLI and its whole dependency tree come from the lockfile, without install scripts (D85).
+      - run: pnpm install --prod --frozen-lockfile --ignore-scripts --filter @wishlist/vercel-cli
       - name: Pull project settings (IDs and settings only, never env files)
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           API_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_API }}
           WEB_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_WEB }}
-          npm_config_ignore_scripts: 'true'
         run: |
           for app in api web; do
             id_var="${app^^}_PROJECT_ID"
-            VERCEL_PROJECT_ID="${!id_var}" npx --yes vercel@"$VERCEL_CLI_VERSION" pull --yes --environment=preview
+            VERCEL_PROJECT_ID="${!id_var}" tools/vercel-cli/node_modules/.bin/vercel pull --yes --environment=preview
             mkdir -p "vercel-settings/$app"
             cp .vercel/project.json "vercel-settings/$app/project.json"
             rm -rf .vercel
@@ -100,7 +100,7 @@ jobs:
           mkdir -p .vercel
           cp vercel-settings/api/project.json .vercel/project.json
           # --standalone inlines dependencies, so deploy jobs need no node_modules.
-          pnpm exec vercel build --standalone
+          pnpm vercel build --standalone
           # A tarball keeps pnpm's symlinks; upload-artifact would replace them with copies.
           tar -C .vercel/output -czf api-output.tgz .
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -136,8 +136,6 @@ jobs:
       # No cache, production dependencies only, no install scripts (spec addendum §2; final
       # review C-1, C-2).
       - run: pnpm install --prod --frozen-lockfile --ignore-scripts --filter @wishlist/api
-      - name: Pin the Vercel CLI to the repo's version
-        run: echo "VERCEL_CLI_VERSION=$(jq -r '.devDependencies.vercel' package.json)" >> "$GITHUB_ENV"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: vercel-settings
@@ -187,19 +185,20 @@ jobs:
         run: mkdir -p .vercel/output && tar -xzf artifacts/api-output.tgz -C .vercel/output
       - run: scripts/check-vercel-output.sh .vercel/output
 
+      # The CLI and its whole dependency tree come from the lockfile, without install scripts (D85).
+      - run: pnpm install --prod --frozen-lockfile --ignore-scripts --filter @wishlist/vercel-cli
       - name: Deploy API preview
         id: api
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_API }}
           DATABASE_URL: ${{ steps.db.outputs.db_url_pooled }}
-          npm_config_ignore_scripts: 'true'
         run: |
           cp vercel-settings/api/project.json .vercel/project.json
           # EMAIL_TRANSPORT=log: a preview never emails anyone, whatever data it holds (spec §10).
           # Cloudflare's published always-pass test secret (public, not a credential): previews
           # accept Turnstile test tokens, and their email is log-only anyway.
-          url=$(npx --yes vercel@"$VERCEL_CLI_VERSION" deploy --prebuilt \
+          url=$(tools/vercel-cli/node_modules/.bin/vercel deploy --prebuilt \
             --env DATABASE_URL="$DATABASE_URL" \
             --env APP_ORIGIN="https://$WEB_ALIAS" \
             --env EMAIL_TRANSPORT=log \
@@ -240,7 +239,7 @@ jobs:
           mkdir -p .vercel
           cp vercel-settings/web/project.json .vercel/project.json
           # --standalone inlines dependencies, so deploy jobs need no node_modules.
-          pnpm exec vercel build --standalone
+          pnpm vercel build --standalone
           # A tarball keeps pnpm's symlinks; upload-artifact would replace them with copies.
           tar -C .vercel/output -czf web-output.tgz .
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -266,12 +265,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           package-manager-cache: false
-      - name: Pin the Vercel CLI to the repo's version
-        run: echo "VERCEL_CLI_VERSION=$(jq -r '.devDependencies.vercel' package.json)" >> "$GITHUB_ENV"
+      # The CLI and its whole dependency tree come from the lockfile, without install scripts (D85).
+      - run: pnpm install --prod --frozen-lockfile --ignore-scripts --filter @wishlist/vercel-cli
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: vercel-settings
@@ -287,11 +287,10 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_WEB }}
-          npm_config_ignore_scripts: 'true'
         run: |
           cp vercel-settings/web/project.json .vercel/project.json
-          url=$(npx --yes vercel@"$VERCEL_CLI_VERSION" deploy --prebuilt | scripts/vercel-url.sh)
-          npx --yes vercel@"$VERCEL_CLI_VERSION" alias set "$url" "$WEB_ALIAS"
+          url=$(tools/vercel-cli/node_modules/.bin/vercel deploy --prebuilt | scripts/vercel-url.sh)
+          tools/vercel-cli/node_modules/.bin/vercel alias set "$url" "$WEB_ALIAS"
 
   smoke:
     name: smoke
