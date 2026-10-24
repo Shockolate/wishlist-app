@@ -14,8 +14,9 @@ export class SharedListService {
   constructor(@Inject(DB) private readonly db: Database) {}
 
   /**
-   * The list as `viewerId` may see it (spec §5.1): the owner, signed in, sees claims only once
-   * they opt in. A malformed token is refused before the database is asked.
+   * The list as `viewerId` may see it (spec §5.1): the owner, signed in, sees claim totals once
+   * they opt in (D75; the claims beside them until the contract step). A malformed token is
+   * refused before the database is asked.
    */
   async get(shareToken: string, viewerId: string | null): Promise<SharedWishlistResponse> {
     if (!CAPABILITY_TOKEN_PATTERN.test(shareToken)) throw shareLinkNotFound();

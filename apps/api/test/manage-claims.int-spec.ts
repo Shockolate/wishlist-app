@@ -11,11 +11,18 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { claimsIpKey, claimsListKey } from '../src/claims/rate-limits.js';
 import { hashToken } from '../src/security/tokens.js';
 import { http } from '../src/testing/app.js';
-import { ADA, logIn, signUpVerified } from './support/accounts.js';
+import { ADA, logIn, signUp, signUpVerified, type Account } from './support/accounts.js';
 import { createAuthTestApp, type AuthTestApp } from './support/auth-app.js';
 import { client, type ApiResponse } from './support/client.js';
 import { openTestDatabase } from './support/database.js';
-import { linkTag, seedItem, seedTag, shareTokenOf, wishlistIdOf } from './support/lists.js';
+import {
+  linkTag,
+  seedClaim,
+  seedItem,
+  seedTag,
+  shareTokenOf,
+  wishlistIdOf,
+} from './support/lists.js';
 import { untilBlockedBy } from './support/locks.js';
 import { fillBucket } from './support/rate-limits.js';
 
@@ -329,5 +336,89 @@ describe('DELETE /claims/:manageToken (spec §5)', () => {
     expect(cancelled.status).toBe(204);
     expect([200, 404]).toContain(changed.status);
     expect(await count()).toBe(0);
+  });
+});
+
+describe('a claim on the owner’s own list (D82)', () => {
+  const BOB: Account = {
+    email: 'bob@example.com',
+    password: 'another fine passphrase 2',
+    displayName: 'Bob',
+  };
+
+  /** Ada's verified list with Sue's claim on a kettle, and Ada's session. */
+  async function suesClaim() {
+    await signUpVerified(t);
+    const kettle = await seedItem(db, ADA.email, 'Kettle', 3);
+    const sue = await seedClaim(db, kettle, 'Sue', 2);
+    return { sue, ada: await logIn(t) };
+  }
+
+  const claimRows = async () =>
+    (
+      await db.pool.query<{ claimer_name: string; quantity: number }>(
+        'select claimer_name, quantity from claims',
+      )
+    ).rows;
+
+  it('refuses a GET with 403 OWN_LIST_CLAIM and no claim data', async () => {
+    const { sue, ada } = await suesClaim();
+    const res = await client(t.app, ada).get(`/claims/${sue.manageToken}`);
+    expect([res.status, codeOf(res)]).toEqual([403, ErrorCode.OWN_LIST_CLAIM]);
+    const body = JSON.stringify(res.body);
+    expect(body).not.toContain('Sue');
+    expect(body).not.toContain(sue.id);
+    expect(body).not.toContain('remaining');
+  });
+
+  it('refuses a PATCH, and the claim is unchanged', async () => {
+    const { sue, ada } = await suesClaim();
+    const res = await client(t.app, ada).patch(`/claims/${sue.manageToken}`, { quantity: 1 });
+    expect([res.status, codeOf(res)]).toEqual([403, ErrorCode.OWN_LIST_CLAIM]);
+    expect(await claimRows()).toEqual([{ claimer_name: 'Sue', quantity: 2 }]);
+  });
+
+  it('refuses a DELETE, and the claim stays', async () => {
+    const { sue, ada } = await suesClaim();
+    const res = await client(t.app, ada).delete(`/claims/${sue.manageToken}`);
+    expect([res.status, codeOf(res)]).toEqual([403, ErrorCode.OWN_LIST_CLAIM]);
+    expect(await count()).toBe(1);
+  });
+
+  it('refuses the owner before the list’s limit, so a 429 says nothing (D43)', async () => {
+    const { sue, ada } = await suesClaim();
+    await fillBucket(db, claimsListKey(await wishlistIdOf(db, ADA.email)), 30);
+    const res = await client(t.app, ada).patch(`/claims/${sue.manageToken}`, { quantity: 1 });
+    expect([res.status, codeOf(res)]).toEqual([403, ErrorCode.OWN_LIST_CLAIM]);
+  });
+
+  it('refuses an owner whose email is unconfirmed too', async () => {
+    await signUp(t);
+    const kettle = await seedItem(db, ADA.email, 'Kettle', 3);
+    const sue = await seedClaim(db, kettle, 'Sue', 2);
+    const ada = await logIn(t);
+    const res = await client(t.app, ada).get(`/claims/${sue.manageToken}`);
+    expect([res.status, codeOf(res)]).toEqual([403, ErrorCode.OWN_LIST_CLAIM]);
+  });
+
+  it('treats anyone else who is signed in as the claimer, as before', async () => {
+    const { sue } = await suesClaim();
+    await signUpVerified(t, BOB);
+    const bob = await logIn(t, BOB);
+    const res = await client(t.app, bob).get(`/claims/${sue.manageToken}`);
+    expect(res.status).toBe(200);
+    expect(ClaimDetailsResponseSchema.parse(res.body).claim.claimerName).toBe('Sue');
+    expect((await client(t.app, bob).delete(`/claims/${sue.manageToken}`)).status).toBe(204);
+  });
+
+  it('still answers 404 for an unknown token, signed in as the owner', async () => {
+    const { ada } = await suesClaim();
+    for (const res of [
+      await client(t.app, ada).get(`/claims/${UNKNOWN_TOKEN}`),
+      await client(t.app, ada).patch(`/claims/${UNKNOWN_TOKEN}`, { quantity: 1 }),
+      await client(t.app, ada).delete(`/claims/${UNKNOWN_TOKEN}`),
+    ]) {
+      expect([res.status, codeOf(res)]).toEqual([404, ErrorCode.NOT_FOUND]);
+    }
   });
 });

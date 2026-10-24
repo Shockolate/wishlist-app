@@ -126,7 +126,10 @@ export const UpdateWishlistRequestSchema = z
   );
 export type UpdateWishlistRequest = z.infer<typeof UpdateWishlistRequestSchema>;
 
-/** A claim as gifters, and an owner who opted in, see it (spec §5). Never its manage token. */
+/**
+ * A claim as gifters see it (spec §5). Never its manage token. An owner who opts in gets totals,
+ * and until the contract step of D75 these claims too.
+ */
 export const ClaimSchema = z.object({
   id: z.uuid(),
   claimerName: z.string(),
@@ -136,16 +139,19 @@ export type Claim = z.infer<typeof ClaimSchema>;
 
 /**
  * The claim fields an item carries when its viewer may see them (spec §5.1). They're optional
- * because the projection leaves them out, rather than empty, for everyone else.
+ * because the projection leaves them out, rather than empty, for everyone else. A gifter gets
+ * `remaining` and `claims`; an owner who opted in gets `remaining` and `claimed`, never `claims`.
  */
 export const ITEM_CLAIM_FIELDS = {
   remaining: z.number().int().min(0).optional(),
+  /** The owner's total (D75), which replaces `claims` for owners: the claims' quantities summed, unclamped. */
+  claimed: z.number().int().min(0).optional(),
   claims: z.array(ClaimSchema).optional(),
 };
 
 /**
  * An item as the owner sees it. Every field is present; empty ones are null (Plan 3a rule 1).
- * `remaining` and `claims` appear only once the owner opts in (spec §5.1). `tagIds` is optional for
+ * `remaining` and `claimed` appear only once the owner opts in (spec §5.1, D75). `tagIds` is optional for
  * expand/contract (spec §10); the tags themselves are sent once, beside the items.
  */
 export const ItemSchema = z.object({

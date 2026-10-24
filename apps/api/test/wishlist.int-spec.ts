@@ -176,14 +176,14 @@ describe('PATCH /wishlist (spec §5)', () => {
       showClaimsToOwner: true,
     });
     const shown = WishlistResponseSchema.parse((await client(t.app, cookie).get('/wishlist')).body);
-    expect(shown.items[0]).toMatchObject({
-      remaining: 1,
-      claims: [{ id: sue.id, claimerName: 'Sue', quantity: 1 }],
-    });
+    // Expand step (D75): the claims still come beside `claimed` until the contract layer.
+    expect(shown.items[0]).toMatchObject({ remaining: 1, claimed: 1 });
+    expect(shown.items[0]?.claims).toEqual([{ id: sue.id, claimerName: 'Sue', quantity: 1 }]);
 
     await client(t.app, cookie).patch('/wishlist', { showClaimsToOwner: false });
     const hidden = (await client(t.app, cookie).get('/wishlist')).body as { items: object[] };
     expect(hidden.items[0]).not.toHaveProperty('claims');
+    expect(hidden.items[0]).not.toHaveProperty('claimed');
   });
 
   it('renames without touching the spoiler setting', async () => {

@@ -37,6 +37,8 @@ export const ErrorCode = {
   CLAIM_EXCEEDS_REMAINING: 'CLAIM_EXCEEDS_REMAINING',
   /** 403: the list's owner tried to claim from their own list (spec §2). */
   OWNER_CANNOT_CLAIM: 'OWNER_CANNOT_CLAIM',
+  /** 403: the list's signed-in owner opened a claim's manage link (D82). */
+  OWN_LIST_CLAIM: 'OWN_LIST_CLAIM',
   /** 404: a share link that's malformed, unknown, or was replaced by a rotation (spec §5). */
   SHARE_LINK_NOT_FOUND: 'SHARE_LINK_NOT_FOUND',
   /** 409: a claim sent a manage token that belongs to a claim on another item (D42). */
