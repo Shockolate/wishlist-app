@@ -36,7 +36,7 @@ export class ClaimsController {
     @Param('manageToken') manageToken: string,
     @OptionalAuth() auth: AuthContext | null,
   ): Promise<ClaimDetailsResponse> {
-    return this.claims.details(manageToken, auth?.user.id ?? null);
+    return this.claims.details(manageToken, auth?.user ?? null);
   }
 
   @Patch(':manageToken')

@@ -252,3 +252,43 @@ describe('GET /shared/:shareToken (spec §5)', () => {
     },
   );
 });
+
+describe('GET /shared/:shareToken and the viewer’s name (D76)', () => {
+  const viewerOf = (res: ApiResponse) => SharedWishlistResponseSchema.parse(res.body).viewer;
+
+  it('gives a verified non-owner their display name, and nobody else', async () => {
+    const { token } = await adasList();
+    expect(viewerOf(await shared(token))).toBeUndefined();
+    expect(await shared(token).then((r) => r.body)).not.toHaveProperty('viewer');
+    expect(viewerOf(await shared(token, await logIn(t)))).toBeUndefined();
+
+    await signUp(t, BOB);
+    const unverified = await shared(token, await logIn(t, BOB));
+    expect(unverified.body).not.toHaveProperty('viewer');
+    await db.pool.query(`update users set email_verified_at = now() where email = $1`, [BOB.email]);
+    expect(viewerOf(await shared(token, await logIn(t, BOB)))).toEqual({ displayName: 'Bob' });
+  });
+
+  it('nothing about links reaches the owner', async () => {
+    const { token, sue, kettle } = await adasList();
+    await setShowClaims(db, ADA.email, true);
+    await signUpVerified(t, BOB);
+    const linked = await db.pool.query<{ id: string }>(
+      `insert into claim_links (id, claim_id, user_id, item_title, owner_display_name, bought_at)
+       select gen_random_uuid(), $1, id, 'Kettle', 'Ada', now() from users where email = $2
+       returning id`,
+      [sue.id, BOB.email],
+    );
+    const linkId = linked.rows[0]?.id ?? '';
+    expect(linkId).not.toBe('');
+    const ada = await logIn(t);
+    const forbidden = ['"link"', 'bought', 'onYourGifts', 'viewer"', 'Gifts', linkId];
+    for (const res of [await shared(token, ada), await client(t.app, ada).get('/wishlist')]) {
+      expect(res.status).toBe(200);
+      const body = JSON.stringify(res.body);
+      for (const word of forbidden) expect(body).not.toContain(word);
+      expect(body).toContain(kettle);
+    }
+    expect(await shared(token, ada).then((r) => r.body)).toMatchObject({ viewerIsOwner: true });
+  });
+});

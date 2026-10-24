@@ -26,7 +26,7 @@ export class SharedController {
     @Param('shareToken') shareToken: string,
     @OptionalAuth() auth: AuthContext | null,
   ): Promise<SharedWishlistResponse> {
-    return this.lists.get(shareToken, auth?.user.id ?? null);
+    return this.lists.get(shareToken, auth?.user ?? null);
   }
 
   @Post(':shareToken/items/:itemId/claims')
@@ -38,6 +38,6 @@ export class SharedController {
     @OptionalAuth() auth: AuthContext | null,
     @ClientIp() ip: string,
   ): Promise<CreateClaimResponse> {
-    return this.claims.create(shareToken, itemId, body, auth?.user.id ?? null, ip);
+    return this.claims.create(shareToken, itemId, body, auth?.user ?? null, ip);
   }
 }

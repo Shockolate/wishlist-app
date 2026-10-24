@@ -408,3 +408,104 @@ describe('replaying a claim with the sheet’s own manage token (D42)', () => {
     expect(body.manageToken).toMatch(CAPABILITY_TOKEN_PATTERN);
   });
 });
+
+describe('linking a claim to a signed-in gifter (D76)', () => {
+  const links = async () =>
+    (
+      await db.pool.query<{
+        claim_id: string;
+        user_id: string;
+        item_title: string;
+        owner_display_name: string;
+        bought_at: Date | null;
+      }>('select claim_id, user_id, item_title, owner_display_name, bought_at from claim_links')
+    ).rows;
+  const userId = async (email: string) =>
+    (await db.pool.query<{ id: string }>('select id from users where email = $1', [email])).rows[0]
+      ?.id;
+
+  it('links a claim made by a verified, signed-in gifter, and says so', async () => {
+    const { token, kettle } = await adasKettle(2);
+    await signUpVerified(t, BOB);
+    const res = await claim(token, kettle, { claimerName: 'Bobby' }, await logIn(t, BOB));
+    expect(res.status).toBe(201);
+    const body = CreateClaimResponseSchema.parse(res.body);
+    expect(body.onYourGifts).toBe(true);
+    expect(await links()).toEqual([
+      {
+        claim_id: body.claim.id,
+        user_id: await userId(BOB.email),
+        item_title: 'Kettle',
+        owner_display_name: 'Ada',
+        bought_at: null,
+      },
+    ]);
+  });
+
+  it('does not link a guest’s or an unverified account’s claim', async () => {
+    const { token, kettle } = await adasKettle(3);
+    const guest = await claim(token, kettle, { claimerName: 'Sue' });
+    expect(guest.status).toBe(201);
+    expect(guest.body).not.toHaveProperty('onYourGifts');
+    await signUp(t, BOB);
+    const unverified = await claim(token, kettle, { claimerName: 'Bobby' }, await logIn(t, BOB));
+    expect(unverified.status).toBe(201);
+    expect(unverified.body).not.toHaveProperty('onYourGifts');
+    expect(await count('claims')).toBe(2);
+    expect(await count('claim_links')).toBe(0);
+  });
+
+  it('a replayed token links the existing claim once (D42)', async () => {
+    const { token, kettle } = await adasKettle(2);
+    await signUpVerified(t, BOB);
+    const bob = await logIn(t, BOB);
+    const manageToken = newToken(16);
+    const first = await claim(token, kettle, { claimerName: 'Bobby', manageToken }, bob);
+    const again = await claim(token, kettle, { claimerName: 'Bobby', manageToken }, bob);
+    expect([first.status, again.status]).toEqual([201, 201]);
+    expect(CreateClaimResponseSchema.parse(again.body).onYourGifts).toBe(true);
+    expect(await count('claims')).toBe(1);
+    expect(await count('claim_links')).toBe(1);
+  });
+
+  it('a replay while signed in links a claim that was made as a guest', async () => {
+    const { token, kettle } = await adasKettle(2);
+    const manageToken = newToken(16);
+    const guest = await claim(token, kettle, { claimerName: 'Bobby', manageToken });
+    expect(guest.body).not.toHaveProperty('onYourGifts');
+    await signUpVerified(t, BOB);
+    const again = await claim(
+      token,
+      kettle,
+      { claimerName: 'Bobby', manageToken },
+      await logIn(t, BOB),
+    );
+    expect(CreateClaimResponseSchema.parse(again.body).onYourGifts).toBe(true);
+    expect(await count('claim_links')).toBe(1);
+  });
+
+  it('a replay by another account does not take the link, and says false (ruling 5)', async () => {
+    const { token, kettle } = await adasKettle(2);
+    await signUpVerified(t, BOB);
+    const manageToken = newToken(16);
+    await claim(token, kettle, { claimerName: 'Bobby', manageToken }, await logIn(t, BOB));
+    const cam: Account = { ...BOB, email: 'cam@example.com', displayName: 'Cam' };
+    await signUpVerified(t, cam);
+    const res = await claim(
+      token,
+      kettle,
+      { claimerName: 'Cam', manageToken },
+      await logIn(t, cam),
+    );
+    expect(res.status).toBe(201);
+    expect(CreateClaimResponseSchema.parse(res.body).onYourGifts).toBe(false);
+    expect((await links()).map((l) => l.user_id)).toEqual([await userId(BOB.email)]);
+  });
+
+  it('refuses the owner, verified or not, and links nothing', async () => {
+    const { token, kettle } = await adasKettle(1);
+    const res = await claim(token, kettle, { claimerName: 'Ada' }, await logIn(t));
+    expect([res.status, codeOf(res)]).toEqual([403, ErrorCode.OWNER_CANNOT_CLAIM]);
+    expect(await count('claim_links')).toBe(0);
+  });
+});

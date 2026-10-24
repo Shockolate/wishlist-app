@@ -422,3 +422,58 @@ describe('a claim on the owner’s own list (D82)', () => {
     }
   });
 });
+
+describe('GET /claims/:manageToken tells a signed-in gifter about links (D76)', () => {
+  const BOB: Account = {
+    email: 'bob@example.com',
+    password: 'another fine passphrase 2',
+    displayName: 'Bob',
+  };
+  const CAM: Account = { ...BOB, email: 'cam@example.com', displayName: 'Cam' };
+
+  const linkTo = (claimId: string, email: string) =>
+    db.pool.query(
+      `insert into claim_links (id, claim_id, user_id, item_title, owner_display_name)
+       select gen_random_uuid(), $1, id, 'Kettle', 'Ada' from users where email = $2`,
+      [claimId, email],
+    );
+
+  it('says none, yours or someone-else to a verified gifter, and nothing to a guest', async () => {
+    const { token, kettle } = await adasKettle(3);
+    const sue = await claimed(token, kettle, 'Sue');
+    await signUpVerified(t, BOB);
+    await signUpVerified(t, CAM);
+    const bob = await logIn(t, BOB);
+    const cam = await logIn(t, CAM);
+    const linkOf = async (cookie?: string) =>
+      ClaimDetailsResponseSchema.parse(
+        (await client(t.app, cookie).get(`/claims/${sue.manageToken}`)).body,
+      ).link;
+
+    expect(await linkOf()).toBeUndefined();
+    expect(await linkOf(bob)).toBe('none');
+    await linkTo(sue.claim.id, BOB.email);
+    expect(await linkOf(bob)).toBe('yours');
+    expect(await linkOf(cam)).toBe('someone-else');
+    expect(await linkOf()).toBeUndefined();
+    const guest = (await details(sue.manageToken)).body as object;
+    expect(guest).not.toHaveProperty('link');
+  });
+
+  it('adds no link for an unverified account', async () => {
+    const { token, kettle } = await adasKettle(1);
+    const sue = await claimed(token, kettle, 'Sue');
+    await signUp(t, BOB);
+    const res = await client(t.app, await logIn(t, BOB)).get(`/claims/${sue.manageToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body).not.toHaveProperty('link');
+  });
+
+  it('adds no link for the owner, who is refused first (D82)', async () => {
+    const { token, kettle } = await adasKettle(1);
+    const sue = await claimed(token, kettle, 'Sue');
+    const res = await client(t.app, await logIn(t)).get(`/claims/${sue.manageToken}`);
+    expect([res.status, codeOf(res)]).toEqual([403, ErrorCode.OWN_LIST_CLAIM]);
+    expect(res.body).not.toHaveProperty('link');
+  });
+});

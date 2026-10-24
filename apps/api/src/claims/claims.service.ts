@@ -9,6 +9,7 @@ import {
 } from '@wishlist/contracts';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
+import type { SessionUser } from '../auth/sessions.service.js';
 import { CLOCK, type Clock } from '../core/clock.js';
 import { ENV, type Env } from '../core/env.js';
 import { newId } from '../core/ids.js';
@@ -29,6 +30,7 @@ import {
 } from './claims-errors.js';
 import { CLAIM_COLUMNS, SHARED_ITEM_COLUMNS, SNAPSHOT, claimedTotal } from './queries.js';
 import { CLAIMS_PER_IP, CLAIMS_PER_LIST, claimsIpKey, claimsListKey } from './rate-limits.js';
+import { canLink, insertLink, linkStateOf } from './links.js';
 import { fitsChangedClaim, fitsNewClaim, remainingOf } from './remaining.js';
 
 const ItemIdSchema = z.uuid();
@@ -55,7 +57,7 @@ export class ClaimsService {
     shareToken: string,
     itemId: string,
     input: CreateClaimRequest,
-    viewerId: string | null,
+    viewer: SessionUser | null,
     ip: string,
   ): Promise<CreateClaimResponse> {
     if (!CAPABILITY_TOKEN_PATTERN.test(shareToken)) throw shareLinkNotFound();
@@ -64,23 +66,30 @@ export class ClaimsService {
     // Read outside the transaction: a link rotated just after this still gets this one claim,
     // as if it had arrived a moment earlier (Plan 4a rule 3).
     const [list] = await this.db
-      .select({ id: wishlists.id, ownerId: wishlists.ownerId })
+      .select({
+        id: wishlists.id,
+        ownerId: wishlists.ownerId,
+        ownerDisplayName: users.displayName,
+      })
       .from(wishlists)
+      .innerJoin(users, eq(users.id, wishlists.ownerId))
       .where(eq(wishlists.shareToken, shareToken));
     if (!list) throw shareLinkNotFound();
     // Before the list's limit (D43): a 429 there would tell the owner gifters have been claiming.
-    if (viewerId === list.ownerId) throw ownerCannotClaim();
+    if (viewer?.id === list.ownerId) throw ownerCannotClaim();
     await this.limiter.enforce(claimsListKey(list.id), CLAIMS_PER_LIST);
 
     const manageToken = input.manageToken ?? newToken(16);
     const tokenHash = hashToken(manageToken);
-    let claim: Claim;
+    // A verified, signed-in gifter's claim goes on Your gifts (D76); anyone else's is as before.
+    const linker = canLink(viewer, list.ownerId) ? viewer : null;
+    let made: { claim: Claim; onYourGifts: boolean };
     try {
-      claim = await this.db.transaction(async (tx) => {
+      made = await this.db.transaction(async (tx) => {
         // Spec §6.3: the item's row lock serializes every claim write on it. Only the item is
         // locked, never the list, so the users → wishlists → items order holds.
         const [item] = await tx
-          .select({ quantity: items.quantity })
+          .select({ quantity: items.quantity, title: items.title })
           .from(items)
           .where(and(eq(items.id, itemId), eq(items.wishlistId, list.id)))
           .for('update');
@@ -91,19 +100,35 @@ export class ClaimsService {
           .select({ ...CLAIM_COLUMNS, itemId: claims.itemId })
           .from(claims)
           .where(eq(claims.manageTokenHash, tokenHash));
+        const now = this.clock.now();
+        // Links the claim to the session if it has none, and says whether it ended up on this
+        // session's gifts: a claim another account holds stays theirs (Plan 10b ruling 5).
+        const link = async (claimId: string): Promise<boolean> => {
+          if (!linker) return false;
+          const inserted = await insertLink(tx, {
+            claimId,
+            userId: linker.id,
+            itemTitle: item.title,
+            ownerDisplayName: list.ownerDisplayName,
+            now,
+          });
+          return inserted || (await linkStateOf(tx, claimId, linker.id)) === 'yours';
+        };
         if (existing) {
           if (existing.itemId !== itemId) throw manageTokenInUse();
           return {
-            id: existing.id,
-            claimerName: existing.claimerName,
-            quantity: existing.quantity,
+            claim: {
+              id: existing.id,
+              claimerName: existing.claimerName,
+              quantity: existing.quantity,
+            },
+            onYourGifts: await link(existing.id),
           };
         }
         const claimed = await claimedTotal(tx, itemId);
         if (!fitsNewClaim(input.quantity, item.quantity, claimed)) {
           throw claimExceedsRemaining(remainingOf(item.quantity, claimed));
         }
-        const now = this.clock.now();
         const [row] = await tx
           .insert(claims)
           .values({
@@ -117,21 +142,27 @@ export class ClaimsService {
           })
           .returning(CLAIM_COLUMNS);
         if (!row) throw new Error('claim insert returned no row');
-        return row;
+        return { claim: row, onYourGifts: await link(row.id) };
       });
     } catch (error) {
       // The same token claimed on another item at the same moment (Plan 4b rule 3).
       if (isUniqueViolation(error, 'claims_manage_token_hash_unique')) throw manageTokenInUse();
       throw error;
     }
-    return { claim, manageToken, manageUrl: manageUrl(this.env.APP_ORIGIN, manageToken) };
+    return {
+      claim: made.claim,
+      manageToken,
+      manageUrl: manageUrl(this.env.APP_ORIGIN, manageToken),
+      // Absent for a guest and an unverified account: they have no Your gifts to be on.
+      ...(linker && { onYourGifts: made.onYourGifts }),
+    };
   }
 
   /**
    * The claimer's own view (spec §5.1): the manage token is the capability. The list's own owner,
    * signed in, is refused with nothing about the claim (D82).
    */
-  async details(manageToken: string, viewerId: string | null): Promise<ClaimDetailsResponse> {
+  async details(manageToken: string, viewer: SessionUser | null): Promise<ClaimDetailsResponse> {
     if (!CAPABILITY_TOKEN_PATTERN.test(manageToken)) throw claimNotFound();
     return this.db.transaction(async (tx) => {
       const [row] = await tx
@@ -150,7 +181,7 @@ export class ClaimsService {
         .innerJoin(users, eq(users.id, wishlists.ownerId))
         .where(eq(claims.manageTokenHash, hashToken(manageToken)));
       if (!row) throw claimNotFound();
-      if (viewerId === row.ownerId) throw ownListClaim();
+      if (viewer?.id === row.ownerId) throw ownListClaim();
       const claimed = await claimedTotal(tx, row.item.id);
       return {
         claim: row.claim,
@@ -161,6 +192,11 @@ export class ClaimsService {
         // The list's current link, so it's right after a rotation (spec §5).
         shareUrl: shareUrl(this.env.APP_ORIGIN, row.shareToken),
         ownerSeesClaims: row.ownerSeesClaims,
+        // Only for a session that could have the claim on its gifts, and never for the owner,
+        // who was refused above (D76, D82).
+        ...(canLink(viewer, row.ownerId) && {
+          link: await linkStateOf(tx, row.claim.id, viewer.id),
+        }),
       };
     }, SNAPSHOT);
   }
