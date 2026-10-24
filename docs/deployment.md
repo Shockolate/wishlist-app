@@ -182,6 +182,7 @@ The privacy page says Sentry's error reports have IP addresses removed. [Sentry 
 | Vercel `wishlist-api` → Production | `ETSY_API_KEY` (sensitive)                                                                                                    | Etsy Open API key, as `keystring:shared_secret`. Unset means Etsy links take the page fetch. See "Turning on Etsy lookups"                                                                                                       |
 | Vercel `wishlist-api` → Production | `CLOUDFLARE_ACCOUNT_ID`                                                                                                       | Cloudflare account ID, from the account's overview page. Set together with the token or not at all. Unset means no tag suggestions. See "Turning on tag suggestions"                                                             |
 | Vercel `wishlist-api` → Production | `CLOUDFLARE_AI_TOKEN` (sensitive)                                                                                             | API token with Account → Workers AI → Read and Edit, on that account only. Unset means no tag suggestions. See "Turning on tag suggestions"                                                                                      |
+| Vercel `wishlist-api` → Production | `CRON_HEARTBEAT_URL` (sensitive)                                                                                              | The daily cron's Better Stack heartbeat URL, `https:` only (D86). It carries the heartbeat's token, so treat it as a secret. Unset means no ping. See "Daily cron"                                                               |
 | Vercel `wishlist-api` → Production | `EMAIL_TRANSPORT=resend`, `EMAIL_FROM=Hanker <no-reply@mail.hanker.dev>`, `RESEND_API_KEY` (sensitive)                        | Set in Plan 2b. The API refuses to boot in production with Turnstile set and `EMAIL_TRANSPORT=log`                                                                                                                               |
 | Set per preview by CI              | `DATABASE_URL`, `APP_ORIGIN`, `EMAIL_TRANSPORT=log`, `TURNSTILE_SECRET_KEY` (Cloudflare's always-pass test secret), `GIT_SHA` | See `.github/workflows/preview.yml`                                                                                                                                                                                              |
 | Set per deploy by CI               | `GIT_SHA`                                                                                                                     | The commit being deployed                                                                                                                                                                                                        |
@@ -209,6 +210,11 @@ Runtime variables apply to the **next** deployment. Redeploy, or merge to `main`
 The response lists the counts.
 
 - **Check it ran:** Vercel → `wishlist-api` → Settings → Cron Jobs shows the schedule and has a **Run** button. The run's logs show the JSON counts.
+- **The heartbeat (D86):** each authorized run pings Better Stack's "Hanker daily cron" heartbeat at `CRON_HEARTBEAT_URL`, or its `/fail` URL when the cleanup throws, so a cron that stops running or keeps failing sends an alert. A ping that fails is a Sentry warning, `cron heartbeat failed status=<n|none>`, and never changes the run. To set it up: in Better Stack → Uptime → Heartbeats, create "Hanker daily cron" with a period of 1 day and 2 hours of grace (Hobby runs the cron at any point within 09:00–09:59 UTC, so runs are 23 to 25 hours apart). Copy its URL, then store it from a hidden prompt:
+  ```bash
+  read -rs URL && printf %s "$URL" | pnpm vercel env add CRON_HEARTBEAT_URL production --sensitive --project wishlist-api --scope shockolate; unset URL
+  ```
+  Redeploy, press **Run** under Cron Jobs, and check the heartbeat turns Up.
 - **It refuses** any request without `Authorization: Bearer $CRON_SECRET` with a `401`.
 
 ## Backups
@@ -372,12 +378,13 @@ A backup job that passes proves only that bytes reached R2. The drill proves the
 
 Better Stack's free plan watches the site and the backup, and emails you (D47). Create these in Better Stack → Uptime, with email alerts to you:
 
-| Monitor          | URL                                  | Check every                                              | Proves                                                                                |
-| ---------------- | ------------------------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Live             | `https://hanker.dev/api/health/live` | 3 minutes                                                | The web project, the `/api` rewrite and the API function are up                       |
-| Site             | `https://hanker.dev/`                | 3 minutes                                                | The landing page renders. It's static, so it touches neither the API nor the database |
-| Deep             | `https://hanker.dev/api/health`      | 30 minutes (the longest Better Stack's free plan offers) | Neon is reachable and migrated. It answers `503` when not                             |
-| Backup heartbeat | set up in [Backups](#backups) step 4 | expects a ping every 24 hours, with 2 hours of grace     | The nightly backup ran and uploaded                                                   |
+| Monitor              | URL                                  | Check every                                              | Proves                                                                                        |
+| -------------------- | ------------------------------------ | -------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Live                 | `https://hanker.dev/api/health/live` | 3 minutes                                                | The web project, the `/api` rewrite and the API function are up                               |
+| Site                 | `https://hanker.dev/`                | 3 minutes                                                | The landing page renders. It's static, so it touches neither the API nor the database         |
+| Deep                 | `https://hanker.dev/api/health`      | 30 minutes (the longest Better Stack's free plan offers) | Neon is reachable and migrated. It answers `503` when not                                     |
+| Backup heartbeat     | set up in [Backups](#backups) step 4 | expects a ping every 24 hours, with 2 hours of grace     | The nightly backup ran and uploaded                                                           |
+| Daily cron heartbeat | set up in [Daily cron](#daily-cron)  | expects a ping every 24 hours, with 2 hours of grace     | The daily cleanup ran and succeeded, so `/privacy`'s 30 days for Your gifts notes holds (D86) |
 
 **Why only the deep check touches the database.** `/api/health` runs a query, which wakes Neon, and Neon Free scales to zero only after 5 idle minutes, with 100 CU-hours per project per month. A deep check every 3 minutes would keep it awake all month, about 180 CU-hours, and Neon would then suspend the database until the month ends. Every 30 minutes costs about 30 CU-hours, since Neon sleeps for 25 of every 30 minutes. `/api/health/live` never touches the database. Check Neon → your project → Usage after the first week; if compute trends past about 70% of the quota, pause the Deep monitor. The backup heartbeat still proves the database daily.
 
@@ -386,6 +393,7 @@ Better Stack's free plan watches the site and the backup, and emails you (D47). 
 - **Live or Site down:** check Vercel's status and the newest deploy. Roll back if a deploy caused it ([Rollback](#rollback)).
 - **Deep down but Live up:** the API is up and Neon isn't. Check Neon's status page and the project's compute quota.
 - **Backup heartbeat:** see [Backups → When it fails](#when-it-fails).
+- **Daily cron heartbeat:** see "When something breaks" in [operations.md](operations.md#when-something-breaks).
 
 ## Sentry
 
