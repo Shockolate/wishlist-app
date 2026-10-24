@@ -1,0 +1,328 @@
+import { expect, test, type Browser, type Page } from '@playwright/test';
+import { DESKTOP, expectAccessible, expectNoSidewaysScroll, PHONE } from '../../support/a11y.js';
+import { logInViaApi, signUpViaApi, uniqueEmail } from '../../support/accounts.js';
+import { addItemViaApi, verifiedOwner } from '../../support/owner.js';
+import { claimViaApi, guest, shareTokenOf } from '../../support/share.js';
+
+/** A verified account in its own browser, so each person has their own session. */
+async function person(browser: Browser, base: string, label: string, displayName: string) {
+  const context = await browser.newContext({ baseURL: base });
+  const page = await context.newPage();
+  await verifiedOwner(page, base, label, displayName);
+  return page;
+}
+
+const card = (page: Page, title: string) =>
+  page.getByRole('listitem').filter({ has: page.getByRole('heading', { name: title }) });
+const group = (page: Page, owner: string) => page.getByRole('region', { name: owner, exact: true });
+
+test('a signed-in gifter’s claims appear on Your gifts, grouped by person, and Bought is ticked privately', async ({
+  browser,
+  baseURL,
+}) => {
+  const base = baseURL ?? '';
+  const mom = await person(browser, base, 'gifts-mom', 'Mom');
+  const kettle = await addItemViaApi(mom.request, base, {
+    title: 'Fellow Stagg kettle',
+    priceText: '$165.00',
+    note: 'The matte black one, please.',
+  });
+  const spatulas = await addItemViaApi(mom.request, base, { title: 'Spatula set' });
+  const momToken = await shareTokenOf(mom.request);
+
+  const sam = await person(browser, base, 'gifts-sam', 'Sam');
+  const chalk = await addItemViaApi(sam.request, base, { title: 'Chalk bag', quantity: 3 });
+  const samToken = await shareTokenOf(sam.request);
+
+  const gifter = await person(browser, base, 'gifts-gifter', 'Gina');
+  // Sam first, then Mom, so the groups follow the order of the claims, not of the lists.
+  await claimViaApi(gifter.request, base, samToken, chalk.id, { claimerName: 'Gina', quantity: 2 });
+  await claimViaApi(gifter.request, base, momToken, kettle.id, { claimerName: 'Gina' });
+  await claimViaApi(gifter.request, base, momToken, spatulas.id, { claimerName: 'Gina' });
+
+  await gifter.goto('/list');
+  await gifter
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Your gifts' })
+    .click();
+  await expect(gifter).toHaveURL('/gifts');
+  await expect(gifter).toHaveTitle('Your gifts | Hanker');
+  await expect(gifter.getByRole('heading', { level: 1, name: 'Your gifts' })).toBeVisible();
+  await expect(gifter.getByText('3 things for 2 people', { exact: true })).toBeVisible();
+
+  await expect(gifter.getByRole('heading', { level: 2 })).toHaveText(['Sam', 'Mom']);
+  await expect(card(gifter, 'Chalk bag')).toContainText('You’re getting 2');
+  await expect(card(gifter, 'Fellow Stagg kettle')).toContainText('$165.00 · you’re getting 1');
+  await expect(card(gifter, 'Fellow Stagg kettle')).toContainText('The matte black one, please.');
+  await expect(group(gifter, 'Mom').getByRole('listitem').getByRole('heading')).toHaveText([
+    'Fellow Stagg kettle',
+    'Spatula set',
+  ]);
+  await expect(group(gifter, 'Mom').getByRole('link', { name: /^Open list/ })).toHaveAttribute(
+    'href',
+    `${new URL(base).origin}/s/${momToken}`,
+  );
+  // An idea has no link to shop at.
+  await expect(card(gifter, 'Chalk bag').getByRole('link', { name: /^Shop/ })).toHaveCount(0);
+
+  await expectAccessible(gifter);
+  await gifter.setViewportSize(PHONE);
+  await expectNoSidewaysScroll(gifter);
+
+  const bought = card(gifter, 'Spatula set').getByRole('checkbox', { name: 'Bought' });
+  await expect(bought).not.toBeChecked();
+  await bought.check();
+  await expect(bought).toBeChecked();
+  await expect(gifter.getByText('3 things for 2 people · 1 bought', { exact: true })).toBeVisible();
+  await gifter.reload();
+  await expect(card(gifter, 'Spatula set').getByRole('checkbox', { name: 'Bought' })).toBeChecked();
+  await expect(
+    card(gifter, 'Fellow Stagg kettle').getByRole('checkbox', { name: 'Bought' }),
+  ).not.toBeChecked();
+  await expectAccessible(gifter);
+
+  // Bought is the gifter's alone: a guest's view of Mom's list shows nothing of it.
+  const visitor = await (await guest(browser, base)).newPage();
+  await visitor.goto(`/s/${momToken}`);
+  await expect(visitor.getByRole('heading', { name: 'Spatula set' })).toBeVisible();
+  await expect(visitor.getByText(/bought/i)).toHaveCount(0);
+  const shared = await visitor.request.get(`/api/shared/${momToken}`);
+  expect(await shared.text()).not.toMatch(/bought|linkId/i);
+  // Nor does Mom's own list.
+  expect(await (await mom.request.get('/api/wishlist')).text()).not.toMatch(/bought|linkId/i);
+});
+
+test('Shop opens the item’s link safely, and a removed claim is a note the gifter can Clear', async ({
+  browser,
+  baseURL,
+}) => {
+  const base = baseURL ?? '';
+  const sam = await person(browser, base, 'gifts-note-sam', 'Sam');
+  const lamp = await addItemViaApi(sam.request, base, {
+    title: 'Desk lamp',
+    url: 'https://example.com/lamp',
+  });
+  const bonsai = await addItemViaApi(sam.request, base, { title: 'Botanical bonsai' });
+  const samToken = await shareTokenOf(sam.request);
+  const gifter = await person(browser, base, 'gifts-note-gifter', 'Gina');
+  await claimViaApi(gifter.request, base, samToken, lamp.id, { claimerName: 'Gina' });
+  await claimViaApi(gifter.request, base, samToken, bonsai.id, { claimerName: 'Gina' });
+
+  await gifter.goto('/gifts');
+  const shop = card(gifter, 'Desk lamp').getByRole('link', { name: /^Shop/ });
+  await expect(shop).toHaveAttribute('href', 'https://example.com/lamp');
+  await expect(shop).toHaveAttribute('target', '_blank');
+  await expect(shop).toHaveAttribute('rel', 'noopener noreferrer');
+
+  // Sam takes the bonsai off their list while Gina has the page open.
+  const deleted = await sam.request.delete(`/api/wishlist/items/${bonsai.id}`, {
+    headers: { origin: base },
+    data: {},
+  });
+  expect(deleted.status()).toBe(204);
+  await gifter.reload();
+  const note = gifter.getByRole('listitem').filter({ hasText: 'Botanical bonsai' });
+  await expect(note).toContainText('Sam took this off their list. Your claim is gone.');
+  await expect(note.getByRole('checkbox')).toHaveCount(0);
+  await expectAccessible(gifter);
+
+  await note.getByRole('button', { name: /^Clear/ }).click();
+  // The button went with the card, so focus is on the heading rather than dropped to the body.
+  await expect(gifter.getByRole('heading', { level: 1, name: 'Your gifts' })).toBeFocused();
+  await expect(gifter.getByText('Botanical bonsai')).toHaveCount(0);
+  await gifter.reload();
+  await expect(gifter.getByText('Botanical bonsai')).toHaveCount(0);
+  await expect(card(gifter, 'Desk lamp')).toBeVisible();
+});
+
+test('Change opens the card in place, saves a new name and quantity, and a 409 resets the stepper', async ({
+  browser,
+  baseURL,
+}) => {
+  const base = baseURL ?? '';
+  const mom = await person(browser, base, 'gifts-change-mom', 'Mom');
+  const blanket = await addItemViaApi(mom.request, base, { title: 'Picnic blanket', quantity: 4 });
+  const momToken = await shareTokenOf(mom.request);
+  const gifter = await person(browser, base, 'gifts-change-gifter', 'Gina');
+  await claimViaApi(gifter.request, base, momToken, blanket.id, { claimerName: 'Gina' });
+
+  await gifter.goto('/gifts');
+  const blanketCard = card(gifter, 'Picnic blanket');
+  await expect(blanketCard).toContainText('You’re getting 1');
+  await blanketCard.getByRole('button', { name: /^Change/ }).click();
+
+  // The card opens in place, with the name focused and the hint saying how many can be had.
+  const name = blanketCard.getByLabel('Your name, as other gifters see it');
+  await expect(name).toBeFocused();
+  await expect(name).toHaveValue('Gina');
+  await expect(blanketCard.getByText('Up to 4: 3 more are free')).toBeVisible();
+  const howMany = blanketCard.getByRole('group', { name: 'How many' }).locator('output');
+  await expectAccessible(gifter);
+  await gifter.setViewportSize(PHONE);
+  await expectNoSidewaysScroll(gifter);
+  await gifter.setViewportSize(DESKTOP);
+
+  // Close throws the change away and gives focus back to Change.
+  await name.fill('Someone else');
+  await blanketCard.getByRole('button', { name: 'Close' }).click();
+  await expect(blanketCard.getByRole('button', { name: /^Change/ })).toBeFocused();
+  await expect(name).toHaveCount(0);
+
+  await blanketCard.getByRole('button', { name: /^Change/ }).click();
+  await expect(name).toHaveValue('Gina');
+  await name.fill('Gina B.');
+  await blanketCard.getByRole('button', { name: 'More' }).click();
+  await expect(howMany).toHaveText('2');
+  await blanketCard.getByRole('button', { name: 'Save' }).click();
+  await expect(name).toHaveCount(0);
+  await expect(blanketCard).toContainText('You’re getting 2');
+  await expect(blanketCard.getByRole('button', { name: /^Change/ })).toBeFocused();
+  const claims = async () =>
+    (
+      (await (
+        await guest(browser, base).then((c) => c.request.get(`/api/shared/${momToken}`))
+      ).json()) as {
+        items: { claims?: { claimerName: string; quantity: number }[] }[];
+      }
+    ).items.flatMap((item) => item.claims ?? []);
+  expect(await claims()).toEqual([
+    expect.objectContaining({ claimerName: 'Gina B.', quantity: 2 }),
+  ]);
+
+  // Another gifter takes the rest while the card is open: the stepper goes back to the most left.
+  await blanketCard.getByRole('button', { name: /^Change/ }).click();
+  await expect(name).toHaveValue('Gina B.');
+  await blanketCard.getByRole('button', { name: 'More' }).click();
+  await blanketCard.getByRole('button', { name: 'More' }).click();
+  await expect(howMany).toHaveText('4');
+  const other = await guest(browser, base);
+  await claimViaApi(other.request, base, momToken, blanket.id, { claimerName: 'Pat', quantity: 2 });
+  await blanketCard.getByRole('button', { name: 'Save' }).click();
+  await expect(
+    blanketCard.getByText('Someone else claimed some, so you can have up to 2 now.'),
+  ).toBeVisible();
+  await expect(howMany).toHaveText('2');
+  await expect(blanketCard.getByText('Up to 2', { exact: true })).toBeVisible();
+  await expectAccessible(gifter);
+  // The card stays open, and the claim is as it was.
+  await blanketCard.getByRole('button', { name: 'Save' }).click();
+  await expect(name).toHaveCount(0);
+  await expect(blanketCard).toContainText('You’re getting 2');
+  expect(await claims()).toEqual(
+    expect.arrayContaining([expect.objectContaining({ claimerName: 'Gina B.', quantity: 2 })]),
+  );
+});
+
+test('Let it go asks first, then the card leaves and the item is free on the share page', async ({
+  browser,
+  baseURL,
+}) => {
+  const base = baseURL ?? '';
+  const mom = await person(browser, base, 'gifts-letgo-mom', 'Mom');
+  const blanket = await addItemViaApi(mom.request, base, { title: 'Picnic blanket' });
+  await addItemViaApi(mom.request, base, { title: 'Spatula set' });
+  const momToken = await shareTokenOf(mom.request);
+  const gifter = await person(browser, base, 'gifts-letgo-gifter', 'Gina');
+  await claimViaApi(gifter.request, base, momToken, blanket.id, { claimerName: 'Gina' });
+
+  await gifter.goto('/gifts');
+  const blanketCard = card(gifter, 'Picnic blanket');
+  await blanketCard.getByRole('button', { name: /^Change/ }).click();
+  await blanketCard.getByRole('button', { name: 'Let it go' }).click();
+  const dialog = gifter.getByRole('alertdialog', { name: 'Let this go?' });
+  await expect(dialog).toContainText('Someone else can get this for Mom instead.');
+  await expectAccessible(gifter);
+
+  await dialog.getByRole('button', { name: 'Keep it' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(blanketCard).toBeVisible();
+
+  await blanketCard.getByRole('button', { name: 'Let it go' }).click();
+  await gifter.getByRole('alertdialog').getByRole('button', { name: 'Let it go' }).click();
+  await expect(gifter.getByRole('heading', { level: 1, name: 'Your gifts' })).toBeFocused();
+  await expect(gifter.getByText('Picnic blanket')).toHaveCount(0);
+  // No note: letting go from here is the gifter's own doing.
+  await expect(gifter.getByText('Your claim is gone')).toHaveCount(0);
+  await gifter.reload();
+  await expect(gifter.getByText('Picnic blanket')).toHaveCount(0);
+
+  const visitor = await (await guest(browser, base)).newPage();
+  await visitor.goto(`/s/${momToken}`);
+  await expect(
+    card(visitor, 'Picnic blanket').getByRole('button', { name: 'I’ll get this' }),
+  ).toBeVisible();
+  await expect(visitor.getByText('Gina')).toHaveCount(0);
+});
+
+test('a gift whose item was deleted meanwhile becomes a removed note when touched, and Clear removes it', async ({
+  browser,
+  baseURL,
+}) => {
+  const base = baseURL ?? '';
+  const sam = await person(browser, base, 'gifts-gone-sam', 'Sam');
+  const lamp = await addItemViaApi(sam.request, base, { title: 'Desk lamp' });
+  const samToken = await shareTokenOf(sam.request);
+  const gifter = await person(browser, base, 'gifts-gone-gifter', 'Gina');
+  await claimViaApi(gifter.request, base, samToken, lamp.id, { claimerName: 'Gina' });
+
+  await gifter.goto('/gifts');
+  const lampCard = card(gifter, 'Desk lamp');
+  await lampCard.getByRole('button', { name: /^Change/ }).click();
+  await lampCard.getByLabel('Your name, as other gifters see it').fill('Gina B.');
+
+  // Sam takes the lamp off their list while Gina has the card open.
+  const deleted = await sam.request.delete(`/api/wishlist/items/${lamp.id}`, {
+    headers: { origin: base },
+    data: {},
+  });
+  expect(deleted.status()).toBe(204);
+
+  await lampCard.getByRole('button', { name: 'Save' }).click();
+  const note = gifter.getByRole('listitem').filter({ hasText: 'Desk lamp' });
+  await expect(note).toContainText('Sam took this off their list. Your claim is gone.');
+  await expect(note.getByRole('button', { name: 'Save' })).toHaveCount(0);
+  await expect(gifter.getByRole('heading', { level: 1, name: 'Your gifts' })).toBeFocused();
+  await expectAccessible(gifter);
+
+  await note.getByRole('button', { name: /^Clear/ }).click();
+  await expect(gifter.getByText('Desk lamp')).toHaveCount(0);
+  await gifter.reload();
+  await expect(gifter.getByText('Desk lamp')).toHaveCount(0);
+});
+
+test('says what Your gifts is for until there is something on it', async ({ browser, baseURL }) => {
+  const gifter = await person(browser, baseURL ?? '', 'gifts-empty', 'Gina');
+  await gifter.goto('/gifts');
+  await expect(
+    gifter.getByText(
+      'Nothing here yet. Claims you make while signed in appear here, and so does a claim whose link you open while signed in.',
+    ),
+  ).toBeVisible();
+  await expectAccessible(gifter);
+});
+
+test('an unconfirmed email is asked to confirm before seeing gifts', async ({ page, baseURL }) => {
+  const base = baseURL ?? '';
+  const email = uniqueEmail('gifts-unverified');
+  await signUpViaApi(page.request, base, email);
+  expect(await logInViaApi(page.request, base, email)).toBe(204);
+  await page.goto('/gifts');
+  await expect(page.getByRole('status')).toContainText('Confirm your email to see your gifts.');
+  await expect(page.getByRole('link', { name: 'send a new link' })).toBeVisible();
+  await expectAccessible(page);
+});
+
+test('a signed-out visitor is sent to log in and comes back to Your gifts', async ({ page }) => {
+  await page.goto('/gifts');
+  await expect(page).toHaveURL('/login?next=%2Fgifts');
+});
+
+test('Your gifts is kept out of Referer and search results', async ({ page, baseURL }) => {
+  const base = baseURL ?? '';
+  const email = uniqueEmail('gifts-headers');
+  await signUpViaApi(page.request, base, email);
+  expect(await logInViaApi(page.request, base, email)).toBe(204);
+  const response = await page.goto('/gifts');
+  expect(response?.headers()['referrer-policy']).toBe('no-referrer');
+  expect(response?.headers()['x-robots-tag']).toBe('noindex');
+});

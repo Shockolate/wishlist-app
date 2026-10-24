@@ -32,7 +32,7 @@ test('the signed-in pages are accessible and fit a phone', async ({ page, baseUR
   const email = uniqueEmail('pages');
   await signUpViaApi(page.request, baseURL ?? '', email);
   expect(await logInViaApi(page.request, baseURL ?? '', email)).toBe(204);
-  for (const path of ['/list', '/settings']) {
+  for (const path of ['/list', '/gifts', '/settings']) {
     await page.setViewportSize(DESKTOP);
     await page.goto(path);
     await expectAccessible(page);

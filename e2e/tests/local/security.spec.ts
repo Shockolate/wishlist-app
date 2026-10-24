@@ -69,7 +69,7 @@ test('every page allows Cloudflare’s challenge, so in-app navigation keeps Tur
 test('signed-out visitors to account pages go to login, keeping where they were going', async ({
   request,
 }) => {
-  for (const path of ['/list', '/settings']) {
+  for (const path of ['/list', '/gifts', '/settings']) {
     const res = await request.get(path, { maxRedirects: 0 });
     expect(res.status()).toBe(307);
     expect(res.headers()['location']).toMatch(
@@ -99,7 +99,7 @@ test('robots.txt keeps the token and account pages out of search (spec §6.7)', 
   request,
 }) => {
   const body = await (await request.get('/robots.txt')).text();
-  for (const path of ['/verify-email', '/reset-password', '/list', '/settings']) {
+  for (const path of ['/verify-email', '/reset-password', '/list', '/gifts', '/settings']) {
     expect(body).toContain(`Disallow: ${path}`);
   }
 });

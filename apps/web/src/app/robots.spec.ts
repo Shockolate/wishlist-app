@@ -11,6 +11,7 @@ describe('robots', () => {
       '/verify-email',
       '/reset-password',
       '/list',
+      '/gifts',
       '/settings',
       '/s/',
       '/c/',

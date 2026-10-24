@@ -1,4 +1,4 @@
-const SIGNED_IN_ONLY = ['/list', '/settings'];
+const SIGNED_IN_ONLY = ['/list', '/gifts', '/settings'];
 
 /**
  * Where the proxy sends a request instead, judged only by whether the session cookie exists

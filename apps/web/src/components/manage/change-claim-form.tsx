@@ -2,7 +2,6 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
-  ClaimConflictProblemSchema,
   ClaimerNameSchema,
   ClaimSchema,
   ErrorCode,
@@ -18,8 +17,8 @@ import { Card } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Notice } from '@/components/ui/notice';
-import { ApiError } from '@/lib/api-client';
 import { browserApi } from '@/lib/browser-api';
+import { remainingFromConflict } from '@/lib/claim-conflict';
 import { dropRecord, updateRecords } from '@/lib/claim-records';
 import { formErrorMap } from '@/lib/form-errors';
 import { claimChangeConflictMessage, errorMessage, fieldErrors, hasCode } from '@/lib/messages';
@@ -81,11 +80,7 @@ export function ChangeClaimForm({
       }
       if (hasCode(error, ErrorCode.CLAIM_EXCEEDS_REMAINING)) {
         // The 409 carries what's left beyond every claim (Plan 4a rule 7).
-        const left =
-          error instanceof ApiError
-            ? (ClaimConflictProblemSchema.safeParse(error.problem).data?.remaining ?? 0)
-            : 0;
-        const most = left + saved.quantity;
+        const most = remainingFromConflict(error) + saved.quantity;
         setQuantity(most);
         setConflict(claimChangeConflictMessage(most));
         router.refresh();

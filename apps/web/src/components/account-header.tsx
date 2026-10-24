@@ -11,8 +11,8 @@ import { errorMessage, hasCode, LIST_CHANGE_NOT_SAVED } from '@/lib/messages';
 import { useUnseenListFailure } from '@/lib/off-page-failure';
 import { cn } from '@/lib/utils';
 
-/** The signed-in header: the wordmark, the two account pages, and Log out. */
-export function AccountHeader({ current }: { current: 'list' | 'settings' }) {
+/** The signed-in header: the wordmark, the account pages, and Log out. */
+export function AccountHeader({ current }: { current: 'list' | 'gifts' | 'settings' }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const listFailed = useUnseenListFailure();
@@ -50,6 +50,9 @@ export function AccountHeader({ current }: { current: 'list' | 'settings' }) {
         <nav aria-label="Main" className="flex flex-1 gap-1.5 text-[15px] font-medium">
           <NavLink href="/list" current={current === 'list'}>
             Your list
+          </NavLink>
+          <NavLink href="/gifts" current={current === 'gifts'}>
+            Your gifts
           </NavLink>
           <NavLink href="/settings" current={current === 'settings'}>
             Settings
