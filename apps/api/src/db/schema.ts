@@ -156,6 +156,37 @@ export const claims = pgTable(
 );
 
 /**
+ * Your gifts (design §4, D76, D80): a signed-in gifter's private link to a claim, plus the
+ * bookkeeping that belongs to the gifter and not to the claim (the Bought tick). `claim_id` sets
+ * null, not cascades, when the claim goes: the owner deleting the item, the list or the account, or
+ * a manage-link cancel, must leave the gifter a note saying what became of the claim. `item_title`
+ * and `owner_display_name` are snapshots for that note. `gone_at` is when the claim went and
+ * `cancelled_at` says it was cancelled through its link; a note lives 30 days from `gone_at`.
+ * Deleting the gifter's account deletes their links and never the claims (D79). One link per claim,
+ * so a claim is on at most one account's gifts; a null `claim_id` is not unique, so notes pile up.
+ */
+export const claimLinks = pgTable(
+  'claim_links',
+  {
+    id: uuid('id').primaryKey(),
+    claimId: uuid('claim_id').references(() => claims.id, { onDelete: 'set null' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    boughtAt: timestamp('bought_at', tz),
+    cancelledAt: timestamp('cancelled_at', tz),
+    goneAt: timestamp('gone_at', tz),
+    itemTitle: text('item_title').notNull(),
+    ownerDisplayName: text('owner_display_name').notNull(),
+    ...timestamps(),
+  },
+  (t) => [
+    unique('claim_links_claim_id_unique').on(t.claimId),
+    index('claim_links_user_id_idx').on(t.userId),
+  ],
+);
+
+/**
  * Tags (design §5): labels the owner makes to sort their list. A tag belongs to one wishlist, and
  * deleting the list or the account takes it away. `name` keeps the spelling the owner first used;
  * `nameKey` is its case-folded form (`keyOfCleanName` for a name `TagNameSchema` has cleaned, `tagKey`

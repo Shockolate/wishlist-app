@@ -38,6 +38,8 @@ export class CleanupService {
       emailTokens: tokens.rowCount ?? 0,
       sessions: expired.rowCount ?? 0,
       rateLimitWindows: windows.rowCount ?? 0,
+      // Task 5 of Plan 10b ages and deletes gift notes; until then none are deleted.
+      giftNotes: 0,
     };
   }
 }

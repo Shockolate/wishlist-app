@@ -1,6 +1,7 @@
 import {
   ClaimConflictProblemSchema,
   ClaimDetailsResponseSchema,
+  ClaimLinkResponseSchema,
   ClaimSchema,
   CreateClaimResponseSchema,
   ErrorCode,
@@ -420,5 +421,327 @@ describe('a claim on the owner’s own list (D82)', () => {
     ]) {
       expect([res.status, codeOf(res)]).toEqual([404, ErrorCode.NOT_FOUND]);
     }
+  });
+});
+
+describe('GET /claims/:manageToken tells a signed-in gifter about links (D76)', () => {
+  const BOB: Account = {
+    email: 'bob@example.com',
+    password: 'another fine passphrase 2',
+    displayName: 'Bob',
+  };
+  const CAM: Account = { ...BOB, email: 'cam@example.com', displayName: 'Cam' };
+
+  const linkTo = (claimId: string, email: string) =>
+    db.pool.query(
+      `insert into claim_links (id, claim_id, user_id, item_title, owner_display_name)
+       select gen_random_uuid(), $1, id, 'Kettle', 'Ada' from users where email = $2`,
+      [claimId, email],
+    );
+
+  it('says none, yours or someone-else to a verified gifter, and nothing to a guest', async () => {
+    const { token, kettle } = await adasKettle(3);
+    const sue = await claimed(token, kettle, 'Sue');
+    await signUpVerified(t, BOB);
+    await signUpVerified(t, CAM);
+    const bob = await logIn(t, BOB);
+    const cam = await logIn(t, CAM);
+    const linkOf = async (cookie?: string) =>
+      ClaimDetailsResponseSchema.parse(
+        (await client(t.app, cookie).get(`/claims/${sue.manageToken}`)).body,
+      ).link;
+
+    expect(await linkOf()).toBeUndefined();
+    expect(await linkOf(bob)).toBe('none');
+    await linkTo(sue.claim.id, BOB.email);
+    expect(await linkOf(bob)).toBe('yours');
+    expect(await linkOf(cam)).toBe('someone-else');
+    expect(await linkOf()).toBeUndefined();
+    const guest = (await details(sue.manageToken)).body as object;
+    expect(guest).not.toHaveProperty('link');
+  });
+
+  it('adds no link for an unverified account', async () => {
+    const { token, kettle } = await adasKettle(1);
+    const sue = await claimed(token, kettle, 'Sue');
+    await signUp(t, BOB);
+    const res = await client(t.app, await logIn(t, BOB)).get(`/claims/${sue.manageToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body).not.toHaveProperty('link');
+  });
+
+  it('adds no link for the owner, who is refused first (D82)', async () => {
+    const { token, kettle } = await adasKettle(1);
+    const sue = await claimed(token, kettle, 'Sue');
+    const res = await client(t.app, await logIn(t)).get(`/claims/${sue.manageToken}`);
+    expect([res.status, codeOf(res)]).toEqual([403, ErrorCode.OWN_LIST_CLAIM]);
+    expect(res.body).not.toHaveProperty('link');
+  });
+});
+
+describe('POST and DELETE /claims/:manageToken/link (D77, D80)', () => {
+  const BOB: Account = {
+    email: 'bob@example.com',
+    password: 'another fine passphrase 2',
+    displayName: 'Bob',
+  };
+  const CAM: Account = { ...BOB, email: 'cam@example.com', displayName: 'Cam' };
+
+  const link = (manageToken: string, cookie?: string) =>
+    client(t.app, cookie).post(`/claims/${manageToken}/link`);
+  const unlink = (manageToken: string, cookie?: string) =>
+    client(t.app, cookie).delete(`/claims/${manageToken}/link`);
+  const linkOf = (res: ApiResponse) => ClaimLinkResponseSchema.parse(res.body).link;
+  const userId = async (email: string) =>
+    (await db.pool.query<{ id: string }>('select id from users where email = $1', [email])).rows[0]
+      ?.id;
+  const linkRows = async () =>
+    (
+      await db.pool.query<{
+        user_id: string;
+        claim_id: string | null;
+        item_title: string;
+        owner_display_name: string;
+        cancelled_at: Date | null;
+        gone_at: Date | null;
+      }>(
+        `select user_id, claim_id, item_title, owner_display_name, cancelled_at, gone_at
+           from claim_links`,
+      )
+    ).rows;
+
+  /** Sue's claim on Ada's kettle, and verified, signed-in Bob and Cam. */
+  async function setUp() {
+    const { token, kettle } = await adasKettle(3);
+    const sue = await claimed(token, kettle, 'Sue');
+    await signUpVerified(t, BOB);
+    await signUpVerified(t, CAM);
+    return { sue, bob: await logIn(t, BOB), cam: await logIn(t, CAM) };
+  }
+
+  it('links an unlinked claim, and answers someone-else when another account holds it', async () => {
+    const { sue, bob, cam } = await setUp();
+    const first = await link(sue.manageToken, bob);
+    expect(first.status).toBe(200);
+    expect(linkOf(first)).toBe('yours');
+    expect(await linkRows()).toEqual([
+      {
+        user_id: await userId(BOB.email),
+        claim_id: sue.claim.id,
+        item_title: 'Kettle',
+        owner_display_name: 'Ada',
+        cancelled_at: null,
+        gone_at: null,
+      },
+    ]);
+    expect(linkOf(await link(sue.manageToken, bob))).toBe('yours');
+    const other = await link(sue.manageToken, cam);
+    expect([other.status, linkOf(other)]).toEqual([200, 'someone-else']);
+    expect((await linkRows()).map((l) => l.user_id)).toEqual([await userId(BOB.email)]);
+    // The claim itself is untouched.
+    expect(await claimedSum()).toBe(1);
+  });
+
+  it('two accounts linking one claim at once: exactly one wins (Review Focus 1)', async () => {
+    const { sue, bob, cam } = await setUp();
+    const [a, b] = await Promise.all([link(sue.manageToken, bob), link(sue.manageToken, cam)]);
+    expect([a.status, b.status]).toEqual([200, 200]);
+    expect([linkOf(a), linkOf(b)].sort()).toEqual(['someone-else', 'yours']);
+    expect(await linkRows()).toHaveLength(1);
+  });
+
+  it('refuses the owner (403 OWN_LIST_CLAIM), an unverified user (403 EMAIL_NOT_VERIFIED) and a guest (401)', async () => {
+    const { sue } = await setUp();
+    const ada = await logIn(t);
+    const owner = await link(sue.manageToken, ada);
+    expect([owner.status, codeOf(owner)]).toEqual([403, ErrorCode.OWN_LIST_CLAIM]);
+    expect(JSON.stringify(owner.body)).not.toContain('Sue');
+    const ownerUnlink = await unlink(sue.manageToken, ada);
+    expect([ownerUnlink.status, codeOf(ownerUnlink)]).toEqual([403, ErrorCode.OWN_LIST_CLAIM]);
+
+    const dan: Account = { ...BOB, email: 'dan@example.com', displayName: 'Dan' };
+    await signUp(t, dan);
+    const danCookie = await logIn(t, dan);
+    for (const res of [
+      await link(sue.manageToken, danCookie),
+      await unlink(sue.manageToken, danCookie),
+    ]) {
+      expect([res.status, codeOf(res)]).toEqual([403, ErrorCode.EMAIL_NOT_VERIFIED]);
+    }
+    for (const res of [await link(sue.manageToken), await unlink(sue.manageToken)]) {
+      expect([res.status, codeOf(res)]).toEqual([401, ErrorCode.UNAUTHENTICATED]);
+    }
+    expect(await linkRows()).toEqual([]);
+  });
+
+  it('answers 404 NOT_FOUND for a token that is malformed or unknown', async () => {
+    const { bob } = await setUp();
+    for (const manageToken of ['short', UNKNOWN_TOKEN]) {
+      for (const res of [await link(manageToken, bob), await unlink(manageToken, bob)]) {
+        expect([res.status, codeOf(res)]).toEqual([404, ErrorCode.NOT_FOUND]);
+      }
+    }
+  });
+
+  it('refuses the owner before the list’s limit, so a 429 says nothing (D43)', async () => {
+    const { sue } = await setUp();
+    await fillBucket(db, claimsListKey(await wishlistIdOf(db, ADA.email)), 30);
+    const res = await link(sue.manageToken, await logIn(t));
+    expect([res.status, codeOf(res)]).toEqual([403, ErrorCode.OWN_LIST_CLAIM]);
+  });
+
+  it('DELETE …/link removes only the session’s own link, and the claim stays (Review Focus 2)', async () => {
+    const { sue, bob, cam } = await setUp();
+    await link(sue.manageToken, bob);
+
+    const notHers = await unlink(sue.manageToken, cam);
+    expect(notHers.status).toBe(204);
+    expect(await linkRows()).toHaveLength(1);
+
+    const mine = await unlink(sue.manageToken, bob);
+    expect(mine.status).toBe(204);
+    expect(mine.headers['cache-control']).toBe('no-store');
+    expect(await linkRows()).toEqual([]);
+    expect(await count()).toBe(1);
+    expect((await details(sue.manageToken)).status).toBe(200);
+
+    expect((await unlink(sue.manageToken, bob)).status).toBe(204);
+    expect(linkOf(await link(sue.manageToken, cam))).toBe('yours');
+  });
+
+  it('answers 404 when the claim goes between the lookup and the link (R5)', async () => {
+    const { sue, bob } = await setUp();
+    const holder = await db.pool.connect();
+    let racing: Promise<ApiResponse> | undefined;
+    try {
+      await holder.query('begin');
+      const holderPid = (await holder.query<{ pid: number }>('select pg_backend_pid() as pid'))
+        .rows[0]!.pid;
+      await holder.query('delete from claims where id = $1', [sue.claim.id]);
+      racing = link(sue.manageToken, bob).then((res) => res);
+      await untilBlockedBy(db.pool, holderPid, 1, racing);
+      await holder.query('commit');
+    } finally {
+      await holder.query('rollback').catch(() => undefined);
+      holder.release();
+    }
+    const res = await racing;
+    expect([res?.status, res && codeOf(res)]).toEqual([404, ErrorCode.NOT_FOUND]);
+    expect(await linkRows()).toEqual([]);
+  });
+
+  it('cancelling through the link leaves the linked gifter a cancelled note', async () => {
+    const { sue, bob } = await setUp();
+    await link(sue.manageToken, bob);
+    expect((await cancel(sue.manageToken)).status).toBe(204);
+    const [note, ...rest] = await linkRows();
+    expect(rest).toEqual([]);
+    expect(note).toMatchObject({
+      user_id: await userId(BOB.email),
+      claim_id: null,
+      item_title: 'Kettle',
+      owner_display_name: 'Ada',
+    });
+    expect(note?.cancelled_at).toBeInstanceOf(Date);
+    expect(note?.gone_at).toEqual(note?.cancelled_at);
+    expect(await count()).toBe(0);
+  });
+
+  it('another signed-in account cancelling also leaves the linked gifter a note', async () => {
+    const { sue, bob, cam } = await setUp();
+    await link(sue.manageToken, bob);
+    expect((await client(t.app, cam).delete(`/claims/${sue.manageToken}`)).status).toBe(204);
+    const rows = await linkRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.claim_id).toBeNull();
+    expect(rows[0]?.cancelled_at).not.toBeNull();
+  });
+
+  it('the linked gifter cancelling on /c leaves no note', async () => {
+    const { sue, bob } = await setUp();
+    await link(sue.manageToken, bob);
+    expect((await client(t.app, bob).delete(`/claims/${sue.manageToken}`)).status).toBe(204);
+    expect(await linkRows()).toEqual([]);
+    expect(await count()).toBe(0);
+  });
+
+  it.each([
+    ['a guest, which stamps the note', undefined],
+    ['the linked gifter, which deletes the link', 'bob'],
+  ] as const)(
+    'cancelling (%s) takes the claim row before its link, the cascade’s order (R10)',
+    async (_who, canceller) => {
+      // An owner deleting the item cascades item → claim → link. A cancel that took the link
+      // first and then waited for the claim could deadlock with it, so while the claim's row is
+      // held elsewhere, the waiting cancel must hold no lock on the link.
+      const { sue, bob } = await setUp();
+      await link(sue.manageToken, bob);
+      const linkId = (await db.pool.query<{ id: string }>('select id from claim_links')).rows[0]!
+        .id;
+      const holder = await db.pool.connect();
+      let cancelling: Promise<ApiResponse> | undefined;
+      let probe: Promise<number | null> | undefined;
+      try {
+        await holder.query('begin');
+        const holderPid = (await holder.query<{ pid: number }>('select pg_backend_pid() as pid'))
+          .rows[0]!.pid;
+        await holder.query('select id from claims where id = $1 for update', [sue.claim.id]);
+        cancelling = client(t.app, canceller === 'bob' ? bob : undefined)
+          .delete(`/claims/${sue.manageToken}`)
+          .then((res) => res);
+        await untilBlockedBy(db.pool, holderPid, 1, cancelling);
+        probe = db.pool
+          .query('select id from claim_links where id = $1 for update nowait', [linkId])
+          .then((res) => res.rowCount);
+        await probe.catch(() => undefined);
+        await holder.query('commit');
+      } finally {
+        await holder.query('rollback').catch(() => undefined);
+        holder.release();
+      }
+      await expect(probe).resolves.toBe(1);
+      expect((await cancelling)?.status).toBe(204);
+      expect(await count()).toBe(0);
+      const rows = await linkRows();
+      if (canceller === 'bob') expect(rows).toEqual([]);
+      else expect(rows).toMatchObject([{ claim_id: null, cancelled_at: expect.any(Date) }]);
+    },
+  );
+
+  it('cancelling a claim nobody linked leaves nothing behind', async () => {
+    const { sue } = await setUp();
+    expect((await cancel(sue.manageToken)).status).toBe(204);
+    expect(await linkRows()).toEqual([]);
+  });
+
+  it('link and unlink count against the claim limits (spec §6.6)', async () => {
+    const { sue, bob } = await setUp();
+    await fillBucket(db, claimsListKey(await wishlistIdOf(db, ADA.email)), 30);
+    for (const res of [await link(sue.manageToken, bob), await unlink(sue.manageToken, bob)]) {
+      expect([res.status, codeOf(res)]).toEqual([429, ErrorCode.RATE_LIMITED]);
+    }
+    expect(await linkRows()).toEqual([]);
+
+    await db.pool.query('truncate rate_limits');
+    await fillBucket(db, claimsIpKey('127.0.0.1'), 20);
+    for (const res of [await link(sue.manageToken, bob), await unlink(sue.manageToken, bob)]) {
+      expect([res.status, codeOf(res)]).toEqual([429, ErrorCode.RATE_LIMITED]);
+    }
+  });
+
+  it('counts a successful link and unlink', async () => {
+    const { sue, bob } = await setUp();
+    const listCount = async () =>
+      Number(
+        (
+          await db.pool.query<{ n: string }>(
+            "select coalesce(sum(count), 0) as n from rate_limits where key like 'claims:list%'",
+          )
+        ).rows[0]?.n,
+      );
+    const before = await listCount();
+    await link(sue.manageToken, bob);
+    await unlink(sue.manageToken, bob);
+    expect((await listCount()) - before).toBe(2);
   });
 });
