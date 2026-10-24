@@ -39,9 +39,12 @@ export function ClaimLink({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const region = useRef<HTMLDivElement>(null);
-  // React runs an effect twice in development. Linking is idempotent, but one request is the
-  // contract, and the first request's answer must still land, so no cleanup cancels it.
-  const asked = useRef(false);
+  // The island links only when the page opened on `none`: a refresh after a save or a conflict
+  // can bring a new `link` (Not mine leaves `none`, another account can unlink), and that must
+  // never link again. So only a mount on `none` can ask. React also runs an effect twice in
+  // development; linking is idempotent, but one request is the contract, and the first request's
+  // answer must still land, so no cleanup cancels it.
+  const asked = useRef(link !== 'none');
 
   useEffect(() => {
     if (link !== 'none' || asked.current) return;

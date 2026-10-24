@@ -230,6 +230,24 @@ test('a manage link already on someone else’s gifts says so, and still changes
     claim: { claimerName: 'Grandma K', quantity: 1 },
     link: 'none',
   });
+
+  // Not mine sticks for the life of the page: a save refreshes it, and the refreshed page now says
+  // `none`, but this page opened on `yours`, so it must not link again.
+  const refreshed = first.waitForResponse(
+    (response) => response.url().includes(`/c/${manageToken}`) && response.url().includes('_rsc='),
+  );
+  await first.getByLabel('Your name').fill('Grandma M');
+  await first.getByRole('button', { name: 'Save changes' }).click();
+  await expect(first.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+  await refreshed;
+  // The refreshed page renders and its effects run a beat after the response lands.
+  await first.waitForTimeout(500);
+  expect(firstRequests).toEqual([expect.stringMatching(/^DELETE .*\/link$/)]);
+  expect(await titles(first)).toEqual([]);
+  await expect(
+    first.getByRole('status').filter({ hasText: 'Taken off Your gifts.' }),
+  ).toBeVisible();
+  await expect(first.getByText('Added to Your gifts.')).toHaveCount(0);
 });
 
 test('a guest’s sheet and /c are unchanged', async ({ browser, baseURL }) => {
