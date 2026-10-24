@@ -452,43 +452,61 @@ if (!renovate.extends?.includes('helpers:pinGitHubActionDigests'))
   fail('renovate.json: extends must include helpers:pinGitHubActionDigests');
 if (!renovate.minimumReleaseAge) fail('renovate.json: minimumReleaseAge must be set');
 // D88: automerge only minor and patch updates of named dev-only tooling, which runs in
-// secret-free jobs and never shapes the production build. Everything else waits for review.
-const NEVER_AUTOMERGE = [
-  'typescript',
-  'next',
-  '@nestjs/cli',
-  '@swc/core',
-  'esbuild',
-  'turbo',
-  'vercel',
-  '@wishlist/vercel-cli',
-  '@playwright/test',
-  '@types/node',
-  'undici-types',
-  'eslint-config-next',
+// secret-free jobs and never shapes the production build. Everything else waits for review. The
+// whole config is walked, so automerge can't hide in a nested block (a manager, lockFileMaintenance,
+// an update type) or a preset, and the one allowed rule is pinned exactly: widening it means
+// editing this test on purpose (final review).
+const AUTOMERGE_PACKAGES = [
+  '@types/**',
+  '!@types/node',
+  'eslint',
+  'prettier',
+  'vitest',
+  'testcontainers',
+  '@testcontainers/**',
 ];
-if ('automerge' in renovate) fail('renovate.json: no top-level automerge (D88)');
-for (const [i, rule] of (renovate.packageRules ?? []).entries()) {
-  if (rule.automerge === undefined) continue;
-  const where = `renovate.json: packageRules[${i}]`;
-  const types = rule.matchUpdateTypes ?? [];
-  const names = rule.matchPackageNames ?? [];
+const AUTOMERGE_RULE_KEYS = [
+  'description',
+  'matchDepTypes',
+  'matchUpdateTypes',
+  'matchPackageNames',
+  'automerge',
+  'automergeType',
+];
+const sameSet = (a, b) =>
+  a.length === b.length && [...a].sort().join('\n') === [...b].sort().join('\n');
+function checkAutomergeRule(rule, where) {
+  const extra = Object.keys(rule).filter((k) => !AUTOMERGE_RULE_KEYS.includes(k));
+  if (extra.length)
+    fail(
+      `${where}: an automerge rule may only set ${AUTOMERGE_RULE_KEYS.join(', ')} (D88), not ${extra.join(', ')}`,
+    );
   if (JSON.stringify(rule.matchDepTypes) !== JSON.stringify(['devDependencies']))
     fail(`${where}: an automerge rule matches only devDependencies (D88)`);
+  const types = rule.matchUpdateTypes ?? [];
   if (types.length === 0 || types.some((t) => !['minor', 'patch'].includes(t)))
     fail(`${where}: an automerge rule matches only minor and patch updates (D88)`);
   if (rule.automergeType !== 'pr')
     fail(`${where}: automergeType must be "pr", behind the required checks (D88)`);
-  if (rule.matchManagers || rule.matchDatasources)
-    fail(`${where}: an automerge rule must not match by manager or datasource (D88)`);
-  if (names.length === 0) fail(`${where}: an automerge rule names its packages (D88)`);
-  for (const name of names) {
-    if (NEVER_AUTOMERGE.includes(name)) fail(`${where}: ${name} is never automerged (D88)`);
-    if (name === '*' || name === '**') fail(`${where}: no catch-all package pattern (D88)`);
-  }
-  if (names.includes('@types/**') && !names.includes('!@types/node'))
-    fail(`${where}: @types/** must exclude @types/node with !@types/node (D88)`);
+  if (!sameSet(rule.matchPackageNames ?? [], AUTOMERGE_PACKAGES))
+    fail(`${where}: matchPackageNames must be exactly ${AUTOMERGE_PACKAGES.join(', ')} (D88)`);
 }
+let automergeRules = 0;
+(function walk(node, where) {
+  if (Array.isArray(node)) return node.forEach((v, i) => walk(v, `${where}[${i}]`));
+  if (!node || typeof node !== 'object') return;
+  for (const preset of Array.isArray(node.extends) ? node.extends : [])
+    if (/automerge/i.test(String(preset))) fail(`${where}: no automerge preset (${preset}) (D88)`);
+  if (node.automerge !== undefined && node.automerge !== false) {
+    if (/^renovate\.json: packageRules\[\d+\]$/.test(where)) {
+      automergeRules += 1;
+      checkAutomergeRule(node, where);
+    } else fail(`${where}: automerge is allowed only in the one D88 packageRules entry`);
+  }
+  for (const [key, value] of Object.entries(node))
+    walk(value, key === 'packageRules' ? `${where}: packageRules` : `${where}.${key}`);
+})(renovate, 'renovate.json');
+if (automergeRules > 1) fail('renovate.json: only one packageRules entry may automerge (D88)');
 
 if (failures.length > 0) {
   console.error(`workflow-policy: ${failures.length} violation(s)\n- ${failures.join('\n- ')}`);
