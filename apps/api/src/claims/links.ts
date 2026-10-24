@@ -36,8 +36,9 @@ export async function linkStateOf(
 /**
  * Puts a claim on a user's gifts, with the snapshot of its item's title and the owner's name that
  * a note keeps if the claim goes (D80). A claim is on at most one account's gifts: when it already
- * has a link, whoever's it is, this does nothing and returns false. Callers hold the item's row
- * lock, so no other lock is taken here.
+ * has a link, whoever's it is, this does nothing and returns false. It takes no lock: `create`
+ * calls it under the item's row lock, and `link` holds none, because the unique `claim_id` decides
+ * between racers.
  */
 export async function insertLink(
   tx: Transaction,

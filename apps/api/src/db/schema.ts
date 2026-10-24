@@ -162,7 +162,7 @@ export const claims = pgTable(
  * a manage-link cancel, must leave the gifter a note saying what became of the claim. `item_title`
  * and `owner_display_name` are snapshots for that note. `gone_at` is when the claim went and
  * `cancelled_at` says it was cancelled through its link; a note lives 30 days from `gone_at`.
- * Deleting the gifter's account deletes their links and never the claims (D75). One link per claim,
+ * Deleting the gifter's account deletes their links and never the claims (D79). One link per claim,
  * so a claim is on at most one account's gifts; a null `claim_id` is not unique, so notes pile up.
  */
 export const claimLinks = pgTable(

@@ -665,6 +665,49 @@ describe('POST and DELETE /claims/:manageToken/link (D77, D80)', () => {
     expect(await count()).toBe(0);
   });
 
+  it.each([
+    ['a guest, which stamps the note', undefined],
+    ['the linked gifter, which deletes the link', 'bob'],
+  ] as const)(
+    'cancelling (%s) takes the claim row before its link, the cascade’s order (R10)',
+    async (_who, canceller) => {
+      // An owner deleting the item cascades item → claim → link. A cancel that took the link
+      // first and then waited for the claim could deadlock with it, so while the claim's row is
+      // held elsewhere, the waiting cancel must hold no lock on the link.
+      const { sue, bob } = await setUp();
+      await link(sue.manageToken, bob);
+      const linkId = (await db.pool.query<{ id: string }>('select id from claim_links')).rows[0]!
+        .id;
+      const holder = await db.pool.connect();
+      let cancelling: Promise<ApiResponse> | undefined;
+      let probe: Promise<number | null> | undefined;
+      try {
+        await holder.query('begin');
+        const holderPid = (await holder.query<{ pid: number }>('select pg_backend_pid() as pid'))
+          .rows[0]!.pid;
+        await holder.query('select id from claims where id = $1 for update', [sue.claim.id]);
+        cancelling = client(t.app, canceller === 'bob' ? bob : undefined)
+          .delete(`/claims/${sue.manageToken}`)
+          .then((res) => res);
+        await untilBlockedBy(db.pool, holderPid, 1, cancelling);
+        probe = db.pool
+          .query('select id from claim_links where id = $1 for update nowait', [linkId])
+          .then((res) => res.rowCount);
+        await probe.catch(() => undefined);
+        await holder.query('commit');
+      } finally {
+        await holder.query('rollback').catch(() => undefined);
+        holder.release();
+      }
+      await expect(probe).resolves.toBe(1);
+      expect((await cancelling)?.status).toBe(204);
+      expect(await count()).toBe(0);
+      const rows = await linkRows();
+      if (canceller === 'bob') expect(rows).toEqual([]);
+      else expect(rows).toMatchObject([{ claim_id: null, cancelled_at: expect.any(Date) }]);
+    },
+  );
+
   it('cancelling a claim nobody linked leaves nothing behind', async () => {
     const { sue } = await setUp();
     expect((await cancel(sue.manageToken)).status).toBe(204);

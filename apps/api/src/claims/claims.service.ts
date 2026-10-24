@@ -337,7 +337,8 @@ export class ClaimsService {
   }
 
   /**
-   * Cancels the claim (spec §5). No lock: removing a claim can't over-commit an item (§6.3). One
+   * Cancels the claim (spec §5). No `FOR UPDATE`: removing a claim can't over-commit an item
+   * (§6.3). The claim's row is taken before its link's (R10), by deleting the claim first. One
    * transaction, so the claim and what it leaves behind go together (Plan 10b ruling 4): where
    * the claim is on someone's gifts and the canceller isn't that account, its link stays as a
    * `cancelled` note; where it's the canceller's own, the link goes with the claim, no note. The
@@ -361,25 +362,26 @@ export class ClaimsService {
         .where(eq(claims.manageTokenHash, tokenHash));
       if (!found) throw claimNotFound();
       if (viewer?.id === found.ownerId) throw ownListClaim();
-      if (found.linkId !== null) {
-        if (viewer?.id === found.linkUserId) {
-          await tx.delete(claimLinks).where(eq(claimLinks.id, found.linkId));
-        } else {
-          // The cron would stamp `gone_at` on a note that lacks one, but a cancel knows when.
-          const now = this.clock.now();
-          await tx
-            .update(claimLinks)
-            .set({ cancelledAt: now, goneAt: now, updatedAt: now })
-            .where(eq(claimLinks.id, found.linkId));
-        }
-      }
-      // Deleting the claim is what sets the link's `claim_id` to null (the foreign key).
+      // The claim's row first, then its link's: the order an item delete's cascade takes them
+      // (R10), so the two can't deadlock. Deleting the claim sets the link's `claim_id` to null
+      // (the foreign key), which also holds the link's row until this transaction ends.
       const deleted = await tx
         .delete(claims)
         .where(eq(claims.id, found.claimId))
         .returning({ id: claims.id });
-      // Cancelled meanwhile from another device: this transaction's note rolls back with it.
+      // Cancelled meanwhile from another device.
       if (deleted.length === 0) throw claimNotFound();
+      if (found.linkId === null) return;
+      if (viewer?.id === found.linkUserId) {
+        await tx.delete(claimLinks).where(eq(claimLinks.id, found.linkId));
+      } else {
+        // The cron would stamp `gone_at` on a note that lacks one, but a cancel knows when.
+        const now = this.clock.now();
+        await tx
+          .update(claimLinks)
+          .set({ cancelledAt: now, goneAt: now, updatedAt: now })
+          .where(eq(claimLinks.id, found.linkId));
+      }
     });
   }
 }
