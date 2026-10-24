@@ -21,6 +21,11 @@ function find(job, predicate) {
   return step;
 }
 const runStep = (job, re) => find(job, (s) => re.test(s.run ?? ''));
+function automergeRule(renovate) {
+  const rule = renovate.packageRules.find((r) => r.automerge === true);
+  if (!rule) throw new Error('mutation target not found');
+  return rule;
+}
 const usesStep = (job, prefix) => find(job, (s) => String(s.uses).startsWith(prefix));
 
 // [name, file, mutate(parsed file)]
@@ -147,6 +152,56 @@ const mutations = [
     (wf) => {
       const s = find(wf.jobs.seed, (x) => x.name === 'Wipe and rebuild from zero');
       s.if = "steps.seed.outputs.created == 'true' || inputs.reset";
+    },
+  ],
+  [
+    'a top-level automerge (D88)',
+    'renovate.json',
+    (r) => {
+      r.automerge = true;
+    },
+  ],
+  [
+    'automerge on a major (D88)',
+    'renovate.json',
+    (r) => {
+      automergeRule(r).matchUpdateTypes.push('major');
+    },
+  ],
+  [
+    'automerge widened to runtime dependencies (D88)',
+    'renovate.json',
+    (r) => {
+      automergeRule(r).matchDepTypes = ['devDependencies', 'dependencies'];
+    },
+  ],
+  [
+    'automerge for next (D88)',
+    'renovate.json',
+    (r) => {
+      automergeRule(r).matchPackageNames.push('next');
+    },
+  ],
+  [
+    'automerge for GitHub Actions (D88)',
+    'renovate.json',
+    (r) => {
+      automergeRule(r).matchManagers = ['github-actions'];
+    },
+  ],
+  [
+    'automerge for @types/node (D88)',
+    'renovate.json',
+    (r) => {
+      const names = automergeRule(r).matchPackageNames;
+      names.splice(names.indexOf('!@types/node'), 1);
+    },
+  ],
+  [
+    'a catch-all automerge pattern (D88)',
+    'renovate.json',
+    (r) => {
+      automergeRule(r).matchPackageNames.push('**');
     },
   ],
   [

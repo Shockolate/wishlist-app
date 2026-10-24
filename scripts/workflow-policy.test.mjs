@@ -451,8 +451,44 @@ const renovate = JSON.parse(readFileSync(join(root, 'renovate.json'), 'utf8'));
 if (!renovate.extends?.includes('helpers:pinGitHubActionDigests'))
   fail('renovate.json: extends must include helpers:pinGitHubActionDigests');
 if (!renovate.minimumReleaseAge) fail('renovate.json: minimumReleaseAge must be set');
-if (JSON.stringify(renovate).includes('"automerge":true'))
-  fail('renovate.json: no automerge until Ted decides to re-enable it');
+// D88: automerge only minor and patch updates of named dev-only tooling, which runs in
+// secret-free jobs and never shapes the production build. Everything else waits for review.
+const NEVER_AUTOMERGE = [
+  'typescript',
+  'next',
+  '@nestjs/cli',
+  '@swc/core',
+  'esbuild',
+  'turbo',
+  'vercel',
+  '@wishlist/vercel-cli',
+  '@playwright/test',
+  '@types/node',
+  'undici-types',
+  'eslint-config-next',
+];
+if ('automerge' in renovate) fail('renovate.json: no top-level automerge (D88)');
+for (const [i, rule] of (renovate.packageRules ?? []).entries()) {
+  if (rule.automerge === undefined) continue;
+  const where = `renovate.json: packageRules[${i}]`;
+  const types = rule.matchUpdateTypes ?? [];
+  const names = rule.matchPackageNames ?? [];
+  if (JSON.stringify(rule.matchDepTypes) !== JSON.stringify(['devDependencies']))
+    fail(`${where}: an automerge rule matches only devDependencies (D88)`);
+  if (types.length === 0 || types.some((t) => !['minor', 'patch'].includes(t)))
+    fail(`${where}: an automerge rule matches only minor and patch updates (D88)`);
+  if (rule.automergeType !== 'pr')
+    fail(`${where}: automergeType must be "pr", behind the required checks (D88)`);
+  if (rule.matchManagers || rule.matchDatasources)
+    fail(`${where}: an automerge rule must not match by manager or datasource (D88)`);
+  if (names.length === 0) fail(`${where}: an automerge rule names its packages (D88)`);
+  for (const name of names) {
+    if (NEVER_AUTOMERGE.includes(name)) fail(`${where}: ${name} is never automerged (D88)`);
+    if (name === '*' || name === '**') fail(`${where}: no catch-all package pattern (D88)`);
+  }
+  if (names.includes('@types/**') && !names.includes('!@types/node'))
+    fail(`${where}: @types/** must exclude @types/node with !@types/node (D88)`);
+}
 
 if (failures.length > 0) {
   console.error(`workflow-policy: ${failures.length} violation(s)\n- ${failures.join('\n- ')}`);
