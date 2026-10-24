@@ -7,18 +7,26 @@ import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
 import { NoContentSchema } from '@/lib/api-client';
 import { browserApi } from '@/lib/browser-api';
-import { ON_SOMEONE_ELSES_GIFTS, TAKEN_OFF_GIFTS } from '@/lib/gifts-copy';
+import { ON_SOMEONE_ELSES_GIFTS, ON_YOUR_GIFTS, TAKEN_OFF_GIFTS } from '@/lib/gifts-copy';
 import { errorMessage } from '@/lib/messages';
 
-type Phase = 'quiet' | 'someone-else' | 'added' | 'taken-off';
+type Phase = 'quiet' | 'someone-else' | 'added' | 'yours' | 'taken-off';
+
+/** Where each `link` the API sends starts; `none` stays quiet until the link request answers. */
+const START: Record<NonNullable<ClaimDetailsResponse['link']>, Phase> = {
+  none: 'quiet',
+  yours: 'yours',
+  'someone-else': 'someone-else',
+};
 
 /**
  * Where a signed-in gifter's manage link stands on Your gifts (design §5.2, §5.10). Nothing for a
- * guest, for the list's owner, or for a claim already on this account's gifts (`yours`).
+ * guest or for the list's owner.
  *
  * Opening a page changes nothing (D75, D82): a claim nobody has linked (`none`) is linked here, by
  * a request sent once the page is loaded in a browser, never by the server render and never by a
- * prefetch. Not mine takes the link off again and leaves the claim alone.
+ * prefetch. Not mine takes the link off again and leaves the claim alone, whether the link was
+ * just made or the claim was already on this account's gifts (`yours`, R12).
  */
 export function ClaimLink({
   manageToken,
@@ -27,7 +35,7 @@ export function ClaimLink({
   manageToken: string;
   link: ClaimDetailsResponse['link'];
 }) {
-  const [phase, setPhase] = useState<Phase>(link === 'someone-else' ? 'someone-else' : 'quiet');
+  const [phase, setPhase] = useState<Phase>(link ? START[link] : 'quiet');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const region = useRef<HTMLDivElement>(null);
@@ -67,16 +75,20 @@ export function ClaimLink({
           {ON_SOMEONE_ELSES_GIFTS}
         </Notice>
       ) : null}
-      {phase === 'added' ? (
-        <Notice tone="success" announce={false} className="mb-5">
+      {phase === 'added' || phase === 'yours' ? (
+        <Notice tone={phase === 'added' ? 'success' : 'info'} announce={false} className="mb-5">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <span>
-              Added to{' '}
-              <Link href="/gifts" className="underline">
-                Your gifts
-              </Link>
-              .
-            </span>
+            {phase === 'added' ? (
+              <span>
+                Added to{' '}
+                <Link href="/gifts" className="underline">
+                  Your gifts
+                </Link>
+                .
+              </span>
+            ) : (
+              <WithGiftsLink sentence={ON_YOUR_GIFTS} />
+            )}
             <Button
               variant="secondary"
               size="compact"
@@ -95,5 +107,19 @@ export function ClaimLink({
         </Notice>
       ) : null}
     </div>
+  );
+}
+
+/** A sentence with its `Your gifts` made a link to `/gifts`. */
+function WithGiftsLink({ sentence }: { sentence: string }) {
+  const [before, after] = sentence.split('Your gifts');
+  return (
+    <span>
+      {before}
+      <Link href="/gifts" className="underline">
+        Your gifts
+      </Link>
+      {after}
+    </span>
   );
 }

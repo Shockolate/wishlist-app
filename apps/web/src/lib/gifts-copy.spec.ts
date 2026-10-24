@@ -5,6 +5,7 @@ import {
   goneLine,
   letGoText,
   ON_SOMEONE_ELSES_GIFTS,
+  ON_YOUR_GIFTS,
   SEE_GIFTS,
   SHEET_GIFTS_HINT,
   summaryLine,
@@ -113,6 +114,7 @@ describe('signed-in claim copy (Plan 10b copy table)', () => {
     expect(SHEET_GIFTS_HINT).toBe('This goes on Your gifts.');
     expect(SEE_GIFTS).toBe('See Your gifts');
     expect(TAKEN_OFF_GIFTS).toBe('Taken off Your gifts.');
+    expect(ON_YOUR_GIFTS).toBe('On Your gifts.');
     expect(ON_SOMEONE_ELSES_GIFTS).toBe(
       'This claim is on someone else’s gifts in Hanker, so it won’t appear on yours. You can still change or cancel it here.',
     );

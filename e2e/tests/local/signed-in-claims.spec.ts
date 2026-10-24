@@ -166,7 +166,7 @@ test('opening my manage link signed in adds the claim, and Not mine takes it off
   expect(await titles(mum)).toEqual([]);
 });
 
-test('a manage link already on someone else’s gifts says so, and still changes the claim', async ({
+test('a manage link already on someone else’s gifts says so, and still changes the claim; its holder can take it off', async ({
   browser,
   baseURL,
 }) => {
@@ -203,11 +203,33 @@ test('a manage link already on someone else’s gifts says so, and still changes
     link: 'yours',
   });
 
-  // The account that holds it sees nothing extra on load (ruling 7).
+  // The account that holds it is told so, and Not mine takes it off from here too (R12).
+  const firstRequests = linkRequests(first);
   await first.goto(`/c/${manageToken}`);
   await expect(first.getByRole('heading', { level: 1, name: 'Your claim' })).toBeVisible();
+  const onGifts = first.getByRole('status').filter({ hasText: 'On Your gifts.' });
+  await expect(onGifts).toBeVisible();
+  await expect(onGifts.getByRole('link', { name: 'Your gifts' })).toHaveAttribute('href', '/gifts');
   await expect(first.getByText('Added to Your gifts.')).toHaveCount(0);
   await expect(first.getByText(SOMEONE_ELSE, { exact: true })).toHaveCount(0);
+  await expectAccessible(first);
+  // Already linked: loading the page asked for nothing.
+  expect(firstRequests).toEqual([]);
+
+  await onGifts.getByRole('button', { name: 'Not mine' }).click();
+  await expect(
+    first.getByRole('status').filter({ hasText: 'Taken off Your gifts.' }),
+  ).toBeVisible();
+  await expect(first.getByRole('button', { name: 'Not mine' })).toHaveCount(0);
+  await expectAccessible(first);
+  expect(firstRequests).toEqual([expect.stringMatching(/^DELETE .*\/link$/)]);
+  expect(await titles(first)).toEqual([]);
+  // The claim is unchanged; it's only off Your gifts.
+  const after = await first.request.get(`/api/claims/${manageToken}`);
+  expect(await after.json()).toMatchObject({
+    claim: { claimerName: 'Grandma K', quantity: 1 },
+    link: 'none',
+  });
 });
 
 test('a guest’s sheet and /c are unchanged', async ({ browser, baseURL }) => {

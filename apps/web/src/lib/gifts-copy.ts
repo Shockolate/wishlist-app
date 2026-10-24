@@ -53,6 +53,12 @@ export const SHEET_GIFTS_HINT = 'This goes on Your gifts.';
 /** The claim sheet's way to Your gifts, once a claim has landed there. */
 export const SEE_GIFTS = 'See Your gifts';
 
+/**
+ * `/c` for a claim already on this account's gifts, beside Not mine (R12). The page makes
+ * `Your gifts` a link to `/gifts`, as it does in the notice a fresh link shows.
+ */
+export const ON_YOUR_GIFTS = 'On Your gifts.';
+
 /** `/c`, after Not mine: the claim is still there, but no longer on Your gifts. */
 export const TAKEN_OFF_GIFTS = 'Taken off Your gifts.';
 
