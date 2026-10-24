@@ -3,6 +3,7 @@ import {
   CAPABILITY_TOKEN_PATTERN,
   type Claim,
   type ClaimDetailsResponse,
+  type ClaimLinkResponse,
   type CreateClaimRequest,
   type CreateClaimResponse,
   type UpdateClaimRequest,
@@ -14,8 +15,8 @@ import { CLOCK, type Clock } from '../core/clock.js';
 import { ENV, type Env } from '../core/env.js';
 import { newId } from '../core/ids.js';
 import { DB, type Database } from '../db/database.module.js';
-import { isUniqueViolation } from '../db/pg-errors.js';
-import { claims, items, users, wishlists } from '../db/schema.js';
+import { isForeignKeyViolation, isUniqueViolation } from '../db/pg-errors.js';
+import { claimLinks, claims, items, users, wishlists } from '../db/schema.js';
 import { RateLimiter } from '../rate-limit/rate-limiter.js';
 import { hashToken, newToken } from '../security/tokens.js';
 import { manageUrl, shareUrl } from '../wishlist/links.js';
@@ -30,7 +31,7 @@ import {
 } from './claims-errors.js';
 import { CLAIM_COLUMNS, SHARED_ITEM_COLUMNS, SNAPSHOT, claimedTotal } from './queries.js';
 import { CLAIMS_PER_IP, CLAIMS_PER_LIST, claimsIpKey, claimsListKey } from './rate-limits.js';
-import { canLink, insertLink, linkStateOf } from './links.js';
+import { canLink, insertLink, LINK_CLAIM_FK, linkStateOf } from './links.js';
 import { fitsChangedClaim, fitsNewClaim, remainingOf } from './remaining.js';
 
 const ItemIdSchema = z.uuid();
@@ -147,6 +148,8 @@ export class ClaimsService {
     } catch (error) {
       // The same token claimed on another item at the same moment (Plan 4b rule 3).
       if (isUniqueViolation(error, 'claims_manage_token_hash_unique')) throw manageTokenInUse();
+      // A replay racing a cancel: the claim was deleted between our read and the link insert.
+      if (isForeignKeyViolation(error, LINK_CLAIM_FK)) throw claimNotFound();
       throw error;
     }
     return {
@@ -265,27 +268,118 @@ export class ClaimsService {
   }
 
   /**
-   * Cancels the claim (spec §5). No lock: removing a claim can't over-commit an item (§6.3). A
-   * guest's cancel is one `DELETE`; with a session, the claim's list owner is read first so the
-   * list's own owner is refused (D82).
+   * Puts the claim behind `manageToken` on the session's gifts, if it's on nobody's (design §5,
+   * D77). Answers `someone-else` when another account holds it, and leaves everything as it was.
+   * Checks run in the order of `update`: the token's shape, the IP's limit, the claim, the owner
+   * (D82), the list's limit, and only then the write.
    */
-  async cancel(manageToken: string, viewerId: string | null): Promise<void> {
+  async link(manageToken: string, user: SessionUser, ip: string): Promise<ClaimLinkResponse> {
+    const found = await this.claimToLink(manageToken, user, ip);
+    const now = this.clock.now();
+    try {
+      // Two statements at READ COMMITTED: when another account's insert won, ours does nothing,
+      // and the read that follows sees its commit. The loop covers the winner's link being
+      // removed in between, which makes the claim free again.
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const state = await this.db.transaction(async (tx) => {
+          const inserted = await insertLink(tx, {
+            claimId: found.claimId,
+            userId: user.id,
+            itemTitle: found.itemTitle,
+            ownerDisplayName: found.ownerDisplayName,
+            now,
+          });
+          return inserted ? 'yours' : await linkStateOf(tx, found.claimId, user.id);
+        });
+        if (state !== 'none') return { link: state };
+      }
+    } catch (error) {
+      // The claim was cancelled after we found it: it's gone, like any unknown token (R5).
+      if (isForeignKeyViolation(error, LINK_CLAIM_FK)) throw claimNotFound();
+      throw error;
+    }
+    throw new Error('claim link kept changing while it was being read');
+  }
+
+  /**
+   * Takes the claim off the session's gifts (design §5, D77): only the session's own link, and a
+   * no-op when the claim has none or another account holds it. The claim is never touched.
+   */
+  async unlink(manageToken: string, user: SessionUser, ip: string): Promise<void> {
+    const found = await this.claimToLink(manageToken, user, ip);
+    await this.db
+      .delete(claimLinks)
+      .where(and(eq(claimLinks.claimId, found.claimId), eq(claimLinks.userId, user.id)));
+  }
+
+  /** The guards `link` and `unlink` share, and what a link snapshots about the claim. */
+  private async claimToLink(manageToken: string, user: SessionUser, ip: string) {
+    if (!CAPABILITY_TOKEN_PATTERN.test(manageToken)) throw claimNotFound();
+    await this.limiter.enforce(claimsIpKey(ip), CLAIMS_PER_IP);
+    const [found] = await this.db
+      .select({
+        claimId: claims.id,
+        itemTitle: items.title,
+        wishlistId: items.wishlistId,
+        ownerId: wishlists.ownerId,
+        ownerDisplayName: users.displayName,
+      })
+      .from(claims)
+      .innerJoin(items, eq(items.id, claims.itemId))
+      .innerJoin(wishlists, eq(wishlists.id, items.wishlistId))
+      .innerJoin(users, eq(users.id, wishlists.ownerId))
+      .where(eq(claims.manageTokenHash, hashToken(manageToken)));
+    if (!found) throw claimNotFound();
+    // Before the list's limit (D43, D82): a 429 there would tell the owner about claims.
+    if (user.id === found.ownerId) throw ownListClaim();
+    await this.limiter.enforce(claimsListKey(found.wishlistId), CLAIMS_PER_LIST);
+    return found;
+  }
+
+  /**
+   * Cancels the claim (spec §5). No lock: removing a claim can't over-commit an item (§6.3). One
+   * transaction, so the claim and what it leaves behind go together (Plan 10b ruling 4): where
+   * the claim is on someone's gifts and the canceller isn't that account, its link stays as a
+   * `cancelled` note; where it's the canceller's own, the link goes with the claim, no note. The
+   * list's own owner, signed in, is refused (D82).
+   */
+  async cancel(manageToken: string, viewer: SessionUser | null): Promise<void> {
     if (!CAPABILITY_TOKEN_PATTERN.test(manageToken)) throw claimNotFound();
     const tokenHash = hashToken(manageToken);
-    if (viewerId !== null) {
-      const [found] = await this.db
-        .select({ ownerId: wishlists.ownerId })
+    await this.db.transaction(async (tx) => {
+      const [found] = await tx
+        .select({
+          claimId: claims.id,
+          ownerId: wishlists.ownerId,
+          linkId: claimLinks.id,
+          linkUserId: claimLinks.userId,
+        })
         .from(claims)
         .innerJoin(items, eq(items.id, claims.itemId))
         .innerJoin(wishlists, eq(wishlists.id, items.wishlistId))
+        .leftJoin(claimLinks, eq(claimLinks.claimId, claims.id))
         .where(eq(claims.manageTokenHash, tokenHash));
       if (!found) throw claimNotFound();
-      if (found.ownerId === viewerId) throw ownListClaim();
-    }
-    const deleted = await this.db
-      .delete(claims)
-      .where(eq(claims.manageTokenHash, tokenHash))
-      .returning({ id: claims.id });
-    if (deleted.length === 0) throw claimNotFound();
+      if (viewer?.id === found.ownerId) throw ownListClaim();
+      if (found.linkId !== null) {
+        if (viewer?.id === found.linkUserId) {
+          await tx.delete(claimLinks).where(eq(claimLinks.id, found.linkId));
+        } else {
+          // The cron would stamp `gone_at` on a note that lacks one, but a cancel knows when.
+          const now = this.clock.now();
+          await tx
+            .update(claimLinks)
+            .set({ cancelledAt: now, goneAt: now, updatedAt: now })
+            .where(eq(claimLinks.id, found.linkId));
+        }
+      }
+      // Deleting the claim is what sets the link's `claim_id` to null (the foreign key).
+      const deleted = await tx
+        .delete(claims)
+        .where(eq(claims.id, found.claimId))
+        .returning({ id: claims.id });
+      // Cancelled meanwhile from another device: this transaction's note rolls back with it.
+      if (deleted.length === 0) throw claimNotFound();
+    });
   }
 }

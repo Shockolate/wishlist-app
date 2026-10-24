@@ -57,6 +57,6 @@ export class ClaimsController {
     @Param('manageToken') manageToken: string,
     @OptionalAuth() auth: AuthContext | null,
   ): Promise<void> {
-    await this.claims.cancel(manageToken, auth?.user.id ?? null);
+    await this.claims.cancel(manageToken, auth?.user ?? null);
   }
 }

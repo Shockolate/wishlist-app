@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isUniqueViolation } from './pg-errors.js';
+import { isForeignKeyViolation, isUniqueViolation } from './pg-errors.js';
 
 const pg = (code: string, constraint?: string) =>
   Object.assign(new Error('duplicate key'), { code, constraint });
@@ -33,5 +33,31 @@ describe('isUniqueViolation', () => {
     ).toBe(false);
     expect(isUniqueViolation(undefined, 'x')).toBe(false);
     expect(isUniqueViolation('23505', 'x')).toBe(false);
+  });
+});
+
+describe('isForeignKeyViolation', () => {
+  it('recognizes Postgres’s foreign_key_violation on the named constraint, wrapped or not', () => {
+    const fk = pg('23503', 'claim_links_claim_id_claims_id_fk');
+    expect(isForeignKeyViolation(fk, 'claim_links_claim_id_claims_id_fk')).toBe(true);
+    expect(
+      isForeignKeyViolation(
+        new Error('Failed query', { cause: fk }),
+        'claim_links_claim_id_claims_id_fk',
+      ),
+    ).toBe(true);
+  });
+
+  it('ignores another constraint, a unique violation, and things that are not errors', () => {
+    expect(
+      isForeignKeyViolation(pg('23503', 'other_fk'), 'claim_links_claim_id_claims_id_fk'),
+    ).toBe(false);
+    expect(
+      isForeignKeyViolation(
+        pg('23505', 'claim_links_claim_id_claims_id_fk'),
+        'claim_links_claim_id_claims_id_fk',
+      ),
+    ).toBe(false);
+    expect(isForeignKeyViolation(undefined, 'x')).toBe(false);
   });
 });

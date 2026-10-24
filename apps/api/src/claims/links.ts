@@ -4,12 +4,16 @@ import { newId } from '../core/ids.js';
 import type { Transaction } from '../db/database.module.js';
 import { claimLinks } from '../db/schema.js';
 
+/** The foreign key from a link to its claim: violated when the claim was deleted a moment ago. */
+export const LINK_CLAIM_FK = 'claim_links_claim_id_claims_id_fk';
+
 /** Whose gifts a claim is on, as one session sees it (design §5). */
 export type LinkState = 'none' | 'yours' | 'someone-else';
 
 /**
  * Who may have claims on Your gifts (design §2, D76): a signed-in user whose email is confirmed
- * and who isn't the list's owner. An owner is refused before this is asked (D43, D82).
+ * and who isn't the list's owner. `ClaimsService.create` and `details` refuse the owner before
+ * they ask this; `SharedListService.get` doesn't refuse the owner, so for them this is just false.
  */
 export function canLink(user: SessionUser | null, ownerId: string): user is SessionUser {
   return user !== null && user.emailVerified && user.id !== ownerId;

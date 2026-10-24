@@ -502,6 +502,34 @@ describe('linking a claim to a signed-in gifter (D76)', () => {
     expect((await links()).map((l) => l.user_id)).toEqual([await userId(BOB.email)]);
   });
 
+  it('a replay racing a cancel answers 404, not 500 (R7)', async () => {
+    const { token, kettle } = await adasKettle(2);
+    await signUpVerified(t, BOB);
+    const bob = await logIn(t, BOB);
+    const manageToken = newToken(16);
+    const first = await claim(token, kettle, { claimerName: 'Bobby', manageToken });
+    const claimId = CreateClaimResponseSchema.parse(first.body).claim.id;
+    // A cancel that has deleted the claim but not yet committed: the replay's link insert
+    // reaches the claim row's foreign key check and waits for it.
+    const holder = await db.pool.connect();
+    let replay: Promise<ApiResponse> | undefined;
+    try {
+      await holder.query('begin');
+      const holderPid = (await holder.query<{ pid: number }>('select pg_backend_pid() as pid'))
+        .rows[0]!.pid;
+      await holder.query('delete from claims where id = $1', [claimId]);
+      replay = claim(token, kettle, { claimerName: 'Bobby', manageToken }, bob).then((r) => r);
+      await untilBlockedBy(db.pool, holderPid, 1, replay);
+      await holder.query('commit');
+    } finally {
+      await holder.query('rollback').catch(() => undefined);
+      holder.release();
+    }
+    const res = await replay;
+    expect([res?.status, res && codeOf(res)]).toEqual([404, ErrorCode.NOT_FOUND]);
+    expect(await count('claim_links')).toBe(0);
+  });
+
   it('refuses the owner, verified or not, and links nothing', async () => {
     const { token, kettle } = await adasKettle(1);
     const res = await claim(token, kettle, { claimerName: 'Ada' }, await logIn(t));
