@@ -42,6 +42,8 @@ export const SharedWishlistResponseSchema = z.object({
   ownerSeesClaims: z.boolean(),
   tags: z.array(TagSchema).optional(),
   items: z.array(SharedItemSchema),
+  /** The signed-in, verified gifter's own display name, so the claim sheet can offer it (Plan 10b). */
+  viewer: z.object({ displayName: z.string() }).optional(),
 });
 export type SharedWishlistResponse = z.infer<typeof SharedWishlistResponseSchema>;
 
@@ -50,6 +52,8 @@ export const CreateClaimResponseSchema = z.object({
   claim: ClaimSchema,
   manageToken: z.string().regex(CAPABILITY_TOKEN_PATTERN),
   manageUrl: z.url(),
+  /** `true` when the claim's link is this signed-in session's: it is on Your gifts (Plan 10b). */
+  onYourGifts: z.boolean().optional(),
 });
 export type CreateClaimResponse = z.infer<typeof CreateClaimResponseSchema>;
 
@@ -65,6 +69,8 @@ export const ClaimDetailsResponseSchema = z.object({
   remaining: z.number().int().min(0),
   shareUrl: z.url(),
   ownerSeesClaims: z.boolean(),
+  /** For a signed-in, verified session only: whether this claim is on its gifts (Plan 10b). */
+  link: z.enum(['none', 'yours', 'someone-else']).optional(),
 });
 export type ClaimDetailsResponse = z.infer<typeof ClaimDetailsResponseSchema>;
 

@@ -2,6 +2,7 @@ export * from './auth.js';
 export * from './claims.js';
 export * from './cron.js';
 export * from './error-codes.js';
+export * from './gifts.js';
 export * from './health.js';
 export * from './patterns.js';
 export * from './price.js';

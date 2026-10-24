@@ -6,5 +6,7 @@ export const CleanupResultSchema = z.object({
   emailTokens: z.number().int().nonnegative(),
   sessions: z.number().int().nonnegative(),
   rateLimitWindows: z.number().int().nonnegative(),
+  /** Notes on Your gifts deleted after their 30 days (Plan 10b). */
+  giftNotes: z.number().int().nonnegative(),
 });
 export type CleanupResult = z.infer<typeof CleanupResultSchema>;

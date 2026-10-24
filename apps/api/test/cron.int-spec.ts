@@ -67,7 +67,7 @@ describe('GET /api/internal/cron/daily (spec §10)', () => {
     const result = CleanupResultSchema.parse(res.body);
     // Ada's account goes, and its token and wishlist cascade with it. Bob's used verification
     // token and his 30-day session have expired.
-    expect(result).toMatchObject({ unverifiedUsers: 1, emailTokens: 1, sessions: 1 });
+    expect(result).toMatchObject({ unverifiedUsers: 1, emailTokens: 1, sessions: 1, giftNotes: 0 });
     expect(result.rateLimitWindows).toBeGreaterThan(0);
 
     const { rows } = await db.pool.query<{ email: string }>('select email from users');
@@ -85,7 +85,7 @@ describe('GET /api/internal/cron/daily (spec §10)', () => {
     t.clock.advance(6 * DAY);
     const result = CleanupResultSchema.parse((await runCron(t.app, `Bearer ${SECRET}`)).body);
 
-    expect(result).toMatchObject({ unverifiedUsers: 0, sessions: 0 });
+    expect(result).toMatchObject({ unverifiedUsers: 0, sessions: 0, giftNotes: 0 });
     expect(await count('users')).toBe(2);
     expect((await client(t.app, bob).get('/me')).status).toBe(200);
   });
