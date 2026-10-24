@@ -14,6 +14,7 @@ import { createAuthTestApp, type AuthTestApp } from './support/auth-app.js';
 import { client, type ApiResponse } from './support/client.js';
 import { openTestDatabase } from './support/database.js';
 import { seedItem, shareTokenOf, wishlistIdOf } from './support/lists.js';
+import { untilBlockedBy } from './support/locks.js';
 import { fillBucket } from './support/rate-limits.js';
 
 const db = openTestDatabase();
@@ -55,6 +56,10 @@ const listed = async (cookie: string) => {
 };
 const count = async (table: 'claims' | 'claim_links') =>
   Number((await db.pool.query<{ n: string }>(`select count(*) as n from ${table}`)).rows[0]?.n);
+/** What a claim-limit bucket has counted; undefined when nothing was charged. */
+const used = async (key: string) =>
+  (await db.pool.query<{ count: number }>('select count from rate_limits where key = $1', [key]))
+    .rows[0]?.count;
 
 /** A claim as a gifter makes it; signed in (with `cookie`), it goes on Your gifts. */
 async function claim(
@@ -143,14 +148,15 @@ describe('GET /me/gifts (design §5.9, ruling 2)', () => {
       );
     await note('Oldest', true, '2026-10-01T00:00:00Z', '2026-10-30T00:00:00Z');
     await note('Newest', false, '2026-10-05T00:00:00Z', '2026-10-05T00:00:00Z');
-    // The cron hasn't stamped this one: it counts from its last update.
+    // The cron hasn't stamped this one yet, so it went since the cron last ran: newer than every
+    // stamped note, whenever it was last updated (R14).
     await note('Unstamped', false, null, '2026-10-03T00:00:00Z');
 
     const body = await listed(s.bob);
     expect(body.gifts).toHaveLength(1);
     expect(body.gone.map((n) => [n.itemTitle, n.reason])).toEqual([
-      ['Newest', 'removed'],
       ['Unstamped', 'removed'],
+      ['Newest', 'removed'],
       ['Oldest', 'cancelled'],
     ]);
     expect(Object.keys(body.gone[0] ?? {}).sort()).toEqual([
@@ -395,26 +401,38 @@ describe('PATCH /me/gifts/:linkId (design §5.9)', () => {
     expect([res.status, codeOf(res)]).toEqual([404, ErrorCode.NOT_FOUND]);
   });
 
-  it('counts against the IP’s and the list’s claim limits, and says nothing else', async () => {
+  it('counts a name or quantity change against the IP’s and the list’s claim limits', async () => {
+    const s = await bobsKettle();
+    const ipKey = claimsIpKey('127.0.0.1');
+    const listKey = claimsListKey(await wishlistIdOf(db, ADA.email));
+    for (const body of [{ claimerName: 'Bobby' }, { quantity: 2, bought: true }]) {
+      await db.pool.query('truncate rate_limits');
+      await fillBucket(db, listKey, 30);
+      const byList = await change(s.linkId, body, s.bob);
+      expect([byList.status, codeOf(byList)]).toEqual([429, ErrorCode.RATE_LIMITED]);
+      await db.pool.query('truncate rate_limits');
+      await fillBucket(db, ipKey, 20);
+      const byIp = await change(s.linkId, body, s.bob);
+      expect([byIp.status, codeOf(byIp)]).toEqual([429, ErrorCode.RATE_LIMITED]);
+      await db.pool.query('truncate rate_limits');
+      expect((await change(s.linkId, body, s.bob)).status).toBe(200);
+      expect([await used(ipKey), await used(listKey)]).toEqual([1, 1]);
+    }
+  });
+
+  it('ticks Bought with both claim limits full, and charges neither (R13)', async () => {
     const s = await bobsKettle();
     const ipKey = claimsIpKey('127.0.0.1');
     const listKey = claimsListKey(await wishlistIdOf(db, ADA.email));
     await fillBucket(db, listKey, 30);
-    const byList = await change(s.linkId, { bought: true }, s.bob);
-    expect([byList.status, codeOf(byList)]).toEqual([429, ErrorCode.RATE_LIMITED]);
-    await db.pool.query('truncate rate_limits');
     await fillBucket(db, ipKey, 20);
-    const byIp = await change(s.linkId, { bought: true }, s.bob);
-    expect([byIp.status, codeOf(byIp)]).toEqual([429, ErrorCode.RATE_LIMITED]);
+    for (const bought of [true, false, true]) {
+      expect((await change(s.linkId, { bought }, s.bob)).status).toBe(200);
+    }
+    expect([await used(ipKey), await used(listKey)]).toEqual([20, 30]);
     await db.pool.query('truncate rate_limits');
-    expect((await change(s.linkId, { bought: true }, s.bob)).status).toBe(200);
-    const used = async (key: string) =>
-      (
-        await db.pool.query<{ count: number }>('select count from rate_limits where key = $1', [
-          key,
-        ])
-      ).rows[0]?.count;
-    expect([await used(ipKey), await used(listKey)]).toEqual([1, 1]);
+    expect((await change(s.linkId, { bought: false }, s.bob)).status).toBe(200);
+    expect([await used(ipKey), await used(listKey)]).toEqual([undefined, undefined]);
   });
 });
 
@@ -456,26 +474,90 @@ describe('DELETE /me/gifts/:linkId (design §5.9)', () => {
     expect(Number(held.rows[0]?.n)).toBe(1);
   });
 
-  it('counts a live claim against both claim limits, and clearing a note only the IP’s', async () => {
+  it('counts letting a gift go against the IP’s and the list’s claim limits', async () => {
     const s = await bobsKettle();
     const listKey = claimsListKey(await wishlistIdOf(db, ADA.email));
     const ipKey = claimsIpKey('127.0.0.1');
     await fillBucket(db, listKey, 30);
     const byList = await letGo(s.linkId, s.bob);
     expect([byList.status, codeOf(byList)]).toEqual([429, ErrorCode.RATE_LIMITED]);
-    expect(await count('claims')).toBe(2);
-
-    // A note has no list: only the IP's bucket applies.
-    await db.pool.query('delete from items where id = $1', [s.kettle]);
-    expect((await letGo(s.linkId, s.bob)).status).toBe(204);
-
-    await db.pool.query('truncate rate_limits');
-    const second = await claim(s.adaToken, s.mug, 'Bob', 1, s.bob);
-    expect(second.onYourGifts).toBe(true);
     await db.pool.query('truncate rate_limits');
     await fillBucket(db, ipKey, 20);
-    const gift = (await listed(s.bob)).gifts[0];
-    const byIp = await letGo(gift?.linkId ?? UNKNOWN_ID, s.bob);
+    const byIp = await letGo(s.linkId, s.bob);
     expect([byIp.status, codeOf(byIp)]).toEqual([429, ErrorCode.RATE_LIMITED]);
+    expect(await count('claims')).toBe(2);
+
+    await db.pool.query('truncate rate_limits');
+    expect((await letGo(s.linkId, s.bob)).status).toBe(204);
+    expect([await used(ipKey), await used(listKey)]).toEqual([1, 1]);
+  });
+
+  it('clears a note with both claim limits full, and charges neither (R13)', async () => {
+    const s = await bobsKettle();
+    const listKey = claimsListKey(await wishlistIdOf(db, ADA.email));
+    const ipKey = claimsIpKey('127.0.0.1');
+    await db.pool.query('delete from items where id = $1', [s.kettle]);
+    await fillBucket(db, listKey, 30);
+    await fillBucket(db, ipKey, 20);
+    expect((await letGo(s.linkId, s.bob)).status).toBe(204);
+    expect(await count('claim_links')).toBe(0);
+    expect([await used(ipKey), await used(listKey)]).toEqual([20, 30]);
+  });
+
+  it('answers 404 to Let it go on a claim cancelled meanwhile, and leaves the note (R14)', async () => {
+    // Bob's page still shows the gift; someone cancels it through its link just as he lets it
+    // go. He's told it's gone and the page refreshes to the note, rather than it vanishing.
+    const s = await bobsKettle();
+    const holder = await db.pool.connect();
+    let racing: Promise<ApiResponse> | undefined;
+    try {
+      await holder.query('begin');
+      const holderPid = (await holder.query<{ pid: number }>('select pg_backend_pid() as pid'))
+        .rows[0]!.pid;
+      await holder.query('delete from claims where id = $1', [s.mine.claim.id]);
+      await holder.query(
+        'update claim_links set cancelled_at = now(), gone_at = now() where id = $1',
+        [s.linkId],
+      );
+      racing = letGo(s.linkId, s.bob).then((res) => res);
+      await untilBlockedBy(db.pool, holderPid, 1, racing);
+      await holder.query('commit');
+    } finally {
+      await holder.query('rollback').catch(() => undefined);
+      holder.release();
+    }
+    const res = await racing;
+    expect(res?.status).toBe(404);
+    expect(res && codeOf(res)).toBe(ErrorCode.NOT_FOUND);
+    const { gone } = await listed(s.bob);
+    expect(gone).toMatchObject([{ linkId: s.linkId, reason: 'cancelled' }]);
+  });
+
+  it('lets a gift go taking the claim row before its link, the cascade’s order (R10)', async () => {
+    // An owner deleting the item cascades item → claim → link. Let it go must not hold the link
+    // while it waits for the claim, or the two can deadlock.
+    const s = await bobsKettle();
+    const holder = await db.pool.connect();
+    let racing: Promise<ApiResponse> | undefined;
+    let probe: Promise<number | null> | undefined;
+    try {
+      await holder.query('begin');
+      const holderPid = (await holder.query<{ pid: number }>('select pg_backend_pid() as pid'))
+        .rows[0]!.pid;
+      await holder.query('select id from claims where id = $1 for update', [s.mine.claim.id]);
+      racing = letGo(s.linkId, s.bob).then((res) => res);
+      await untilBlockedBy(db.pool, holderPid, 1, racing);
+      probe = db.pool
+        .query('select id from claim_links where id = $1 for update nowait', [s.linkId])
+        .then((res) => res.rowCount);
+      await probe.catch(() => undefined);
+      await holder.query('commit');
+    } finally {
+      await holder.query('rollback').catch(() => undefined);
+      holder.release();
+    }
+    await expect(probe).resolves.toBe(1);
+    expect((await racing)?.status).toBe(204);
+    expect([await count('claims'), await count('claim_links')]).toEqual([1, 0]);
   });
 });

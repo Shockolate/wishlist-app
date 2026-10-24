@@ -273,7 +273,9 @@ describe('DELETE /me (spec §5)', () => {
       const kettleClaim = await claimAs(bob, adaToken, kettle, 2);
       await claimAs(bob, adaToken, mug, 1);
       // Bob has ticked Bought on one of them.
-      await db.pool.query('update claim_links set bought_at = now()');
+      await db.pool.query('update claim_links set bought_at = now() where claim_id = $1', [
+        kettleClaim.claim.id,
+      ]);
       expect(await count('claim_links')).toBe(2);
 
       const res = await client(t.app, bob).delete('/me', { password: BOB.password });
@@ -312,7 +314,7 @@ describe('DELETE /me (spec §5)', () => {
       await claimAs(bob, adaToken, kettle, 1);
       await claimAs(cam, adaToken, kettle, 1);
       await claimAs(cam, await shareTokenOf(db, BOB.email), lamp, 1);
-      // Bob opens Your gifts, so the snapshot of Ada's item is as he last saw it.
+      // Before Ada leaves, the kettle is a live gift on Bob's page, not a note.
       const before = GiftsResponseSchema.parse((await client(t.app, bob).get('/me/gifts')).body);
       expect(before.gifts.map((g) => g.item.title)).toEqual(['Kettle']);
 

@@ -58,12 +58,9 @@ export class GiftsService {
         })
         .from(claimLinks)
         .where(and(eq(claimLinks.userId, user.id), isNull(claimLinks.claimId)))
-        // The cron stamps `gone_at` on a cascaded note a day or so late: until then it counts
-        // from its last update.
-        .orderBy(
-          desc(sql`coalesce(${claimLinks.goneAt}, ${claimLinks.updatedAt})`),
-          desc(claimLinks.id),
-        );
+        // The cron stamps `gone_at` on a cascaded note a day or so late, so a note without one
+        // went since the cron last ran: newer than every stamped note (R14).
+        .orderBy(sql`${claimLinks.goneAt} desc nulls first`, desc(claimLinks.id));
       return { rows, notes, remaining: await remainingByItem(tx, rows) };
     }, SNAPSHOT);
 
@@ -97,9 +94,10 @@ export class GiftsService {
 
   /**
    * The Bought tick, a new name or quantity, or all of them; answers the gift as it now stands.
-   * `bought` alone sets the link's `bought_at` and takes no item lock, since it touches no claim.
-   * A name or quantity follows `PATCH /claims`' transaction (`applyClaimChange`), the tick in the
-   * same one. The IP's limit is charged first, the list's once the link is found to have a claim.
+   * `bought` alone sets the link's `bought_at`, takes no item lock and charges no claim limit
+   * (R13): it touches no claim, only the gifter's own row. A name or quantity follows
+   * `PATCH /claims`' transaction (`applyClaimChange`), the tick in the same one, and is charged
+   * like it: the IP's limit first, the list's once the link is found to have a claim.
    */
   async change(
     user: SessionUser,
@@ -107,14 +105,15 @@ export class GiftsService {
     input: UpdateGiftRequest,
     ip: string,
   ): Promise<Gift> {
-    const found = await this.findLink(user, linkId, ip);
+    const touchesClaim = input.claimerName !== undefined || input.quantity !== undefined;
+    if (touchesClaim) await this.limiter.enforce(claimsIpKey(ip), CLAIMS_PER_IP);
+    const found = await this.findLink(user, linkId);
     const { claimId, itemId, wishlistId } = found;
     // A note has no claim to change.
     if (!claimId || !itemId || !wishlistId) throw claimNotFound();
-    await this.limiter.enforce(claimsListKey(wishlistId), CLAIMS_PER_LIST);
+    if (touchesClaim) await this.limiter.enforce(claimsListKey(wishlistId), CLAIMS_PER_LIST);
 
     const now = this.clock.now();
-    const touchesClaim = input.claimerName !== undefined || input.quantity !== undefined;
     return this.db.transaction(async (tx) => {
       // Item row first, as every claim write does (spec §6.3); the link row after the claim, the
       // order the owner deleting the item takes them in.
@@ -148,30 +147,41 @@ export class GiftsService {
   }
 
   /**
-   * Let it go, for a live claim: the link and the claim are deleted, and no note is left. Clear,
-   * for a note: the note is deleted. Taking a claim away needs no item lock (spec §6.3). A live
-   * claim counts against both claim limits; a note has no list, so only the IP's.
+   * Let it go, for a live claim: the claim and the link are deleted, and no note is left. Clear,
+   * for a note: the note is deleted. Taking a claim away needs no item lock (spec §6.3). Letting
+   * go counts against the IP's claim limit, then the list's; Clear touches only the gifter's own
+   * row and counts against neither (R13).
    */
   async remove(user: SessionUser, linkId: string, ip: string): Promise<void> {
-    const found = await this.findLink(user, linkId, ip);
-    if (found.claimId && found.wishlistId) {
-      await this.limiter.enforce(claimsListKey(found.wishlistId), CLAIMS_PER_LIST);
+    const found = await this.findLink(user, linkId);
+    const { claimId, wishlistId } = found;
+    if (claimId && wishlistId) {
+      await this.limiter.enforce(claimsIpKey(ip), CLAIMS_PER_IP);
+      await this.limiter.enforce(claimsListKey(wishlistId), CLAIMS_PER_LIST);
     }
     await this.db.transaction(async (tx) => {
-      // Re-read as the delete returns it: a cancel may have turned the claim into a note since.
+      if (claimId) {
+        // The claim's row first, then its link's: the order an item delete's cascade takes them
+        // (R10). Deleting the claim nulls the link's `claim_id` and holds the link's row.
+        const deleted = await tx
+          .delete(claims)
+          .where(eq(claims.id, claimId))
+          .returning({ id: claims.id });
+        // Cancelled or deleted with its item meanwhile: say so, and leave the note (R14).
+        if (deleted.length === 0) throw claimNotFound();
+      }
       const [link] = await tx
         .delete(claimLinks)
         .where(and(eq(claimLinks.id, linkId), eq(claimLinks.userId, user.id)))
-        .returning({ claimId: claimLinks.claimId });
+        .returning({ id: claimLinks.id });
+      // Taken off this account's gifts meanwhile (Not mine): this rolls the claim's delete back.
       if (!link) throw claimNotFound();
-      if (link.claimId) await tx.delete(claims).where(eq(claims.id, link.claimId));
     });
   }
 
   /** The link, if it's the session's: a malformed, unknown or someone else's ID is one `404`. */
-  private async findLink(user: SessionUser, linkId: string, ip: string) {
+  private async findLink(user: SessionUser, linkId: string) {
     if (!LinkIdSchema.safeParse(linkId).success) throw claimNotFound();
-    await this.limiter.enforce(claimsIpKey(ip), CLAIMS_PER_IP);
     const [found] = await this.db
       .select({
         claimId: claimLinks.claimId,
