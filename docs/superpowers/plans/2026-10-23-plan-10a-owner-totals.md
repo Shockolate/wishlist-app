@@ -65,7 +65,7 @@
 
 ## Rulings this plan makes on gaps in the design
 
-1. **One API layer, not three.** The design (§6) proposed expand, web, contract. Here the API both adds `claimed` and stops sending owners `claims[]` in one layer below the web layer. In production the API deploys before the web (main spec §10), so for at most one deploy the old web meets the new API: it gets no owner `claims[]`, so `editorClaimLine` returns null and the owner briefly sees no claim lines. That fails closed (nothing leaks), and the old schema ignores the unknown `claimed`. Accepted.
+1. ~~**One API layer, not three.**~~ **Reversed after submit (Ted, 2026-10-23): expand, web, contract, as the design's §6 proposed.** One API layer was safe at runtime (the old web would briefly show no claim lines; nothing leaks), but it broke CONTRIBUTING's rule that every layer passes CI on its own: the API layer ran the old owner-claims and golden-path E2E, which read names, against an API that no longer sent them. So `api/owner-totals` adds `claimed` and still sends opted-in owners `claims[]` (the expand step), `web/owner-totals` reads only `claimed`, and a top layer, `api/owner-claims-contract`, reverts the expand commit so owners get `claims[]` never, with the absence tests. The D82 refusal stays in `api/owner-totals`: no older E2E opens `/c` as the owner. The contract layer sits above `docs/owner-totals` because `gh stack` inserts layers only through its interactive `modify`.
 2. **The owner check reads the owner in the same lookup** that finds the claim, so no extra query for guests: the `details` select already joins `wishlists`; `update` and `cancel` gain the join. `cancel` becomes select-then-delete when a session is present; a guest's cancel stays one `DELETE`.
 3. **`/claims` controller** takes `@UseGuards(OptionalSessionGuard)` and passes `auth?.user.id ?? null` to `details`, `update` and `cancel`, as `SharedController` does.
 4. **`loadClaim`** returns `{ kind: 'own-list' }` on `403 OWN_LIST_CLAIM` and `{ kind: 'claim', details }` otherwise; `/c` renders `OwnListClaim` for the first. That view saves nothing to `hanker:claims`.
@@ -87,9 +87,10 @@ One new stack. Nothing is pushed before Task 6.
 | Layer (branch) | Tasks |
 |---|---|
 | `docs/plan-10a` | 0 |
-| `api/owner-totals` | 1, 2 |
+| `api/owner-totals` | 1 (expand: owners still get `claims[]`, ruling 1), 2 |
 | `web/owner-totals` | 3, 4 |
 | `docs/owner-totals` | 5 |
+| `api/owner-claims-contract` | 1's contract step (ruling 1) |
 
 Each layer's first task starts with `gh stack add <branch>`; Task 0 runs `gh stack init docs/plan-10a`.
 
