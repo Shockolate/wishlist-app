@@ -1,6 +1,16 @@
 import type { Gift, GoneGift } from '@wishlist/contracts';
 import { describe, expect, it } from 'vitest';
-import { giftLine, goneLine, letGoText, summaryLine } from './gifts-copy';
+import {
+  giftLine,
+  goneLine,
+  letGoText,
+  ON_SOMEONE_ELSES_GIFTS,
+  ON_YOUR_GIFTS,
+  SEE_GIFTS,
+  SHEET_GIFTS_HINT,
+  summaryLine,
+  TAKEN_OFF_GIFTS,
+} from './gifts-copy';
 
 function gift(over: {
   shareUrl?: string;
@@ -96,5 +106,17 @@ describe('goneLine', () => {
 describe('letGoText (Plan 10b copy table)', () => {
   it('says the item goes back to the owner’s list', () => {
     expect(letGoText('Mom')).toBe('Someone else can get this for Mom instead.');
+  });
+});
+
+describe('signed-in claim copy (Plan 10b copy table)', () => {
+  it('says what the table says, with curly apostrophes', () => {
+    expect(SHEET_GIFTS_HINT).toBe('This goes on Your gifts.');
+    expect(SEE_GIFTS).toBe('See Your gifts');
+    expect(TAKEN_OFF_GIFTS).toBe('Taken off Your gifts.');
+    expect(ON_YOUR_GIFTS).toBe('On Your gifts.');
+    expect(ON_SOMEONE_ELSES_GIFTS).toBe(
+      'This claim is on someone else’s gifts in Hanker, so it won’t appear on yours. You can still change or cancel it here.',
+    );
   });
 });

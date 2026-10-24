@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { CancelClaim } from './cancel-claim';
 import { ChangeClaimForm } from './change-claim-form';
 import { ClaimGone } from './claim-gone';
+import { ClaimLink } from './claim-link';
 
 /** One claim, by its manage link (spec §2, §7, the Plan 4b mockups). */
 export function ManageClaim({
@@ -35,6 +36,7 @@ export function ManageClaim({
   if (state === 'gone') return <GoneNow />;
   return (
     <>
+      <ClaimLink manageToken={manageToken} link={details.link} />
       <h1 className="font-display text-[clamp(2.5rem,6vw,4rem)] leading-none">Your claim</h1>
       <p className="mt-2 text-[15px] text-muted-foreground">
         On{' '}
