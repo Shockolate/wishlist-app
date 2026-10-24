@@ -51,12 +51,15 @@ export function ShareClaimsProvider({
   shareToken,
   ownerName,
   ownerSeesClaims,
+  viewer,
   items,
   children,
 }: {
   shareToken: string;
   ownerName: string;
   ownerSeesClaims: boolean;
+  /** Set for a verified, signed-in gifter: their claims go on Your gifts (Plan 10b). */
+  viewer?: { displayName: string };
   items: readonly SharedItem[];
   children: ReactNode;
 }) {
@@ -127,6 +130,7 @@ export function ShareClaimsProvider({
           shareToken={shareToken}
           ownerName={ownerName}
           ownerSeesClaims={ownerSeesClaims}
+          {...(viewer ? { viewer } : {})}
           onClose={() => setOpenItem(null)}
           returnFocus={returnFocus}
         />

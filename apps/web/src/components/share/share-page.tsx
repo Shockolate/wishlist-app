@@ -73,6 +73,7 @@ export function SharePage({
           shareToken={shareToken}
           ownerName={owner}
           ownerSeesClaims={list.ownerSeesClaims}
+          {...(list.viewer ? { viewer: list.viewer } : {})}
           items={list.items}
         >
           {items}

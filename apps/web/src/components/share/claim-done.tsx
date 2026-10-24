@@ -1,11 +1,13 @@
 'use client';
 
 import type { CreateClaimResponse } from '@wishlist/contracts';
+import Link from 'next/link';
 import { useState } from 'react';
 import { CopyIcon, ShareIcon } from '@/components/list/icons';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
 import { SheetClose } from '@/components/ui/sheet';
+import { SEE_GIFTS } from '@/lib/gifts-copy';
 import { useCanShare } from '@/lib/use-can-share';
 
 /** After a claim (spec §7 step 2): the manage link, to copy or share, and the way back. */
@@ -57,6 +59,11 @@ export function ClaimDone({
             <ShareIcon />
             Share
           </Button>
+        ) : null}
+        {claim.onYourGifts ? (
+          <Link href="/gifts" className={buttonVariants({ variant: 'secondary', size: 'compact' })}>
+            {SEE_GIFTS}
+          </Link>
         ) : null}
       </div>
       <div role="status">

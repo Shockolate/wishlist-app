@@ -46,3 +46,16 @@ export const GIFTS_HEADING_ID = 'gifts-heading';
 /** Shown when there are no gifts and no notes. */
 export const NOTHING_YET =
   'Nothing here yet. Claims you make while signed in appear here, and so does a claim whose link you open while signed in.';
+
+/** The claim sheet's hint when a verified gifter is signed in: where the claim will go. */
+export const SHEET_GIFTS_HINT = 'This goes on Your gifts.';
+
+/** The claim sheet's way to Your gifts, once a claim has landed there. */
+export const SEE_GIFTS = 'See Your gifts';
+
+/** `/c`, after Not mine: the claim is still there, but no longer on Your gifts. */
+export const TAKEN_OFF_GIFTS = 'Taken off Your gifts.';
+
+/** `/c` for a claim already on another account's gifts. The account is never named. */
+export const ON_SOMEONE_ELSES_GIFTS =
+  'This claim is on someone else’s gifts in Hanker, so it won’t appear on yours. You can still change or cancel it here.';

@@ -30,6 +30,7 @@ import { browserApi } from '@/lib/browser-api';
 import { remainingFromConflict } from '@/lib/claim-conflict';
 import { pendingTokenFor, readClaimerName, writeClaimerName } from '@/lib/claim-records';
 import { formErrorMap } from '@/lib/form-errors';
+import { SHEET_GIFTS_HINT } from '@/lib/gifts-copy';
 import { mintManageToken } from '@/lib/manage-token';
 import {
   claimConflictMessage,
@@ -84,6 +85,7 @@ export function ClaimSheet({
   shareToken,
   ownerName,
   ownerSeesClaims,
+  viewer,
   onClose,
   returnFocus,
 }: {
@@ -91,6 +93,8 @@ export function ClaimSheet({
   shareToken: string;
   ownerName: string;
   ownerSeesClaims: boolean;
+  /** Set for a verified, signed-in gifter: their display name beats this browser's (ruling 8). */
+  viewer?: { displayName: string };
   onClose: () => void;
   returnFocus: () => void;
 }) {
@@ -113,7 +117,7 @@ export function ClaimSheet({
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(NameSchema, { error: formErrorMap }),
-    defaultValues: { claimerName: readClaimerName() },
+    defaultValues: { claimerName: viewer?.displayName ?? readClaimerName() },
   });
   const { ref: nameRef, ...nameField } = register('claimerName');
 
@@ -289,6 +293,9 @@ export function ClaimSheet({
               {ownerSeesClaims ? null : <EyeOffIcon />}
               {ownerSeesLine(ownerName, ownerSeesClaims)}
             </p>
+            {viewer ? (
+              <p className="text-sm leading-snug text-muted-foreground">{SHEET_GIFTS_HINT}</p>
+            ) : null}
             {formError ? <Notice tone="error">{formError}</Notice> : null}
             <Button type="submit" disabled={isSubmitting} className="w-full">
               {retry ? 'Try again' : claimButtonLabel(max, conflict !== null)}
