@@ -15,3 +15,7 @@ overrides:
   # @vercel/functions, so it ships) pins zod 4.1.11 exactly, even in its latest release.
   # Drop this once it allows 4.6.6 or later. Zod 3 has no fix, and only the Vercel CLI uses it.
   'zod@>=4.0.0 <4.6.6': 4.6.7
+  # GHSA-q7qp-rjg7-q26m: multer before 2.5.0 can be held up by a pending fileFilter.
+  # @nestjs/platform-express 12.2.0 (the latest) pins multer 2.4.0 exactly. Hanker takes no
+  # uploads, but the API ships it. Drop this once platform-express allows 2.5.0 or later.
+  'multer@>=2.0.0 <2.5.0': 2.5.0
