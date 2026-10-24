@@ -20,6 +20,7 @@ Sample data. The people and the list are made up.
 
 - **Owners** sign up, confirm their email, and build one list. They paste a shop link and, when the shop allows it, the title and price are filled in. Or they type an idea. They reorder items and rotate the share link whenever they like. They tag items so gifters can filter, and Hanker can suggest tags from the shop’s details, reusing the list’s own tags.
 - **Gifters** open the link from a text message, with no account. They claim an item in a few taps, and come back to change or cancel the claim from any device.
+- **Your gifts.** A gifter who is signed in with a confirmed email gets their claims on one page, across everyone’s lists, grouped by the person they’re for. They tick off what they’ve bought (only they see it), change a name or quantity, or let a claim go. A claim made signed out joins when its link is opened signed in. Claims that disappear leave a note for about 30 days.
 - **Surprises stay safe.** An owner who hasn't opted in never receives claim data from the server. It isn't merely hidden in the UI. Owners who opt in see only how many are claimed, never by whom.
 
 ## How it's built

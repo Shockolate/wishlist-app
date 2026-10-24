@@ -75,3 +75,28 @@ test('/terms covers tag suggestions (tag suggestions §5.6)', async ({ page }) =
     'Tag suggestions are written by an AI model and can be wrong or odd. They’re only suggestions: nothing is tagged unless you tap it.',
   );
 });
+
+test('/privacy says what Your gifts keeps (Your gifts §5.11)', async ({ page }) => {
+  await page.goto('/privacy');
+  const main = page.getByRole('main');
+  await expect(
+    main.getByRole('heading', { name: 'If you’re signed in when you claim' }),
+  ).toBeVisible();
+  // claim_links links a claim on a verified session's claim, or its manage link opened after load.
+  await expect(main).toContainText('open a claim’s link while signed in and the page has loaded');
+  // claim_links.bought_at is in no owner or gifter response.
+  await expect(main).toContainText('Bought ticks are stored and seen only by you.');
+  // The daily cron deletes notes 30 days after claim_links.gone_at.
+  await expect(main).toContainText('on Your gifts for about 30 days, or until you clear it');
+  // user_id cascades; claim_id is SET NULL, so a claim outlives the link.
+  await expect(main).toContainText('Deleting your account deletes these links, ticks and notes.');
+  // No response says which account holds a claim (D75, D82).
+  await expect(main).toContainText(
+    'Hanker never shows anyone else whose gifts a claim is on, whether they own the list or are another gifter.',
+  );
+  // An owner's account delete cascades to the claims, but each gifter's link keeps the snapshot
+  // of item_title and owner_display_name until the cron purges it (D79, D80).
+  await expect(main).toContainText(
+    'A gifter who had one of your items on Your gifts keeps a note with its title and your display name for about 30 days, or until they clear it.',
+  );
+});

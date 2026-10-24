@@ -1,7 +1,7 @@
 # Your Gifts and Owner Totals — Design
 
 - **Date:** 2026-10-23
-- **Status:** Approved by Ted, 2026-10-23. Part 1 is Plan 10a.
+- **Status:** Approved by Ted, 2026-10-23. Part 1 is Plan 10a; Part 2 is Plan 10b.
 - **Author:** Ted Armstrong (with Claude)
 - **Amends:** [`2026-10-07-wishlist-app-design.md`](2026-10-07-wishlist-app-design.md): §2 Spoilers (owners see totals, never names), §4 (a `claim_links` table), §5 and §5.1 (new fields and endpoints, a changed projection table), §7 (a **Your gifts** page, signed-in states of the claim sheet and the manage page). D33 and D40 are amended. The plan assigns decision numbers from D75.
 - **Origin:** Ted, in conversation on 2026-10-23, from suggestion #3 of that day's feature review ("What you're getting"), widened from a browser-only page to one kept on the account. Mockups in `.superpowers/brainstorm/557350-1792792425/content/` locally: `gifts-layout.html` (option A, cards, chosen) and `claim-states.html` (approved as drawn). Everything marked _Ted_ he decided; everything marked _Claude's call_ he saw in a playback or the mockups and didn't object to, or is flagged as open.
