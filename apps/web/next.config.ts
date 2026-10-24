@@ -86,15 +86,21 @@ const nextConfig: NextConfig = {
         ],
       },
       // Token pages (spec §6.7): no Referer can carry the token, and search engines skip them.
-      ...['/verify-email', '/reset-password/confirm', '/s/:shareToken', '/c/:manageToken'].map(
-        (source) => ({
-          source,
-          headers: [
-            { key: 'Referrer-Policy', value: 'no-referrer' },
-            { key: 'X-Robots-Tag', value: 'noindex' },
-          ],
-        }),
-      ),
+      // Your gifts follows them (design §5.7): it lists share links, claimer names and the private
+      // Bought tick, so it sends no Referer and stays out of search.
+      ...[
+        '/verify-email',
+        '/reset-password/confirm',
+        '/s/:shareToken',
+        '/c/:manageToken',
+        '/gifts',
+      ].map((source) => ({
+        source,
+        headers: [
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+          { key: 'X-Robots-Tag', value: 'noindex' },
+        ],
+      })),
     ];
   },
 };

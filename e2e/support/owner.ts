@@ -9,9 +9,14 @@ const VERIFY = 'Confirm your email for Hanker';
  * A new owner with a confirmed email, logged in (Plan 3b rule 15). The session cookie lands in the
  * page's browser context, so page.goto and page.request both act as them.
  */
-export async function verifiedOwner(page: Page, baseURL: string, label: string): Promise<string> {
+export async function verifiedOwner(
+  page: Page,
+  baseURL: string,
+  label: string,
+  displayName = 'Ada',
+): Promise<string> {
   const email = uniqueEmail(label);
-  await signUpViaApi(page.request, baseURL, email);
+  await signUpViaApi(page.request, baseURL, email, displayName);
   const path = linkPath((await waitForEmail(email, VERIFY)).text, '/verify-email');
   const token = new URL(path, baseURL).searchParams.get('token');
   const verified = await page.request.post('/api/auth/verify-email', {

@@ -5,7 +5,7 @@ export default function robots(): MetadataRoute.Robots {
   return {
     rules: {
       userAgent: '*',
-      disallow: ['/verify-email', '/reset-password', '/list', '/settings', '/s/', '/c/'],
+      disallow: ['/verify-email', '/reset-password', '/list', '/gifts', '/settings', '/s/', '/c/'],
     },
   };
 }

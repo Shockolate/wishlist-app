@@ -7,6 +7,9 @@ describe('authRedirect (spec §6.1, Plan 2b rule 8)', () => {
   it.each([
     ['/list', false, '/login?next=%2Flist'],
     ['/settings', false, '/login?next=%2Fsettings'],
+    ['/gifts', false, '/login?next=%2Fgifts'],
+    ['/gifts', true, null],
+    ['/giftshop', false, null],
     ['/settings?tab=password', false, '/login?next=%2Fsettings%3Ftab%3Dpassword'],
     ['/', true, '/list'],
     ['/list', true, null],
