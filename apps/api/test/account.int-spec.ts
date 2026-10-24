@@ -1,11 +1,26 @@
-import { ErrorCode, MeResponseSchema, ProblemSchema } from '@wishlist/contracts';
+import {
+  ClaimDetailsResponseSchema,
+  CreateClaimResponseSchema,
+  ErrorCode,
+  GiftsResponseSchema,
+  MeResponseSchema,
+  ProblemSchema,
+} from '@wishlist/contracts';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SUBJECTS } from '../src/auth/auth-emails.js';
 import { SESSION_COOKIE } from '../src/auth/session-cookie.js';
-import { ADA, lastEmail, logIn, signUpVerified, TURNSTILE_OK } from './support/accounts.js';
+import {
+  ADA,
+  lastEmail,
+  logIn,
+  signUpVerified,
+  TURNSTILE_OK,
+  type Account,
+} from './support/accounts.js';
 import { createAuthTestApp, type AuthTestApp } from './support/auth-app.js';
 import { client, linkToken, setCookies, type ApiResponse } from './support/client.js';
 import { openTestDatabase } from './support/database.js';
+import { seedItem, shareTokenOf } from './support/lists.js';
 import type * as Passwords from '../src/security/passwords.js';
 
 // Runs once, right after the next password verification: the window between confirming a password
@@ -227,5 +242,102 @@ describe('DELETE /me (spec §5)', () => {
       expect(await count(table)).toBe(0);
     }
     expect((await login(ADA.password)).status).toBe(401);
+  });
+
+  describe('and Your gifts (Plan 10b, D76)', () => {
+    const BOB: Account = {
+      email: 'bob@example.com',
+      password: 'another fine passphrase 2',
+      displayName: 'Bob',
+    };
+    const CAM: Account = { ...BOB, email: 'cam@example.com', displayName: 'Cam' };
+
+    const claimAs = async (cookie: string, shareToken: string, item: string, quantity: number) => {
+      const res = await client(t.app, cookie).post(`/shared/${shareToken}/items/${item}/claims`, {
+        claimerName: 'Bob',
+        quantity,
+      });
+      expect(res.status).toBe(201);
+      const created = CreateClaimResponseSchema.parse(res.body);
+      expect(created.onYourGifts).toBe(true);
+      return created;
+    };
+
+    it('deleting a gifter’s account keeps their claims and quantities, and removes their links', async () => {
+      await signUpVerified(t);
+      await signUpVerified(t, BOB);
+      const bob = await logIn(t, BOB);
+      const adaToken = await shareTokenOf(db, ADA.email);
+      const kettle = await seedItem(db, ADA.email, 'Kettle', 3);
+      const mug = await seedItem(db, ADA.email, 'Mug');
+      const kettleClaim = await claimAs(bob, adaToken, kettle, 2);
+      await claimAs(bob, adaToken, mug, 1);
+      // Bob has ticked Bought on one of them.
+      await db.pool.query('update claim_links set bought_at = now() where claim_id = $1', [
+        kettleClaim.claim.id,
+      ]);
+      expect(await count('claim_links')).toBe(2);
+
+      const res = await client(t.app, bob).delete('/me', { password: BOB.password });
+      expect(res.status).toBe(204);
+
+      expect(await count('claim_links')).toBe(0);
+      const { rows } = await db.pool.query<{ claimer_name: string; quantity: number }>(
+        'select claimer_name, quantity from claims order by quantity desc',
+      );
+      expect(rows).toEqual([
+        { claimer_name: 'Bob', quantity: 2 },
+        { claimer_name: 'Bob', quantity: 1 },
+      ]);
+      // The claim is an ordinary anonymous one now: its manage link still works, and the list's
+      // remaining counts haven't moved.
+      const details = await client(t.app).get(`/claims/${kettleClaim.manageToken}`);
+      expect(details.status).toBe(200);
+      expect(ClaimDetailsResponseSchema.parse(details.body)).toMatchObject({
+        claim: { quantity: 2 },
+        remaining: 1,
+      });
+      expect(await count('users')).toBe(1);
+    });
+
+    it('deleting an owner’s account leaves each gifter a removed note naming the owner and the item', async () => {
+      await signUpVerified(t);
+      await signUpVerified(t, BOB);
+      await signUpVerified(t, CAM);
+      const bob = await logIn(t, BOB);
+      const cam = await logIn(t, CAM);
+      const ada = await logIn(t);
+      const adaToken = await shareTokenOf(db, ADA.email);
+      const kettle = await seedItem(db, ADA.email, 'Kettle', 2);
+      // Cam also has a gift from Bob's list, which must survive Ada leaving.
+      const lamp = await seedItem(db, BOB.email, 'Lamp');
+      await claimAs(bob, adaToken, kettle, 1);
+      await claimAs(cam, adaToken, kettle, 1);
+      await claimAs(cam, await shareTokenOf(db, BOB.email), lamp, 1);
+      // Before Ada leaves, the kettle is a live gift on Bob's page, not a note.
+      const before = GiftsResponseSchema.parse((await client(t.app, bob).get('/me/gifts')).body);
+      expect(before.gifts.map((g) => g.item.title)).toEqual(['Kettle']);
+
+      const res = await client(t.app, ada).delete('/me', { password: ADA.password });
+      expect(res.status).toBe(204);
+
+      for (const cookie of [bob, cam]) {
+        const body = await client(t.app, cookie).get('/me/gifts');
+        expect(body.status).toBe(200);
+        const { gone } = GiftsResponseSchema.parse(body.body);
+        expect(gone).toMatchObject([
+          { itemTitle: 'Kettle', ownerDisplayName: ADA.displayName, reason: 'removed' },
+        ]);
+      }
+      // Cam's other gift, and both gifters' accounts, are untouched.
+      const camGifts = GiftsResponseSchema.parse((await client(t.app, cam).get('/me/gifts')).body);
+      expect(camGifts.gifts.map((g) => [g.item.title, g.ownerDisplayName])).toEqual([
+        ['Lamp', BOB.displayName],
+      ]);
+      expect((await client(t.app, bob).get('/me')).status).toBe(200);
+      expect((await client(t.app, cam).get('/me')).status).toBe(200);
+      expect(await count('users')).toBe(2);
+      expect(await count('claim_links')).toBe(3);
+    });
   });
 });

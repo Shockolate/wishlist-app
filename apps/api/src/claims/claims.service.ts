@@ -29,10 +29,11 @@ import {
   ownListClaim,
   shareLinkNotFound,
 } from './claims-errors.js';
+import { applyClaimChange } from './claim-change.js';
 import { CLAIM_COLUMNS, SHARED_ITEM_COLUMNS, SNAPSHOT, claimedTotal } from './queries.js';
 import { CLAIMS_PER_IP, CLAIMS_PER_LIST, claimsIpKey, claimsListKey } from './rate-limits.js';
 import { canLink, insertLink, LINK_CLAIM_FK, linkStateOf } from './links.js';
-import { fitsChangedClaim, fitsNewClaim, remainingOf } from './remaining.js';
+import { fitsNewClaim, remainingOf } from './remaining.js';
 
 const ItemIdSchema = z.uuid();
 
@@ -220,6 +221,7 @@ export class ClaimsService {
     const tokenHash = hashToken(manageToken);
     const [found] = await this.db
       .select({
+        claimId: claims.id,
         itemId: claims.itemId,
         wishlistId: items.wishlistId,
         ownerId: wishlists.ownerId,
@@ -232,39 +234,15 @@ export class ClaimsService {
     if (viewerId === found.ownerId) throw ownListClaim();
     await this.limiter.enforce(claimsListKey(found.wishlistId), CLAIMS_PER_LIST);
 
-    return this.db.transaction(async (tx) => {
-      // The same lock as a new claim's (spec §6.3): the item's row, and nothing else.
-      const [item] = await tx
-        .select({ quantity: items.quantity })
-        .from(items)
-        .where(eq(items.id, found.itemId))
-        .for('update');
-      // The claim may have gone while we waited: cancelled, or deleted with its item.
-      const [current] = item
-        ? await tx
-            .select({ id: claims.id, quantity: claims.quantity })
-            .from(claims)
-            .where(eq(claims.manageTokenHash, tokenHash))
-        : [];
-      if (!item || !current) throw claimNotFound();
-      if (input.quantity !== undefined) {
-        const claimed = await claimedTotal(tx, found.itemId);
-        if (!fitsChangedClaim(input.quantity, current.quantity, item.quantity, claimed)) {
-          throw claimExceedsRemaining(remainingOf(item.quantity, claimed));
-        }
-      }
-      const [row] = await tx
-        .update(claims)
-        .set({
-          ...(input.claimerName !== undefined && { claimerName: input.claimerName }),
-          ...(input.quantity !== undefined && { quantity: input.quantity }),
-          updatedAt: this.clock.now(),
-        })
-        .where(eq(claims.id, current.id))
-        .returning(CLAIM_COLUMNS);
-      if (!row) throw claimNotFound();
-      return row;
-    });
+    // The same lock as a new claim's (spec §6.3): the item's row, and nothing else.
+    return this.db.transaction((tx) =>
+      applyClaimChange(tx, {
+        claimId: found.claimId,
+        itemId: found.itemId,
+        input,
+        now: this.clock.now(),
+      }),
+    );
   }
 
   /**
