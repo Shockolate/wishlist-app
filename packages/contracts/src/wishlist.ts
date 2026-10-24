@@ -127,8 +127,8 @@ export const UpdateWishlistRequestSchema = z
 export type UpdateWishlistRequest = z.infer<typeof UpdateWishlistRequestSchema>;
 
 /**
- * A claim as gifters see it (spec §5). Never its manage token. An owner who opts in gets totals,
- * and until the contract step of D75 these claims too.
+ * A claim as gifters see it (spec §5). Never its manage token. Owners never get claims, only
+ * totals once they opt in (D75).
  */
 export const ClaimSchema = z.object({
   id: z.uuid(),
@@ -144,7 +144,7 @@ export type Claim = z.infer<typeof ClaimSchema>;
  */
 export const ITEM_CLAIM_FIELDS = {
   remaining: z.number().int().min(0).optional(),
-  /** The owner's total (D75), which replaces `claims` for owners: the claims' quantities summed, unclamped. */
+  /** The owner's total, sent instead of `claims` (D75): the sum of the claims' quantities, unclamped. */
   claimed: z.number().int().min(0).optional(),
   claims: z.array(ClaimSchema).optional(),
 };
