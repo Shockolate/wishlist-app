@@ -54,14 +54,14 @@ flowchart LR
 | Better Stack          | Uptime monitors and heartbeats, alerting by email           | Nobody is alerted                                         |
 | Cloudflare R2         | Nightly `age`-encrypted backups, kept 30 days               | That night's backup fails, and its heartbeat raises it    |
 
-| Path                 | What                                                                                                                                      |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web`           | Next.js App Router, Tailwind, Radix, TanStack Query                                                                                       |
-| `apps/api`           | NestJS 12, Drizzle ORM, SQL migrations. Email, CAPTCHA, breached-password checks and link metadata sit behind ports, with fakes for tests |
-| `packages/contracts` | Zod schemas and error codes for every request and response, the only code the two apps share                                              |
-| `e2e`                | Playwright golden paths, accessibility checks, and post-deploy smoke tests                                                                |
+| Path                 | What                                                                                                                                                                                                             |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web`           | Next.js App Router, Tailwind, Radix, TanStack Query                                                                                                                                                              |
+| `apps/api`           | NestJS 12, Drizzle ORM, SQL migrations. Email, CAPTCHA, breached-password checks, link metadata and shop lookups, tag suggestions, error reporting and the cron heartbeat sit behind ports, with fakes for tests |
+| `packages/contracts` | Zod schemas and error codes for every request and response, the only code the two apps share                                                                                                                     |
+| `e2e`                | Playwright golden paths, accessibility checks, and post-deploy smoke tests                                                                                                                                       |
 
-TypeScript and ESM throughout, in a pnpm + Turborepo monorepo. It is designed to run on free tiers (hosting, database, email, CAPTCHA, error reporting), so the only recurring cost is the domain.
+TypeScript and ESM throughout, in a pnpm + Turborepo monorepo. It is designed to run on free tiers (hosting, database, email, CAPTCHA, error reporting, monitoring, backups, AI), so the only recurring cost is the domain.
 
 ## Decisions worth a look
 
@@ -101,11 +101,11 @@ Hanker is run by one person, in spare time, on free tiers. So the strategy is to
 | `pnpm test:e2e`                 | Playwright against production builds, with mail through Mailpit          | Yes    |
 | `pnpm turbo run lint typecheck` | ESLint and TypeScript                                                    | No     |
 
-Behavior changes are written test-first. CI runs all of the above on every pull request, plus Prettier, actionlint and a migration lint, and a dependency review.
+Behavior changes are written test-first. CI runs all of the above on every pull request, plus Prettier, `pnpm audit`, actionlint, a migration lint, the workflow policy and script tests, and a dependency review.
 
 ## Run it locally
 
-You need Node 24 (`nvm use`), pnpm 12.10.1 and Docker.
+You need Node 24 (`nvm use`), pnpm 12.14.0 (pinned by `packageManager`) and Docker.
 
 ```bash
 pnpm install

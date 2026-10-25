@@ -30,7 +30,7 @@ Hanker is a wishlist app for family and friends: Next.js (web), NestJS (API), Po
 ## Environment
 
 - Node 24 (`.nvmrc`; run `nvm use`). Other versions fail in confusing ways, such as Turbo's `Exec format error`.
-- pnpm 12.10.1, pinned by `packageManager`.
+- pnpm 12.14.0, pinned by `packageManager`.
 - Docker for `pnpm dev`, integration tests (Testcontainers) and E2E.
 - Turbo builds `packages/contracts` before its dependents. If you run Vitest directly and `@wishlist/contracts` won't import, run `pnpm --filter @wishlist/contracts build`.
 - Building or starting the web app needs `API_ORIGIN` and `TURNSTILE_SITE_KEY`, for example `API_ORIGIN=http://localhost:3001 TURNSTILE_SITE_KEY=1x00000000000000000000AA` (Cloudflare's test key). Only `next dev` reads them from `apps/web/.env.development`.
