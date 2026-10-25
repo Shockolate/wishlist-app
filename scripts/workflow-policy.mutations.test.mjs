@@ -21,6 +21,11 @@ function find(job, predicate) {
   return step;
 }
 const runStep = (job, re) => find(job, (s) => re.test(s.run ?? ''));
+function automergeRule(renovate) {
+  const rule = renovate.packageRules.find((r) => r.automerge === true);
+  if (!rule) throw new Error('mutation target not found');
+  return rule;
+}
 const usesStep = (job, prefix) => find(job, (s) => String(s.uses).startsWith(prefix));
 
 // [name, file, mutate(parsed file)]
@@ -147,6 +152,112 @@ const mutations = [
     (wf) => {
       const s = find(wf.jobs.seed, (x) => x.name === 'Wipe and rebuild from zero');
       s.if = "steps.seed.outputs.created == 'true' || inputs.reset";
+    },
+  ],
+  [
+    'a top-level automerge (D88)',
+    'renovate.json',
+    (r) => {
+      r.automerge = true;
+    },
+  ],
+  [
+    'automerge on a major (D88)',
+    'renovate.json',
+    (r) => {
+      automergeRule(r).matchUpdateTypes.push('major');
+    },
+  ],
+  [
+    'automerge widened to runtime dependencies (D88)',
+    'renovate.json',
+    (r) => {
+      automergeRule(r).matchDepTypes = ['devDependencies', 'dependencies'];
+    },
+  ],
+  [
+    'automerge for next (D88)',
+    'renovate.json',
+    (r) => {
+      automergeRule(r).matchPackageNames.push('next');
+    },
+  ],
+  [
+    'automerge for GitHub Actions (D88)',
+    'renovate.json',
+    (r) => {
+      automergeRule(r).matchManagers = ['github-actions'];
+    },
+  ],
+  [
+    'automerge for @types/node (D88)',
+    'renovate.json',
+    (r) => {
+      const names = automergeRule(r).matchPackageNames;
+      names.splice(names.indexOf('!@types/node'), 1);
+    },
+  ],
+  [
+    'automerge nested under a manager (D88, final review)',
+    'renovate.json',
+    (r) => {
+      r['github-actions'] = { automerge: true };
+    },
+  ],
+  [
+    'automerge for lock file maintenance (D88, final review)',
+    'renovate.json',
+    (r) => {
+      r.lockFileMaintenance = { enabled: true, automerge: true };
+    },
+  ],
+  [
+    'automerge for every minor update (D88, final review)',
+    'renovate.json',
+    (r) => {
+      r.minor = { automerge: true };
+    },
+  ],
+  [
+    'an automerge preset at the top level (D88, final review)',
+    'renovate.json',
+    (r) => {
+      r.extends.push(':automergeAll');
+    },
+  ],
+  [
+    'an automerge preset inside a rule (D88, final review)',
+    'renovate.json',
+    (r) => {
+      r.packageRules[0].extends = [':automergeMinor'];
+    },
+  ],
+  [
+    'automerge names that are only negations (D88, final review)',
+    'renovate.json',
+    (r) => {
+      automergeRule(r).matchPackageNames = ['!@types/node'];
+    },
+  ],
+  [
+    'automerge names as a catch-all regex (D88, final review)',
+    'renovate.json',
+    (r) => {
+      automergeRule(r).matchPackageNames.push('/.*/');
+    },
+  ],
+  [
+    'automerge for build tooling not on the denylist (D88, final review)',
+    'renovate.json',
+    (r) => {
+      automergeRule(r).matchPackageNames.push('tailwindcss');
+    },
+  ],
+  [
+    'a catch-all automerge pattern (D88)',
+    'renovate.json',
+    (r) => {
+      automergeRule(r).matchPackageNames.push('**');
     },
   ],
   [

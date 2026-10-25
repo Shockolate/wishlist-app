@@ -633,7 +633,7 @@ These came out of Plan 1's final review. `scripts/workflow-policy.test.mjs` enfo
 - **Checkouts use `persist-credentials: false`**, so later steps (dependency install scripts included) can't read the `GITHUB_TOKEN` from `.git/config`.
 - **`VERCEL_TOKEN` is scoped to the steps that deploy**, not the whole job.
 - **Bot PRs (Renovate) get CI but no preview.** Unreviewed dependency code never runs next to deploy credentials, and bot PRs don't use up Neon's 10-branch cap.
-- **Renovate waits 3 days after a release** (`minimumReleaseAge`) and **never automerges**. That holds at least until builds run in a job with no deploy credentials.
+- **Renovate waits 3 days after a release** (`minimumReleaseAge`) and **automerges only dev-only tooling** (D88): minor and patch updates of `@types/*` (not `@types/node`), ESLint, Prettier, Vitest and Testcontainers, once the required checks pass. These run only in secret-free jobs and never shape the production build. Everything else waits for review: runtime dependencies, anything that builds or bundles (TypeScript, Next, Nest CLI, SWC, esbuild, Turbo), `@wishlist/vercel-cli`, the Playwright group, GitHub Actions digests (they run next to secrets), container images and every major. An automerged PR still deploys to production, like any merge to `main`. The accepted risk: a dev-only bump can change how the lockfile resolves a transitive package that runtime code shares; the 3-day minimum age and the required checks catch most of that. `scripts/workflow-policy.test.mjs` refuses any automerge rule wider than this.
 
 **Done (2026-10-08):** each pipeline is split into secret-free build jobs and deploy-only jobs (see Continuous deployment and Previews).
 

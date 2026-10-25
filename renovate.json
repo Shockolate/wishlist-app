@@ -11,13 +11,13 @@
   "minimumReleaseAge": "3 days",
   "packageRules": [
     {
-      "description": "TS 7 drops the JS compiler API that Nest CLI, typescript-eslint and Next's typecheck use (spec §3). A major waits on the Dependency Dashboard for approval",
+      "description": "TS 7 drops the JS compiler API that Nest CLI, typescript-eslint and Next's typecheck use (spec \u00a73). A major waits on the Dependency Dashboard for approval",
       "matchPackageNames": ["typescript"],
       "matchUpdateTypes": ["major"],
       "dependencyDashboardApproval": true
     },
     {
-      "description": "eslint-config-next's plugins don't support ESLint 10 yet (spec §3). A major waits on the Dependency Dashboard for approval",
+      "description": "eslint-config-next's plugins don't support ESLint 10 yet (spec \u00a73). A major waits on the Dependency Dashboard for approval",
       "matchPackageNames": ["eslint", "@eslint/js"],
       "matchUpdateTypes": ["major"],
       "dependencyDashboardApproval": true
@@ -47,6 +47,22 @@
       "matchPackageNames": ["postgres"],
       "matchUpdateTypes": ["major"],
       "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Dev-only tooling that runs in secret-free jobs and never shapes the production build merges itself once the required checks pass (D88). Builds, runtime code, the Vercel CLI, Playwright, Actions, images and majors wait for review. @types/node moves by hand with undici-types",
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchPackageNames": [
+        "@types/**",
+        "!@types/node",
+        "eslint",
+        "prettier",
+        "vitest",
+        "testcontainers",
+        "@testcontainers/**"
+      ],
+      "automerge": true,
+      "automergeType": "pr"
     }
   ]
 }
