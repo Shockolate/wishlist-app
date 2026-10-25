@@ -149,6 +149,7 @@ jobs:
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          NEON_PRODUCTION_PROJECT_ID: ${{ vars.NEON_PRODUCTION_PROJECT_ID }}
         run: scripts/preview-seed.sh check
 
       - name: Create or reuse the PR's database branch (from preview-seed)
@@ -174,6 +175,7 @@ jobs:
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          NEON_PRODUCTION_PROJECT_ID: ${{ vars.NEON_PRODUCTION_PROJECT_ID }}
         run: scripts/preview-seed.sh assert-child "pr-$PR_NUMBER" preview-seed
 
       - name: Migrate the PR's database branch

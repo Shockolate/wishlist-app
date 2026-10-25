@@ -28,6 +28,7 @@ Later plans add: domain and DNS, Resend and Turnstile (Plan 2); Cloudflare R2 ba
 ## Neon
 
 - Project `wishlist`, Postgres 17, region AWS us-east-1 (next to Vercel's `iad1`).
+- **Previews live in a second project, `wishlist-preview`** (D87), in the same organization, Postgres 17, AWS us-east-1. It holds `preview-seed` and the `pr-*` branches and never any production data. Its key is a project-scoped organization API key, so the preview environment can't reach production's project, and previews get their own compute quota and 10-branch cap. Neon's Free plan allows 100 projects, with compute, branches and data transfer counted per project.
 - **Pooled** connection string → the API's runtime `DATABASE_URL` (stored in Vercel as a sensitive variable).
 - **Direct** connection string → migrations only (`DATABASE_URL_DIRECT`).
 - The free plan scales compute to zero after 5 idle minutes. The first query afterwards takes a few hundred ms longer.
@@ -568,7 +569,7 @@ If a deploy fails after `migrate`, production still runs the previous code again
 
 Each PR, including each layer of a stack, gets (`.github/workflows/preview.yml`):
 
-1. A Neon branch `pr-<n>` created from **`preview-seed`**, never from production. The job checks the branch really descends from `preview-seed`, then migrates it.
+1. A Neon branch `pr-<n>` in the **`wishlist-preview`** project, created from **`preview-seed`**, never from production. The job checks the branch really descends from `preview-seed`, then migrates it.
 2. An API preview using that branch. `EMAIL_TRANSPORT=log` means no email is ever sent.
 3. A web preview built against that API, aliased to `<PREVIEW_ALIAS_PREFIX><n>.vercel.app` (currently `shockolate-wishlist-pr-<n>.vercel.app`).
 4. Read-only smoke tests and a sticky PR comment with the **web** link only.
@@ -577,21 +578,20 @@ The jobs follow the same trust split as deploys: `build-api` and `build-web` hol
 
 **Fixing an old preview branch.** If `provision` fails with "does not descend from preview-seed", the PR's branch was cloned from production before this change. Close and reopen the PR: cleanup deletes the old branch, and the next run creates a fresh one from `preview-seed`.
 
-Cleanup (`.github/workflows/cleanup.yml`): closing a PR deletes its Neon branch, and a nightly sweep deletes any `pr-*` branch whose PR is closed. Neon Free allows 10 branches per project. `main` and `preview-seed` take two, so at most 8 PRs can have previews at once.
+Cleanup (`.github/workflows/cleanup.yml`): closing a PR deletes its Neon branch, and a nightly sweep deletes any `pr-*` branch whose PR is closed. Neon Free allows 10 branches per project. In `wishlist-preview`, its default branch and `preview-seed` take two, so at most 8 PRs can have previews at once.
 
 To check the sweep by hand: Actions → "Cleanup previews" → Run workflow (dry run defaults to on).
 
 ## Preview seed branch
 
-`preview-seed` is the parent of every preview database. It never holds production data.
+`preview-seed` is the parent of every preview database. It lives in the `wishlist-preview` project, which never holds production data (D87).
 
-- **Created** by `.github/workflows/preview-seed.yml` as a **schema-only** root branch of `main`. It's then wiped and rebuilt by replaying every migration from zero. The schema-only copy has drizzle's journal table but not its rows, so the rebuild is required.
+- **Created** by `.github/workflows/preview-seed.yml` as an ordinary child of the preview project's empty default branch. It's then wiped and rebuilt by replaying every migration from zero, on every run.
 - **Kept current** by the same workflow on every push to `main` that touches `apps/api/drizzle/**`, which migrates it incrementally.
 - **Reset** with Actions → "Preview seed" → Run workflow with `reset` checked.
-- **Fallback** (approved, only if schema-only branches stop working): run with `init_source = parent-data`. That creates it as a normal child of `main` and wipes it in the same job, before its connection string is used for anything else.
-- **Safety:** `scripts/preview-seed.sh` refuses to resolve the seed to the production branch, and the workflow only runs on `main`. A seed that isn't a root branch (the fallback, or one made by hand) may hold production rows, so the workflow wipes it on every run. Don't create `preview-seed` by hand.
+- **Safety:** `scripts/preview-seed.sh` and `scripts/neon-sweep.sh` refuse to run when `NEON_PROJECT_ID` is production's project, and when they don't know which project that is: every step that runs them passes the repo variable `NEON_PRODUCTION_PROJECT_ID` (production's project ID, not a secret), and the workflow policy checks it. The seed script also refuses to resolve the seed to the project's default branch, and the workflow only runs on `main`. Don't create `preview-seed` by hand.
 - **Never delete it.** Neon won't delete a branch that has children, and every open preview is one; refresh it in place instead.
-- **Root-branch budget:** `main` plus `preview-seed` use 2 of Neon Free's 3 root branches. A production restore can create backup root branches, so delete old backups if a restore is refused.
+- **Root branches:** production's project has only `main` plus any backup root branches a restore creates (Neon Free allows 3); delete old backups if a restore is refused.
 
 ## Manual deploy (bootstrap or emergency only)
 
@@ -640,6 +640,8 @@ These came out of Plan 1's final review. `scripts/workflow-policy.test.mjs` enfo
 - **Every action is pinned to a commit SHA** (version in a trailing comment), and the actionlint image is pinned by digest. Renovate's `helpers:pinGitHubActionDigests` keeps them current.
 - **Checkouts use `persist-credentials: false`**, so later steps (dependency install scripts included) can't read the `GITHUB_TOKEN` from `.git/config`.
 - **`VERCEL_TOKEN` is scoped to the steps that deploy**, not the whole job.
+- **Accepted risk (Ted, 2026-10-24; D87): one Vercel token serves both environments.** The preview jobs' token can still deploy to production. Vercel's project-scoped tokens don't separate preview from production; separate preview projects would. Those jobs run only on same-repo, non-bot PRs and only upload output built by a secret-free job, so the realistic way in is the tools they run, which D85 pins. Revisit when anyone else gets write access to the repo.
+- **The preview environment's Neon key reaches only `wishlist-preview`** (D87), a project-scoped key, so a preview compromise can't read production's connection strings.
 - **Bot PRs (Renovate) get CI but no preview.** Unreviewed dependency code never runs next to deploy credentials, and bot PRs don't use up Neon's 10-branch cap.
 - **Renovate waits 3 days after a release** (`minimumReleaseAge`) and **automerges only dev-only tooling** (D88): minor and patch updates of `@types/*` (not `@types/node`), ESLint, Prettier, Vitest and Testcontainers, once the required checks pass. These run only in secret-free jobs and never shape the production build. Everything else waits for review: runtime dependencies, anything that builds or bundles (TypeScript, Next, Nest CLI, SWC, esbuild, Turbo), `@wishlist/vercel-cli`, the Playwright group, GitHub Actions digests (they run next to secrets), container images and every major. An automerged PR still deploys to production, like any merge to `main`. The accepted risk: a dev-only bump can change how the lockfile resolves a transitive package that runtime code shares; the 3-day minimum age and the required checks catch most of that. `scripts/workflow-policy.test.mjs` refuses any automerge rule wider than this.
 

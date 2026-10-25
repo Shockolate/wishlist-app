@@ -1,7 +1,8 @@
 name: Preview seed
 
 # Keeps `preview-seed` current: the Neon branch every pr-* preview database is created from. It
-# never holds production data (spec addendum 2026-10-08, §3.3). Trust model (§2): `seed` holds
+# lives in its own Neon project, wishlist-preview, which holds no production data (D87; spec
+# addendum 2026-10-08, §3.3). The scripts refuse production's project. Trust model (§2): `seed` holds
 # the Neon key, restores no cache, and runs only the migrator from source after a
 # --prod --ignore-scripts install, plus curl, jq and psql.
 on:
@@ -14,11 +15,6 @@ on:
         description: Wipe preview-seed and rebuild it by replaying every migration from zero
         type: boolean
         default: false
-      init_source:
-        description: How to create preview-seed if it is missing (parent-data is the approved fallback)
-        type: choice
-        options: [schema-only, parent-data]
-        default: schema-only
 
 concurrency:
   group: preview-seed
@@ -56,29 +52,31 @@ jobs:
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
-          SEED_INIT_SOURCE: ${{ inputs.init_source || 'schema-only' }}
+          NEON_PRODUCTION_PROJECT_ID: ${{ vars.NEON_PRODUCTION_PROJECT_ID }}
         run: scripts/preview-seed.sh ensure | tee -a "$GITHUB_OUTPUT"
 
       - name: Describe the seed branch
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          NEON_PRODUCTION_PROJECT_ID: ${{ vars.NEON_PRODUCTION_PROJECT_ID }}
         run: scripts/preview-seed.sh describe preview-seed
 
       - name: Fetch the seed branch's direct connection string
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          NEON_PRODUCTION_PROJECT_ID: ${{ vars.NEON_PRODUCTION_PROJECT_ID }}
           SEED_BRANCH_ID: ${{ steps.seed.outputs.id }}
         run: |
           uri=$(scripts/preview-seed.sh uri "$SEED_BRANCH_ID")
           echo "::add-mask::$uri"
           echo "SEED_DATABASE_URL=$uri" >> "$GITHUB_ENV"
 
-      # A schema-only branch copies drizzle's journal *table* but not its rows, so it must be wiped
-      # and rebuilt from zero; that also proves every migration still replays on an empty database.
-      # A seed that isn't a root branch may hold its parent's (production) rows, so it is wiped on
-      # every run (final review I-2).
+      # The seed is a child of the preview project's empty default branch (D87), so it is never a
+      # root branch and is wiped and rebuilt from zero on every run. That also proves every migration
+      # still replays on an empty database. The condition stays as it was: a seed with a parent may
+      # hold its parent's rows (final review I-2).
       - name: Wipe and rebuild from zero
         if: steps.seed.outputs.created == 'true' || inputs.reset || steps.seed.outputs.root != 'true'
         run: psql "$SEED_DATABASE_URL" -v ON_ERROR_STOP=1 -c 'DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE; CREATE SCHEMA public;'

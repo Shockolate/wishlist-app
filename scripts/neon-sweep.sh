@@ -3,10 +3,20 @@
 # the per-PR cleanup job: Neon's free plan caps a project at 10 branches.
 #
 # Usage: scripts/neon-sweep.sh [--dry-run]
-# Env:   NEON_API_KEY, NEON_PROJECT_ID, GH_TOKEN (for `gh pr list`)
+# Env:   NEON_API_KEY, NEON_PROJECT_ID (the wishlist-preview project, D87),
+#        NEON_PRODUCTION_PROJECT_ID (refused), GH_TOKEN (for `gh pr list`)
 # Test seams: NEON_BRANCHES_FILE (branches JSON from a file) and OPEN_PRS (space-separated open
 # PR numbers) replace the Neon and GitHub calls.
 set -euo pipefail
+
+die() { echo "neon-sweep: $*" >&2; exit 1; }
+
+# D87: previews live in their own Neon project. Refuse production's, and refuse to run without knowing
+# which project that is, so preview secrets pasted with production's ID can't send previews back in.
+[[ -n "${NEON_PRODUCTION_PROJECT_ID:-}" ]] ||
+  die "NEON_PRODUCTION_PROJECT_ID is unset, so the production project can't be refused (docs/deployment.md)"
+[[ "${NEON_PROJECT_ID:-}" != "$NEON_PRODUCTION_PROJECT_ID" ]] ||
+  die "refusing: NEON_PROJECT_ID is the production project; previews live in their own project (D87)"
 
 dry_run=false
 if [[ "${1:-}" == "--dry-run" ]]; then dry_run=true; fi

@@ -756,7 +756,7 @@ When a dependency fails, the behavior is fixed per service:
 
 - **Why the API preview is unprotected.** A Next.js rewrite can't attach Vercel's protection-bypass header. An unprotected API preview exposes the same surface as the production API: the same auth, and no secrets in responses.
 - **Why preview email is log-only.** Preview databases hold only seed data, but log-only email means a preview can never send mail to anyone, whatever data it holds.
-- **Why previews never clone production.** API previews are public and run unreviewed PR code, so preview databases branch from `preview-seed`, a schema-only root branch rebuilt from the migrations ([addendum 2026-10-08](2026-10-08-ci-secret-isolation-and-seeded-previews-design.md)).
+- **Why previews never clone production.** API previews are public and run unreviewed PR code, so preview databases branch from `preview-seed`, rebuilt from the migrations ([addendum 2026-10-08](2026-10-08-ci-secret-isolation-and-seeded-previews-design.md)). Since 2026-10-24 they live in their own Neon project, `wishlist-preview`, with a project-scoped key ([D87](2026-10-24-operations-hardening-design.md)).
 
 ### Deployment model
 
@@ -770,7 +770,7 @@ When a dependency fails, the behavior is fixed per service:
 | `ci.yml` | `pull_request` | install → `turbo lint typecheck test build` (affected) → API integration → E2E (compose) → `squawk` on new migrations. Its jobs are the ruleset's required checks |
 | `preview.yml` | PR opened, synchronized or reopened | `settings` (pull project settings) → `build-api` (no secrets) → `provision` (check `preview-seed` → create or reuse `pr-<n>` from it → assert it descends from `preview-seed` → migrate with the migrator from source → deploy the API preview → wait for health) → `build-web` (no secrets) → `deploy-web` (deploy, alias) → `smoke` → `comment` (web alias only). Concurrency `preview-<n>`, cancel-in-progress |
 | `cleanup.yml` | PR closed; nightly | Delete Neon branch `pr-<n>`. The nightly sweep deletes `pr-*` branches whose PR is closed, a safety net for Neon's free cap of 10 branches |
-| `preview-seed.yml` | Manual (`reset`, `init_source`); push to `main` touching migrations | Ensure `preview-seed` exists (schema-only root branch, never `main`) → wipe and replay migrations from zero when created or reset → migrate incrementally otherwise |
+| `preview-seed.yml` | Manual (`reset`); push to `main` touching migrations | Ensure `preview-seed` exists in `wishlist-preview` (a child of its empty default branch, never the default itself; production's project refused, D87) → wipe and replay migrations from zero |
 | `deploy.yml` | Push to `main` | `guard` (stale-commit check) → `settings` → `build` (gates and `vercel build` for both apps, no secrets) → `migrate` (migrator from source) → `deploy-api` → health → `deploy-web` → `smoke`. Beside them, `sourcemaps` uploads the web app's browser source maps to Sentry (Plan 5b, D52); a Sentry outage never blocks a release. Every production job re-checks it is deploying `main`'s tip. Concurrency `production`, `cancel-in-progress: false` |
 | `backup.yml` | Nightly; manual | `pg_dump` prod as the read-only `hanker_backup` role (D48) → encrypt with `age` in the pipe → upload to Cloudflare R2 → ping the backup heartbeat, or its `/fail` URL on any error (D47). An R2 lifecycle rule keeps 30 days (Plan 5a) |
 

@@ -261,6 +261,30 @@ const mutations = [
     },
   ],
   [
+    'the seed created by schema-only copy again (D87)',
+    'preview-seed.yml',
+    (wf) => {
+      wf.on.workflow_dispatch.inputs.init_source = { type: 'choice', options: ['schema-only'] };
+    },
+  ],
+  [
+    'a Neon script step without the production project ID (D87)',
+    'preview.yml',
+    (wf) => {
+      delete runStep(wf.jobs.provision, /preview-seed\.sh check/).env.NEON_PRODUCTION_PROJECT_ID;
+    },
+  ],
+  [
+    'the sweep without the production project ID (D87)',
+    'cleanup.yml',
+    (wf) => {
+      const job = Object.values(wf.jobs).find((j) =>
+        j.steps.some((st) => /neon-sweep/.test(st.run ?? '')),
+      );
+      delete runStep(job, /neon-sweep/).env.NEON_PRODUCTION_PROJECT_ID;
+    },
+  ],
+  [
     'an unpinned Vercel CLI version',
     'tools/vercel-cli/package.json',
     (pkg) => {

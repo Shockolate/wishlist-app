@@ -223,6 +223,24 @@ if (!wipeIf.includes("steps.seed.outputs.root != 'true'"))
     "preview-seed.yml#seed: wipe whenever the seed isn't a root branch (steps.seed.outputs.root != 'true')",
   );
 
+// D87: previews live in their own Neon project. The seed is never created by schema-only copy from
+// another project, and every step that runs a Neon script knows production's project ID, which the
+// scripts refuse.
+if (seedJob && byFile['preview-seed.yml']?.on?.workflow_dispatch?.inputs?.init_source)
+  fail('preview-seed.yml: no init_source input; the seed is a child of the preview project (D87)');
+const PRODUCTION_PROJECT_VAR = '${{ vars.NEON_PRODUCTION_PROJECT_ID }}';
+for (const { file, wf } of workflows) {
+  for (const [jobName, job] of Object.entries(wf.jobs ?? {})) {
+    for (const step of job.steps ?? []) {
+      if (!/\b(preview-seed|neon-sweep)\.sh\b/.test(String(step.run ?? ''))) continue;
+      if (step.env?.NEON_PRODUCTION_PROJECT_ID !== PRODUCTION_PROJECT_VAR)
+        fail(
+          `${file}#${jobName}: "${step.name ?? step.run}" must set NEON_PRODUCTION_PROJECT_ID: ${PRODUCTION_PROJECT_VAR} (D87)`,
+        );
+    }
+  }
+}
+
 // Rule 7: GitHub logs a deployment for every job that names an environment. Jobs that only need
 // the preview environment's secrets opt out, so a PR shows one "deployed to preview" per run:
 // deploy-web's, linked to the web alias.
