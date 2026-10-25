@@ -2,6 +2,7 @@ import type { UnfurlResponse } from '@wishlist/contracts';
 import type { Clock } from '../core/clock.js';
 import type { EmailMessage, EmailSender } from '../email/email-sender.js';
 import type { ErrorContext, ErrorReporter } from '../observability/error-reporter.js';
+import type { CronHeartbeat } from '../ops/cron-heartbeat.js';
 import type { BreachedPasswordChecker } from '../security/breached-passwords.js';
 import type { CaptchaVerdict, CaptchaVerifier } from '../security/captcha.js';
 import type { SuggestInput, SuggestResult, TagSuggester } from '../tag-suggest/tag-suggester.js';
@@ -113,6 +114,21 @@ export class FakeTagSuggester implements TagSuggester {
   suggest(input: SuggestInput): Promise<SuggestResult> {
     this.inputs.push(input);
     return Promise.resolve(this.next);
+  }
+}
+
+/** Cron heartbeat stand-in. Records every ping, in order. */
+export class FakeCronHeartbeat implements CronHeartbeat {
+  readonly pings: ('succeeded' | 'failed')[] = [];
+
+  succeeded(): Promise<void> {
+    this.pings.push('succeeded');
+    return Promise.resolve();
+  }
+
+  failed(): Promise<void> {
+    this.pings.push('failed');
+    return Promise.resolve();
   }
 }
 

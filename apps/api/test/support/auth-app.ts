@@ -2,12 +2,14 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { CLOCK } from '../../src/core/clock.js';
 import type { Env } from '../../src/core/env.js';
 import { EMAIL_SENDER } from '../../src/email/email-sender.js';
+import { CRON_HEARTBEAT } from '../../src/ops/cron-heartbeat.js';
 import { BREACHED_PASSWORD_CHECKER } from '../../src/security/breached-passwords.js';
 import { CAPTCHA_VERIFIER } from '../../src/security/captcha.js';
 import {
   FakeBreachedPasswords,
   FakeCaptcha,
   FakeClock,
+  FakeCronHeartbeat,
   FakeEmailSender,
   FakeMetadataFetcher,
   FakeTagSuggester,
@@ -26,6 +28,7 @@ export interface AuthTestApp {
   breaches: FakeBreachedPasswords;
   unfurl: FakeMetadataFetcher;
   suggester: FakeTagSuggester;
+  heartbeat: FakeCronHeartbeat;
   /** Rewinds the clock and clears every fake. Call it in beforeEach. */
   reset(): void;
 }
@@ -41,6 +44,7 @@ export async function createAuthTestApp(
   const breaches = new FakeBreachedPasswords();
   const unfurl = new FakeMetadataFetcher();
   const suggester = new FakeTagSuggester();
+  const heartbeat = new FakeCronHeartbeat();
   const app = await createTestApp({
     databaseUrl,
     env,
@@ -57,7 +61,9 @@ export async function createAuthTestApp(
         .overrideProvider(METADATA_FETCHER)
         .useValue(unfurl)
         .overrideProvider(TAG_SUGGESTER)
-        .useValue(suggester),
+        .useValue(suggester)
+        .overrideProvider(CRON_HEARTBEAT)
+        .useValue(heartbeat),
   });
   return {
     app,
@@ -67,6 +73,7 @@ export async function createAuthTestApp(
     breaches,
     unfurl,
     suggester,
+    heartbeat,
     reset() {
       clock.set(TEST_START);
       emails.sent.length = 0;
@@ -79,6 +86,7 @@ export async function createAuthTestApp(
       unfurl.urls.length = 0;
       suggester.next = { ok: true, names: [] };
       suggester.inputs.length = 0;
+      heartbeat.pings.length = 0;
     },
   };
 }

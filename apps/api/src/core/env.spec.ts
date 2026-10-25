@@ -66,6 +66,33 @@ describe('parseEnv', () => {
     });
   });
 
+  describe('CRON_HEARTBEAT_URL (D86)', () => {
+    const url = 'https://uptime.betterstack.com/api/v1/heartbeat/SECRETTOKEN';
+
+    it('is optional', () => {
+      expect(parseEnv(base).CRON_HEARTBEAT_URL).toBeUndefined();
+    });
+
+    it('reads an https URL', () => {
+      expect(parseEnv({ ...base, CRON_HEARTBEAT_URL: url }).CRON_HEARTBEAT_URL).toBe(url);
+    });
+
+    it('refuses http, so the token never travels in cleartext', () => {
+      expect(() =>
+        parseEnv({ ...base, CRON_HEARTBEAT_URL: url.replace('https:', 'http:') }),
+      ).toThrow(/CRON_HEARTBEAT_URL/);
+    });
+
+    it('refuses something that is not a URL, without echoing it', () => {
+      expect(() => parseEnv({ ...base, CRON_HEARTBEAT_URL: 'not a url SECRETTOKEN' })).toThrow(
+        /CRON_HEARTBEAT_URL/,
+      );
+      expect(() => parseEnv({ ...base, CRON_HEARTBEAT_URL: 'not a url SECRETTOKEN' })).not.toThrow(
+        /SECRETTOKEN/,
+      );
+    });
+  });
+
   it('names the offending variable when the environment is invalid', () => {
     expect(() => parseEnv({ ...base, PORT: 'not-a-port' })).toThrow(/PORT/);
   });

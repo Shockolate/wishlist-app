@@ -3,7 +3,8 @@ import {
   CreateClaimResponseSchema,
   GiftsResponseSchema,
 } from '@wishlist/contracts';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CleanupService } from '../src/ops/cleanup.service.js';
 import { http } from '../src/testing/app.js';
 import { ADA, logIn, signUp, signUpVerified, type Account } from './support/accounts.js';
 import { createAuthTestApp, type AuthTestApp } from './support/auth-app.js';
@@ -51,6 +52,33 @@ describe('GET /api/internal/cron/daily (spec §10)', () => {
     for (const authorization of [undefined, 'Bearer wrong', `Bearer ${SECRET}x`, SECRET]) {
       expect((await runCron(t.app, authorization)).status).toBe(401);
     }
+  });
+
+  describe('the heartbeat (D86)', () => {
+    it('pings succeeded once after an authorized run', async () => {
+      const res = await runCron(t.app, `Bearer ${SECRET}`);
+      expect(res.status).toBe(200);
+      CleanupResultSchema.parse(res.body);
+      expect(t.heartbeat.pings).toEqual(['succeeded']);
+    });
+
+    it('pings nothing when unauthorized', async () => {
+      expect((await runCron(t.app, 'Bearer wrong')).status).toBe(401);
+      expect(t.heartbeat.pings).toEqual([]);
+    });
+
+    it('pings failed and still fails when the cleanup throws', async () => {
+      const cleanup = t.app.get(CleanupService);
+      const spy = vi.spyOn(cleanup, 'runDaily').mockRejectedValueOnce(new Error('cleanup broke'));
+      try {
+        const res = await runCron(t.app, `Bearer ${SECRET}`);
+        expect(res.status).toBe(500);
+        expect(res.headers['content-type']).toMatch(/^application\/problem\+json/);
+        expect(t.heartbeat.pings).toEqual(['failed']);
+      } finally {
+        spy.mockRestore();
+      }
+    });
   });
 
   it('refuses everyone when CRON_SECRET is unset', async () => {
