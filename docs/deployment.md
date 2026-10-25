@@ -6,12 +6,12 @@ Production runs on free tiers: **Vercel Hobby** (two projects), **Neon Free** (P
 Browser ──► wishlist-web (Next.js) ──rewrite /api/*──► wishlist-api (NestJS, one Vercel Function) ──► Neon
 ```
 
-|     | Production URL                       |
-| --- | ------------------------------------ |
-| Web | https://wishlist-web-gold.vercel.app |
-| API | https://wishlist-api-five.vercel.app |
+|     | Production URL                                                                           | Vercel's own URL                     |
+| --- | ---------------------------------------------------------------------------------------- | ------------------------------------ |
+| Web | https://hanker.dev ([Domain and DNS](#domain-and-dns))                                   | https://wishlist-web-gold.vercel.app |
+| API | https://hanker.dev/api/, through the web project's rewrite. People never see its own URL | https://wishlist-api-five.vercel.app |
 
-Vercel assigned these names because `wishlist-web.vercel.app` and `wishlist-api.vercel.app` were already taken. Plan 2 adds a custom domain.
+Vercel assigned these names because `wishlist-web.vercel.app` and `wishlist-api.vercel.app` were already taken. State-changing calls only work from `https://hanker.dev` ([Domain and DNS](#domain-and-dns), "The canonical origin").
 
 ## Accounts
 
@@ -204,7 +204,8 @@ Runtime variables apply to the **next** deployment. Redeploy, or merge to `main`
 
 - unverified accounts older than 7 days, which cascades to their wishlists, tokens and sessions;
 - expired email tokens and sessions;
-- rate-limit windows older than a day.
+- rate-limit windows older than a day;
+- Your gifts notes, 30 days after their claim went (D79, D80): it stamps `gone_at` on notes that have none, then deletes those stamped more than 30 days ago. `/privacy` promises this.
 
 The response lists the counts.
 
@@ -520,11 +521,13 @@ Tag suggestions come from Cloudflare Workers AI (D70), only while `CLOUDFLARE_AC
 
 ## GitHub configuration
 
-| Kind      | Scope            | Names                                                                                                                                                   |
-| --------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Secrets   | env `production` | `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID_API`, `VERCEL_PROJECT_ID_WEB`, `DATABASE_URL_DIRECT`                                                |
-| Secrets   | env `preview`    | `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID_API`, `VERCEL_PROJECT_ID_WEB`, `NEON_API_KEY`, `NEON_PROJECT_ID`, `VERCEL_AUTOMATION_BYPASS_SECRET` |
-| Variables | repo             | `API_PRODUCTION_ORIGIN`, `APP_PRODUCTION_ORIGIN`, `TURNSTILE_SITE_KEY`                                                                                  |
+| Kind      | Scope            | Names                                                                                                                                                                                                                                                                                                             |
+| --------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Secrets   | env `production` | `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID_API`, `VERCEL_PROJECT_ID_WEB`, `DATABASE_URL_DIRECT`; `SENTRY_AUTH_TOKEN` ([Sentry](#sentry)); `DATABASE_URL_BACKUP`, `AGE_RECIPIENT`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `BACKUP_HEARTBEAT_URL` ([Backups](#backups)) |
+| Secrets   | env `preview`    | `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID_API`, `VERCEL_PROJECT_ID_WEB`, `NEON_API_KEY`, `NEON_PROJECT_ID`, `VERCEL_AUTOMATION_BYPASS_SECRET`                                                                                                                                                           |
+| Variables | repo             | `API_PRODUCTION_ORIGIN`, `APP_PRODUCTION_ORIGIN`, `TURNSTILE_SITE_KEY`, `PREVIEW_ALIAS_PREFIX` ([Previews](#previews)); `SENTRY_DSN_WEB`, `SENTRY_ORG`, `SENTRY_PROJECT_WEB` ([Sentry](#sentry))                                                                                                                  |
+
+Every credential, with its expiry and what it unlocks, is listed in [operations.md → Credentials](operations.md#credentials).
 
 The Vercel token (`github-actions-wishlist`, scoped to the `shockolate` team) expires after one year; rotate it before then.
 
