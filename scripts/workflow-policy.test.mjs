@@ -23,6 +23,8 @@ const byFile = Object.fromEntries(workflows.map(({ file, wf }) => [file, wf]));
 const VERCEL_CLI = 'tools/vercel-cli/node_modules/.bin/vercel';
 // No --prod: vercel is that package's devDependency, so `pnpm audit --prod` gates only what
 // production runs (the CLI has its own monthly audit, docs/operations.md).
+// pnpm then also installs the root's devDependencies; the allowlist above still lets these
+// jobs run nothing but the CLI.
 const VERCEL_INSTALL =
   'pnpm install --frozen-lockfile --ignore-scripts --filter @wishlist/vercel-cli';
 const PROD_INSTALL =
