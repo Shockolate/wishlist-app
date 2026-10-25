@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Asserts the CI/CD trust model (spec addendum 2026-10-08 §2, §5; Plan 1 review I-1, I-2, M-1,
 // M-3) so a later edit can't quietly undo it. Run: node scripts/workflow-policy.test.mjs
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 
@@ -16,7 +16,17 @@ const workflows = readdirSync(dir)
   .map((file) => ({ file, wf: parse(readFileSync(join(dir, file), 'utf8')) }));
 const byFile = Object.fromEntries(workflows.map(({ file, wf }) => [file, wf]));
 
-const VERCEL_CLI = 'npx --yes vercel@"$VERCEL_CLI_VERSION"';
+// D85: secret jobs run the Vercel CLI from the lockfile, never through npx, so its whole
+// dependency tree is pinned by integrity hash, and they install it without install scripts.
+// It runs by path from the repo root: `pnpm --filter … exec` would run it in tools/vercel-cli, where
+// there's no .vercel/output to deploy.
+const VERCEL_CLI = 'tools/vercel-cli/node_modules/.bin/vercel';
+// No --prod: vercel is that package's devDependency, so `pnpm audit --prod` gates only what
+// production runs (the CLI has its own monthly audit, docs/operations.md).
+// pnpm then also installs the root's devDependencies; the allowlist above still lets these
+// jobs run nothing but the CLI.
+const VERCEL_INSTALL =
+  'pnpm install --frozen-lockfile --ignore-scripts --filter @wishlist/vercel-cli';
 const PROD_INSTALL =
   'pnpm install --prod --frozen-lockfile --ignore-scripts --filter @wishlist/api';
 const MIGRATOR = 'apps/api/src/db/migrate-cli.ts';
@@ -97,9 +107,9 @@ for (const { file, wf } of workflows) {
     } else if (secrets.length > 0 || job.environment) {
       for (const line of commandLines(job)) {
         const runsPackages = PACKAGE_RUNNER.test(line.replaceAll(VERCEL_CLI, ''));
-        if (runsPackages && line !== PROD_INSTALL)
+        if (runsPackages && line !== PROD_INSTALL && line !== VERCEL_INSTALL)
           fail(
-            `${where}: secret-holding job may only run "${PROD_INSTALL}" or ${VERCEL_CLI}: ${line}`,
+            `${where}: secret-holding job may only run "${PROD_INSTALL}", "${VERCEL_INSTALL}" or ${VERCEL_CLI}: ${line}`,
           );
         if (/\bvercel\s+[a-z]/.test(line) && !line.includes(VERCEL_CLI))
           fail(`${where}: invoke the Vercel CLI as ${VERCEL_CLI}: ${line}`);
@@ -403,17 +413,100 @@ for (const [file, jobName] of [
     fail(`${where}: the Playwright image already has the browser; don't run playwright install`);
 }
 
-// Secret jobs run `npx vercel@<this version>`; a range would float in token-holding jobs.
+// D85: no workflow fetches the Vercel CLI on the fly, and every job that runs it installs it from
+// the lockfile first, in an earlier step.
+for (const { file, wf } of workflows) {
+  for (const [jobName, job] of Object.entries(wf.jobs ?? {})) {
+    const where = `${file}#${jobName}`;
+    let installed = false;
+    for (const step of job.steps ?? []) {
+      const lines = String(step.run ?? '').split('\n');
+      for (const line of lines) {
+        if (/\b(npx|pnpx|pnpm dlx|bunx)\b.*\bvercel\b/.test(line))
+          fail(
+            `${where}: run the Vercel CLI as ${VERCEL_CLI}, never through a package fetcher: ${line.trim()}`,
+          );
+        if (line.includes(VERCEL_CLI) && !installed)
+          fail(`${where}: run "${VERCEL_INSTALL}" in an earlier step before ${VERCEL_CLI}`);
+      }
+      if (lines.some((line) => line.trim() === VERCEL_INSTALL)) installed = true;
+    }
+  }
+}
+
+// The CLI's version is exact, in its own package; a range would float in token-holding jobs.
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-if (!/^\d+\.\d+\.\d+$/.test(pkg.devDependencies?.vercel ?? ''))
-  fail('package.json: devDependencies.vercel must be an exact x.y.z version');
+if (pkg.devDependencies?.vercel || pkg.dependencies?.vercel)
+  fail('package.json: vercel lives in tools/vercel-cli (@wishlist/vercel-cli), not the root (D85)');
+const cliPkgPath = join(root, 'tools/vercel-cli/package.json');
+const cliPkg = existsSync(cliPkgPath) ? JSON.parse(readFileSync(cliPkgPath, 'utf8')) : {};
+if (cliPkg.name !== '@wishlist/vercel-cli')
+  fail('tools/vercel-cli/package.json: name must be @wishlist/vercel-cli');
+if (!/^\d+\.\d+\.\d+$/.test(cliPkg.devDependencies?.vercel ?? ''))
+  fail('tools/vercel-cli/package.json: devDependencies.vercel must be an exact x.y.z version');
+if (Object.keys(cliPkg.dependencies ?? {}).length > 0)
+  fail('tools/vercel-cli/package.json: no dependencies; the CLI is a devDependency (D85)');
 
 const renovate = JSON.parse(readFileSync(join(root, 'renovate.json'), 'utf8'));
 if (!renovate.extends?.includes('helpers:pinGitHubActionDigests'))
   fail('renovate.json: extends must include helpers:pinGitHubActionDigests');
 if (!renovate.minimumReleaseAge) fail('renovate.json: minimumReleaseAge must be set');
-if (JSON.stringify(renovate).includes('"automerge":true'))
-  fail('renovate.json: no automerge until Ted decides to re-enable it');
+// D88: automerge only minor and patch updates of named dev-only tooling, which runs in
+// secret-free jobs and never shapes the production build. Everything else waits for review. The
+// whole config is walked, so automerge can't hide in a nested block (a manager, lockFileMaintenance,
+// an update type) or a preset, and the one allowed rule is pinned exactly: widening it means
+// editing this test on purpose (final review).
+const AUTOMERGE_PACKAGES = [
+  '@types/**',
+  '!@types/node',
+  'eslint',
+  'prettier',
+  'vitest',
+  'testcontainers',
+  '@testcontainers/**',
+];
+const AUTOMERGE_RULE_KEYS = [
+  'description',
+  'matchDepTypes',
+  'matchUpdateTypes',
+  'matchPackageNames',
+  'automerge',
+  'automergeType',
+];
+const sameSet = (a, b) =>
+  a.length === b.length && [...a].sort().join('\n') === [...b].sort().join('\n');
+function checkAutomergeRule(rule, where) {
+  const extra = Object.keys(rule).filter((k) => !AUTOMERGE_RULE_KEYS.includes(k));
+  if (extra.length)
+    fail(
+      `${where}: an automerge rule may only set ${AUTOMERGE_RULE_KEYS.join(', ')} (D88), not ${extra.join(', ')}`,
+    );
+  if (JSON.stringify(rule.matchDepTypes) !== JSON.stringify(['devDependencies']))
+    fail(`${where}: an automerge rule matches only devDependencies (D88)`);
+  const types = rule.matchUpdateTypes ?? [];
+  if (types.length === 0 || types.some((t) => !['minor', 'patch'].includes(t)))
+    fail(`${where}: an automerge rule matches only minor and patch updates (D88)`);
+  if (rule.automergeType !== 'pr')
+    fail(`${where}: automergeType must be "pr", behind the required checks (D88)`);
+  if (!sameSet(rule.matchPackageNames ?? [], AUTOMERGE_PACKAGES))
+    fail(`${where}: matchPackageNames must be exactly ${AUTOMERGE_PACKAGES.join(', ')} (D88)`);
+}
+let automergeRules = 0;
+(function walk(node, where) {
+  if (Array.isArray(node)) return node.forEach((v, i) => walk(v, `${where}[${i}]`));
+  if (!node || typeof node !== 'object') return;
+  for (const preset of Array.isArray(node.extends) ? node.extends : [])
+    if (/automerge/i.test(String(preset))) fail(`${where}: no automerge preset (${preset}) (D88)`);
+  if (node.automerge !== undefined && node.automerge !== false) {
+    if (/^renovate\.json: packageRules\[\d+\]$/.test(where)) {
+      automergeRules += 1;
+      checkAutomergeRule(node, where);
+    } else fail(`${where}: automerge is allowed only in the one D88 packageRules entry`);
+  }
+  for (const [key, value] of Object.entries(node))
+    walk(value, key === 'packageRules' ? `${where}: packageRules` : `${where}.${key}`);
+})(renovate, 'renovate.json');
+if (automergeRules > 1) fail('renovate.json: only one packageRules entry may automerge (D88)');
 
 if (failures.length > 0) {
   console.error(`workflow-policy: ${failures.length} violation(s)\n- ${failures.join('\n- ')}`);

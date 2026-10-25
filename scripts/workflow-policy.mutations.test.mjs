@@ -13,6 +13,7 @@ const policy = join(root, 'scripts/workflow-policy.test.mjs');
 const PINNED_CACHE = 'actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830';
 const PINNED_DOWNLOAD = 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333';
 const PINNED_UPLOAD = 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9';
+const VERCEL_BIN = 'tools/vercel-cli/node_modules/.bin/vercel';
 
 function find(job, predicate) {
   const step = job.steps.find(predicate);
@@ -20,16 +21,39 @@ function find(job, predicate) {
   return step;
 }
 const runStep = (job, re) => find(job, (s) => re.test(s.run ?? ''));
+function automergeRule(renovate) {
+  const rule = renovate.packageRules.find((r) => r.automerge === true);
+  if (!rule) throw new Error('mutation target not found');
+  return rule;
+}
 const usesStep = (job, prefix) => find(job, (s) => String(s.uses).startsWith(prefix));
 
 // [name, file, mutate(parsed file)]
 const mutations = [
   [
-    'vercel@latest in a deploy job',
+    'the Vercel CLI fetched through npx in a deploy job (D85)',
     'deploy.yml',
     (wf) => {
       const s = runStep(wf.jobs['deploy-api'], /deploy --prebuilt/);
-      s.run = s.run.replace('vercel@"$VERCEL_CLI_VERSION"', 'vercel@latest');
+      s.run = s.run.replace(VERCEL_BIN, 'npx --yes vercel@64.7.0');
+    },
+  ],
+  [
+    'the Vercel CLI installed with its install scripts (D85)',
+    'preview.yml',
+    (wf) => {
+      const s = runStep(wf.jobs['deploy-web'], /--filter @wishlist\/vercel-cli/);
+      s.run = s.run.replace(' --ignore-scripts', '');
+    },
+  ],
+  [
+    'the Vercel CLI run before it is installed (D85)',
+    'deploy.yml',
+    (wf) => {
+      const steps = wf.jobs.settings.steps;
+      const at = steps.findIndex((s) => /--filter @wishlist\/vercel-cli/.test(s.run ?? ''));
+      if (at === -1) throw new Error('mutation target not found');
+      steps.push(...steps.splice(at, 1));
     },
   ],
   [
@@ -131,10 +155,131 @@ const mutations = [
     },
   ],
   [
+    'a top-level automerge (D88)',
+    'renovate.json',
+    (r) => {
+      r.automerge = true;
+    },
+  ],
+  [
+    'automerge on a major (D88)',
+    'renovate.json',
+    (r) => {
+      automergeRule(r).matchUpdateTypes.push('major');
+    },
+  ],
+  [
+    'automerge widened to runtime dependencies (D88)',
+    'renovate.json',
+    (r) => {
+      automergeRule(r).matchDepTypes = ['devDependencies', 'dependencies'];
+    },
+  ],
+  [
+    'automerge for next (D88)',
+    'renovate.json',
+    (r) => {
+      automergeRule(r).matchPackageNames.push('next');
+    },
+  ],
+  [
+    'automerge for GitHub Actions (D88)',
+    'renovate.json',
+    (r) => {
+      automergeRule(r).matchManagers = ['github-actions'];
+    },
+  ],
+  [
+    'automerge for @types/node (D88)',
+    'renovate.json',
+    (r) => {
+      const names = automergeRule(r).matchPackageNames;
+      names.splice(names.indexOf('!@types/node'), 1);
+    },
+  ],
+  [
+    'automerge nested under a manager (D88, final review)',
+    'renovate.json',
+    (r) => {
+      r['github-actions'] = { automerge: true };
+    },
+  ],
+  [
+    'automerge for lock file maintenance (D88, final review)',
+    'renovate.json',
+    (r) => {
+      r.lockFileMaintenance = { enabled: true, automerge: true };
+    },
+  ],
+  [
+    'automerge for every minor update (D88, final review)',
+    'renovate.json',
+    (r) => {
+      r.minor = { automerge: true };
+    },
+  ],
+  [
+    'an automerge preset at the top level (D88, final review)',
+    'renovate.json',
+    (r) => {
+      r.extends.push(':automergeAll');
+    },
+  ],
+  [
+    'an automerge preset inside a rule (D88, final review)',
+    'renovate.json',
+    (r) => {
+      r.packageRules[0].extends = [':automergeMinor'];
+    },
+  ],
+  [
+    'automerge names that are only negations (D88, final review)',
+    'renovate.json',
+    (r) => {
+      automergeRule(r).matchPackageNames = ['!@types/node'];
+    },
+  ],
+  [
+    'automerge names as a catch-all regex (D88, final review)',
+    'renovate.json',
+    (r) => {
+      automergeRule(r).matchPackageNames.push('/.*/');
+    },
+  ],
+  [
+    'automerge for build tooling not on the denylist (D88, final review)',
+    'renovate.json',
+    (r) => {
+      automergeRule(r).matchPackageNames.push('tailwindcss');
+    },
+  ],
+  [
+    'a catch-all automerge pattern (D88)',
+    'renovate.json',
+    (r) => {
+      automergeRule(r).matchPackageNames.push('**');
+    },
+  ],
+  [
     'an unpinned Vercel CLI version',
+    'tools/vercel-cli/package.json',
+    (pkg) => {
+      pkg.devDependencies.vercel = '^64.7.0';
+    },
+  ],
+  [
+    'the Vercel CLI as a production dependency, inside the prod audit gate (D85)',
+    'tools/vercel-cli/package.json',
+    (pkg) => {
+      pkg.dependencies = { vercel: pkg.devDependencies.vercel };
+      delete pkg.devDependencies;
+    },
+  ],
+  [
+    'the Vercel CLI back in the root package.json',
     'package.json',
     (pkg) => {
-      pkg.devDependencies.vercel = '^62.5.0';
+      pkg.devDependencies.vercel = '64.7.0';
     },
   ],
   [
@@ -367,7 +512,12 @@ const mutations = [
 function copyRoot() {
   const dir = mkdtempSync(join(tmpdir(), 'policy-'));
   cpSync(join(root, '.github/workflows'), join(dir, '.github/workflows'), { recursive: true });
-  for (const f of ['renovate.json', 'package.json', 'e2e/package.json'])
+  for (const f of [
+    'renovate.json',
+    'package.json',
+    'e2e/package.json',
+    'tools/vercel-cli/package.json',
+  ])
     cpSync(join(root, f), join(dir, f));
   return dir;
 }
