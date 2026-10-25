@@ -38,13 +38,13 @@ Later plans add: domain and DNS, Resend and Turnstile (Plan 2); Cloudflare R2 ba
 Both projects were created and configured from the CLI, so the setup is reproducible and checkable through the API instead of dashboard clicks:
 
 ```bash
-pnpm exec vercel project add wishlist-api --scope shockolate
-pnpm exec vercel project add wishlist-web --scope shockolate
+pnpm vercel project add wishlist-api --scope shockolate
+pnpm vercel project add wishlist-web --scope shockolate
 
 printf '%s' '{"rootDirectory":"apps/api","sourceFilesOutsideRootDirectory":true,"nodeVersion":"24.x","framework":"nestjs","ssoProtection":null}' \
-  | pnpm exec vercel api /v9/projects/wishlist-api -X PATCH --input - --scope shockolate
+  | pnpm vercel api /v9/projects/wishlist-api -X PATCH --input - --scope shockolate
 printf '%s' '{"rootDirectory":"apps/web","sourceFilesOutsideRootDirectory":true,"nodeVersion":"24.x","framework":"nextjs","ssoProtection":{"deploymentType":"preview"}}' \
-  | pnpm exec vercel api /v9/projects/wishlist-web -X PATCH --input - --scope shockolate
+  | pnpm vercel api /v9/projects/wishlist-web -X PATCH --input - --scope shockolate
 ```
 
 | Setting                          | wishlist-api | wishlist-web                                  |
@@ -65,7 +65,7 @@ The bypass secret was generated through the API and piped straight into GitHub, 
 
 ```bash
 printf '%s' '{"generate":{"note":"GitHub Actions smoke tests (wishlist-app)"}}' \
-  | pnpm exec vercel api /v1/projects/wishlist-web/protection-bypass -X PATCH --input - --scope shockolate \
+  | pnpm vercel api /v1/projects/wishlist-web/protection-bypass -X PATCH --input - --scope shockolate \
   | jq -r '.protectionBypass | to_entries | map(select(.value.scope == "automation-bypass")) | .[0].key' \
   | gh secret set VERCEL_AUTOMATION_BYPASS_SECRET --env preview
 ```
@@ -193,7 +193,7 @@ Set a sensitive production variable without it touching disk or shell history. F
 
 ```bash
 openssl rand -base64 48 | tr -d '\n' \
-  | npx --yes vercel@64.5.0 env add CRON_SECRET production --sensitive --project wishlist-api --scope shockolate
+  | pnpm vercel env add CRON_SECRET production --sensitive --project wishlist-api --scope shockolate
 ```
 
 Runtime variables apply to the **next** deployment. Redeploy, or merge to `main`, after changing one.
@@ -399,7 +399,7 @@ Errors from both apps go to Sentry's free Developer plan (spec §10 Monitoring, 
 3. **Alerts.** Keep the default alert rule that emails you on a new issue.
 4. **The API's DSN:** copy `hanker-api`'s DSN (Settings → Client Keys), then set it on the API's Vercel production environment. A DSN isn't secret, so there's no `--sensitive`, but the value still comes from a hidden prompt rather than argv. Paste the DSN at the silent prompt:
    ```bash
-   read -rs DSN && printf %s "$DSN" | npx --yes vercel@64.5.0 env add SENTRY_DSN production --project wishlist-api --scope shockolate; unset DSN
+   read -rs DSN && printf %s "$DSN" | pnpm vercel env add SENTRY_DSN production --project wishlist-api --scope shockolate; unset DSN
    ```
 5. **The web's DSN, and the names the upload needs.** DSNs are public by design, so these are variables, not secrets:
    ```bash
@@ -437,7 +437,7 @@ Sign-up is dark until the Turnstile secret is set (D29, D31). To open it:
 
 ```bash
 read -rs TURNSTILE_SECRET && printf %s "$TURNSTILE_SECRET" \
-  | npx --yes vercel@64.5.0 env add TURNSTILE_SECRET_KEY production --sensitive --project wishlist-api --scope shockolate
+  | pnpm vercel env add TURNSTILE_SECRET_KEY production --sensitive --project wishlist-api --scope shockolate
 unset TURNSTILE_SECRET
 ```
 
@@ -464,13 +464,13 @@ Amazon product links are looked up through Bright Data (D64), only while `BRIGHT
 3. **Store the key.** Paste it at the silent prompt:
    ```bash
    read -rs K && printf %s "$K" \
-     | npx --yes vercel@64.5.0 env add BRIGHT_DATA_API_KEY production --sensitive --project wishlist-api --scope shockolate
+     | pnpm vercel env add BRIGHT_DATA_API_KEY production --sensitive --project wishlist-api --scope shockolate
    unset K
    ```
 4. **Deploy.** A runtime variable applies to the next deployment: merge, or `gh workflow run deploy.yml --ref main`, and wait for every job to pass.
 5. **Check it (V1).** On your own list in production, paste a slow Amazon link, e.g. `https://www.amazon.com/Cephalofair-Games-115005-Frosthaven-Surface/dp/B0D169YKJW/` (about 20 seconds in the spike). Expect the waiting panel, then a prefilled title, photo and price. Then paste an `amzn.to` link, then a link from another shop, which behaves as before. Within the hour, the API's runtime logs should have no `LOOKUP_UNAVAILABLE` line, and Sentry no Bright Data warning.
 
-**To turn it off,** remove the variable (`npx --yes vercel@64.5.0 env rm BRIGHT_DATA_API_KEY production --project wishlist-api --scope shockolate`) and redeploy. Amazon links go back to the page fetch, which Amazon answers with a bot check. Then remove Bright Data from `/privacy`.
+**To turn it off,** remove the variable (`pnpm vercel env rm BRIGHT_DATA_API_KEY production --project wishlist-api --scope shockolate`) and redeploy. Amazon links go back to the page fetch, which Amazon answers with a bot check. Then remove Bright Data from `/privacy`.
 
 **To rotate the key,** create a new one in Bright Data, `env rm` then step 3, redeploy, then delete the old key in Bright Data.
 
@@ -482,13 +482,13 @@ Etsy listing links are looked up through Etsy's Open API (D65), only while `ETSY
 2. **Store the key.** Paste the keystring at the first silent prompt and the shared secret at the second:
    ```bash
    read -rs K && read -rs S && printf '%s:%s' "$K" "$S" \
-     | npx --yes vercel@64.5.0 env add ETSY_API_KEY production --sensitive --project wishlist-api --scope shockolate
+     | pnpm vercel env add ETSY_API_KEY production --sensitive --project wishlist-api --scope shockolate
    unset K S
    ```
 3. **Deploy.** A runtime variable applies to the next deployment: merge, or `gh workflow run deploy.yml --ref main`, and wait for every job to pass.
 4. **Check it (V1).** On your own list in production, paste an Etsy listing link with a slug and `?ref=`, e.g. one copied from Etsy's address bar. Expect the plain "Reading the page…" line, then a prefilled title, photo and price. Then paste an `etsy.me` link from Etsy's Share button, then a link from another shop, which behaves as before. Within the hour, the API's runtime logs should have no `LOOKUP_UNAVAILABLE … provider=etsy` line, and Sentry no Etsy warning. If only the `etsy.me` link fails, the API logs `unfurl NO_METADATA host=etsy.me` and the owner sees "We couldn’t find the details on that page…". That means the short link didn't redirect straight to a listing: it was refused, or it passed through another page first. Listing links still work.
 
-**To turn it off,** remove the variable (`npx --yes vercel@64.5.0 env rm ETSY_API_KEY production --project wishlist-api --scope shockolate`) and redeploy. Etsy links go back to the page fetch, which Etsy refuses. Then remove Etsy from `/privacy`, and its statement from `/terms`.
+**To turn it off,** remove the variable (`pnpm vercel env rm ETSY_API_KEY production --project wishlist-api --scope shockolate`) and redeploy. Etsy links go back to the page fetch, which Etsy refuses. Then remove Etsy from `/privacy`, and its statement from `/terms`.
 
 **To rotate the key,** reset the shared secret under "Apps You've Made", `env rm` then step 2, and redeploy.
 
@@ -507,17 +507,17 @@ Tag suggestions come from Cloudflare Workers AI (D70), only while `CLOUDFLARE_AC
 3. **C3. Store both in production,** at hidden prompts, piped straight into Vercel:
    ```bash
    read -rs A && printf %s "$A" \
-     | npx --yes vercel@64.5.0 env add CLOUDFLARE_ACCOUNT_ID production --sensitive --project wishlist-api --scope shockolate
+     | pnpm vercel env add CLOUDFLARE_ACCOUNT_ID production --sensitive --project wishlist-api --scope shockolate
    read -rs T && printf %s "$T" \
-     | npx --yes vercel@64.5.0 env add CLOUDFLARE_AI_TOKEN production --sensitive --project wishlist-api --scope shockolate
+     | pnpm vercel env add CLOUDFLARE_AI_TOKEN production --sensitive --project wishlist-api --scope shockolate
    unset A T
    ```
    Then redeploy: `gh workflow run deploy.yml --ref main`, and wait for every job to pass. The redeploy is only needed when turning the feature on after its code is already merged; when both are stored before merging (the planned path), the merge's own deploy picks them up.
 4. **V1. After it's turned on,** in production on your own list: add an Amazon link, a page-fetch link, an Etsy link and an idea, and edit one existing item. Check that each gets sensible suggestions, that existing tags are reused, and that turning the setting off removes the row. Within the hour, the API's runtime logs should have no `tag-suggest UNAVAILABLE` line, and Sentry no `Workers AI answered` warning.
 
-**To turn it off for everyone,** remove both variables (`npx --yes vercel@64.5.0 env rm CLOUDFLARE_AI_TOKEN production --project wishlist-api --scope shockolate`, then the same for `CLOUDFLARE_ACCOUNT_ID`) and redeploy. The route answers `[]` and the settings switch stays. Then take Cloudflare's AI out of `/privacy` and `/terms`. An owner can turn it off for their own list in Settings.
+**To turn it off for everyone,** remove both variables (`pnpm vercel env rm CLOUDFLARE_AI_TOKEN production --project wishlist-api --scope shockolate`, then the same for `CLOUDFLARE_ACCOUNT_ID`) and redeploy. The route answers `[]` and the settings switch stays. Then take Cloudflare's AI out of `/privacy` and `/terms`. An owner can turn it off for their own list in Settings.
 
-**To rotate the token** (yearly, before it expires): create a new account token as in C2, `npx --yes vercel@64.5.0 env rm CLOUDFLARE_AI_TOKEN production --project wishlist-api --scope shockolate`, store the new one with the token half of C3, redeploy, then delete the old token in Cloudflare.
+**To rotate the token** (yearly, before it expires): create a new account token as in C2, `pnpm vercel env rm CLOUDFLARE_AI_TOKEN production --project wishlist-api --scope shockolate`, store the new one with the token half of C3, redeploy, then delete the old token in Cloudflare.
 
 ## GitHub configuration
 
@@ -547,7 +547,7 @@ The Vercel token (`github-actions-wishlist`, scoped to the `shockolate` team) ex
 
 **How the jobs are kept safe:**
 
-- **Secret-holding jobs run almost nothing.** Only the pinned Vercel CLI runs, through `npx`, at the version in the root `package.json`; never `pnpm exec`.
+- **Secret-holding jobs run almost nothing.** Only the Vercel CLI runs, from `tools/vercel-cli` (`@wishlist/vercel-cli`, D85): `pnpm install --frozen-lockfile --ignore-scripts --filter @wishlist/vercel-cli`, then `tools/vercel-cli/node_modules/.bin/vercel` by path from the repo root. The lockfile pins its whole dependency tree by integrity hash; `npx` would pin only the top-level package. `vercel` is a devDependency of that package, so `pnpm audit --prod` gates only what production runs and the CLI's advisories are the monthly dev-tooling audit's (operations.md). Without `--prod`, pnpm also installs the root's few devDependencies (Prettier, Turbo, TypeScript, yaml); they're pinned the same way, get no install scripts, and nothing in these jobs runs them. Run it by hand as `pnpm vercel …`, the root script that calls the same binary.
 - **Nothing a build job wrote is executed next to a secret.** Secret-holding jobs restore no cache and run the migrator from the checkout, because a job that ran install scripts could tamper with any cache or artifact it saves.
 - **Every job that touches production re-checks the commit.** It confirms it's deploying `main`'s tip, because "Re-run failed jobs" skips `guard`.
 - **Every deploy job checks its build output first** (`scripts/check-vercel-output.sh`). The output must be complete and self-contained, and no symlink in it may point outside it. The symlink check is defence in depth: the Vercel CLI uploads a symlink's link text, not its target.
@@ -592,13 +592,13 @@ This is exactly what CI runs. It works from the repo root with the org and proje
 ```bash
 export VERCEL_ORG_ID=<team id>
 # API
-VERCEL_PROJECT_ID=<wishlist-api id> pnpm exec vercel pull --yes --environment=production
-VERCEL_PROJECT_ID=<wishlist-api id> pnpm exec vercel build --prod
-VERCEL_PROJECT_ID=<wishlist-api id> pnpm exec vercel deploy --prebuilt --prod --env GIT_SHA="$(git rev-parse HEAD)"
+VERCEL_PROJECT_ID=<wishlist-api id> pnpm vercel pull --yes --environment=production
+VERCEL_PROJECT_ID=<wishlist-api id> pnpm vercel build --prod
+VERCEL_PROJECT_ID=<wishlist-api id> pnpm vercel deploy --prebuilt --prod --env GIT_SHA="$(git rev-parse HEAD)"
 # Web (after the API is healthy)
-VERCEL_PROJECT_ID=<wishlist-web id> pnpm exec vercel pull --yes --environment=production
-VERCEL_PROJECT_ID=<wishlist-web id> API_ORIGIN=https://wishlist-api-five.vercel.app pnpm exec vercel build --prod
-VERCEL_PROJECT_ID=<wishlist-web id> pnpm exec vercel deploy --prebuilt --prod
+VERCEL_PROJECT_ID=<wishlist-web id> pnpm vercel pull --yes --environment=production
+VERCEL_PROJECT_ID=<wishlist-web id> API_ORIGIN=https://wishlist-api-five.vercel.app pnpm vercel build --prod
+VERCEL_PROJECT_ID=<wishlist-web id> pnpm vercel deploy --prebuilt --prod
 ```
 
 Migrate production first if the deploy includes a migration. Use the direct string, and the guard below refuses anything that isn't a Neon URL:
@@ -613,8 +613,8 @@ read -rs DATABASE_URL_DIRECT && export DATABASE_URL_DIRECT && [[ "$DATABASE_URL_
 Code: Vercel Instant Rollback, **web first, then API**. Rolling the API back first could leave a newer web app calling an older API.
 
 ```bash
-VERCEL_PROJECT_ID=<wishlist-web id> pnpm exec vercel rollback
-VERCEL_PROJECT_ID=<wishlist-api id> pnpm exec vercel rollback
+VERCEL_PROJECT_ID=<wishlist-web id> pnpm vercel rollback
+VERCEL_PROJECT_ID=<wishlist-api id> pnpm vercel rollback
 ```
 
 Data: Neon point-in-time restore (6-hour window) from the Neon console. Older than that, recover the rows from a nightly dump ([Restore drill and recovery](#restore-drill-and-recovery)).
