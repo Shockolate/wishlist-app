@@ -25,14 +25,34 @@ Sample data. The people and the list are made up.
 
 ## How it's built
 
-Two Vercel projects sit behind one origin, joined by a Next.js rewrite. The browser only ever talks to `hanker.dev`, so the session is a first-party `HttpOnly` cookie and there is no CORS.
+Two Vercel projects sit behind one origin, joined by a Next.js rewrite. The browser only ever talks to `hanker.dev`, so the session is a first-party `HttpOnly` cookie and there is no CORS. Everything else the API needs sits behind a port, an interface with a real adapter in production and a fake in tests.
 
 ```mermaid
 flowchart LR
   B[Browser] -->|hanker.dev| W["Next.js<br/>apps/web"]
-  W -->|"rewrite /api/*"| A["NestJS on Express<br/>apps/api"]
-  A -->|pg, pooled| D[("Postgres<br/>Neon")]
+  W -->|"rewrite /api/*"| A["NestJS on Express<br/>apps/api, one Vercel Function"]
+  A -->|pg, pooled| D[("Postgres 17<br/>Neon")]
+  A -.->|ports| X["Resend · Turnstile · Have I Been Pwned<br/>Bright Data · Etsy · Workers AI"]
+  W & A -.->|scrubbed errors| S[Sentry]
+  C[Vercel Cron, daily] --> A
+  A -.->|heartbeat| U[Better Stack]
+  U -.->|uptime checks| W
+  G[GitHub Actions] -->|"migrate, deploy"| A
+  G -->|"nightly encrypted dump"| R[("Cloudflare R2")]
 ```
+
+| Service               | Used for                                                    | If it's down or unset                                     |
+| --------------------- | ----------------------------------------------------------- | --------------------------------------------------------- |
+| Vercel (Hobby)        | Both apps, and the daily cleanup cron                       | The site is down; roll back or wait                       |
+| Neon (Free)           | Postgres, plus a separate project for preview databases     | Pages that read data fail; Live and Site monitors stay up |
+| Resend                | Account email                                               | Sign-up and password reset can't send                     |
+| Cloudflare Turnstile  | CAPTCHA on sign-up and email requests                       | Those requests answer `503`; everything else works        |
+| Have I Been Pwned     | Breached-password check (k-anonymity: only a hash prefix)   | The check is skipped                                      |
+| Bright Data, Etsy API | Title and price for Amazon and Etsy links                   | The owner types the details in                            |
+| Workers AI            | Tag suggestions                                             | No suggestions; nothing else changes                      |
+| Sentry                | Error reports, scrubbed of tokens and emails before sending | Errors go unreported; the app is unaffected               |
+| Better Stack          | Uptime monitors and heartbeats, alerting by email           | Nobody is alerted                                         |
+| Cloudflare R2         | Nightly `age`-encrypted backups, kept 30 days               | That night's backup fails, and its heartbeat raises it    |
 
 | Path                 | What                                                                                                                                      |
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
@@ -52,12 +72,25 @@ Each of these has its rationale in the [design spec](docs/superpowers/specs/2026
 - **Links are secrets.** Share and manage links grant access, so those pages send `Referrer-Policy: no-referrer` and `noindex`. Error reports run through [`redactTokens`](packages/contracts/src/redact.ts) before they leave the app. [Spec §6.7](docs/superpowers/specs/2026-10-07-wishlist-app-design.md#67-tokens-in-urls).
 - **Link previews are hardened against SSRF.** The server resolves the host itself, accepts only public addresses from an allowlist, connects to the address it vetted, and re-checks every redirect. [`apps/api/src/unfurl`](apps/api/src/unfurl), [spec §6.8](docs/superpowers/specs/2026-10-07-wishlist-app-design.md#68-unfurl-ssrf).
 - **CI has a trust model.** Jobs that build or test workspace code hold no secrets, and jobs that hold secrets run only pinned tools. A [policy test](scripts/workflow-policy.test.mjs), itself checked by [mutation tests](scripts/workflow-policy.mutations.test.mjs), fails the build if a later edit weakens that. [Design note](docs/superpowers/specs/2026-10-08-ci-secret-isolation-and-seeded-previews-design.md).
-- **Someone has thought about the day it breaks.** Nightly encrypted backups go to object storage, and a restore drill proves they can be restored. Uptime monitors, error reporting and runbooks are in [docs/operations.md](docs/operations.md).
+- **Someone has thought about the day it breaks.** See [Operations](#operations) below.
 - **Dependencies are audited, including the ones GitHub can't see.** GitHub's dependency graph lists only direct packages, so CI runs `pnpm audit --prod` against the lockfile and fails on a high or critical advisory in anything that ships. The Scorecard badge above still counts open advisories. They are in dev and deploy tooling, almost all in the Vercel CLI, where a newer version doesn't clear them, and none of it is part of the running app.
 - **Tag suggestions run on a free tier that neither keeps nor trains on the data.** Cloudflare Workers AI sits behind a port, and is sent only an item's title, note, the shop's web address and description, and the list's tag names, never the full link. Suggestions are optional help: a failure shows nothing, and a tag is added only when tapped. [Design](docs/superpowers/specs/2026-10-23-tag-suggestions-design.md).
 - **Migrations are expand, then contract,** so each one works alongside the API version that is currently deployed. CI lints them with [squawk](https://squawkhq.com).
 
 The work was planned and delivered in order: a spec, a [roadmap](docs/superpowers/plans/2026-10-07-roadmap.md), then one plan per slice, all in [`docs/superpowers`](docs/superpowers).
+
+## Operations
+
+Hanker is run by one person, in spare time, on free tiers. So the strategy is to make it cheap to keep running and hard to break quietly. The runbooks are in [docs/operations.md](docs/operations.md) and [docs/deployment.md](docs/deployment.md).
+
+- **Nothing fails silently.** Three uptime monitors watch the site, the API and the database. The nightly backup and the daily cleanup each ping a heartbeat, so a job that stops running raises an alert, not just one that fails. Every credential with an expiry is in [a table](docs/operations.md#credentials) with its date, what it unlocks and how to rotate it.
+- **Optional things degrade; they never break the rest.** Shop lookups, tag suggestions and error reporting sit behind ports. An unset key turns a feature off, and a failing service falls back: an Amazon link the lookup can't fill is typed in by hand. Only the database and email are load-bearing.
+- **Recovery is rehearsed, not assumed.** Neon restores the last 6 hours to a point in time. Older than that, nightly dumps encrypted with `age` sit in R2 for 30 days. A restore drill decrypts a real dump into a throwaway Postgres and checks it, every quarter and after any change to the backup path. Rolling back code is Vercel's instant rollback, web before API.
+- **Shipping is boring.** Every change is a small pull request in a stack, with its own preview on a database in a separate Neon project that never holds production data. Production deploys only `main`'s tip and refuses a stale commit. Migrations are expand, then contract, so a deploy never needs the database and the code to change at the same moment.
+- **The pipeline is guarded like production.** Jobs holding deploy secrets run only lockfile-pinned tools. Renovate merges only dev-only tooling on its own; everything that ships waits for review. The [policy test](scripts/workflow-policy.test.mjs) fails the build if a later edit loosens any of this.
+- **Free tiers are watched, not hoped for.** The database's uptime check runs every 30 minutes, not 3, so Neon still sleeps and stays inside its compute quota. Paid tiers stay off on purpose (Bright Data has no funds; Workers AI stays on the free allowance), so a spike can stop a feature but never send a bill. A monthly check covers each quota.
+- **Privacy is an operational promise too.** Logs and error reports never carry passwords, tokens, raw email addresses or SQL parameters. Account deletion removes the account's data, and notes about gifts that disappeared are purged after 30 days by a job that is itself monitored.
+- **Accepted risks are written down.** Where a fix isn't worth it yet, the risk, the reason and the trigger to revisit it live in [docs/deployment.md](docs/deployment.md#cicd-supply-chain-hardening). For example, one Vercel token serves both previews and production, until someone else gets write access.
 
 ## Testing
 
