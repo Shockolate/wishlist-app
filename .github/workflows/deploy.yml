@@ -57,7 +57,7 @@ jobs:
           node-version-file: .nvmrc
           package-manager-cache: false
       # The CLI and its whole dependency tree come from the lockfile, without install scripts (D85).
-      - run: pnpm install --prod --frozen-lockfile --ignore-scripts --filter @wishlist/vercel-cli
+      - run: pnpm install --frozen-lockfile --ignore-scripts --filter @wishlist/vercel-cli
       - name: Pull project settings (IDs and settings only, never env files)
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -194,7 +194,7 @@ jobs:
           node-version-file: .nvmrc
           package-manager-cache: false
       # The CLI and its whole dependency tree come from the lockfile, without install scripts (D85).
-      - run: pnpm install --prod --frozen-lockfile --ignore-scripts --filter @wishlist/vercel-cli
+      - run: pnpm install --frozen-lockfile --ignore-scripts --filter @wishlist/vercel-cli
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: vercel-settings
@@ -239,7 +239,7 @@ jobs:
           node-version-file: .nvmrc
           package-manager-cache: false
       # The CLI and its whole dependency tree come from the lockfile, without install scripts (D85).
-      - run: pnpm install --prod --frozen-lockfile --ignore-scripts --filter @wishlist/vercel-cli
+      - run: pnpm install --frozen-lockfile --ignore-scripts --filter @wishlist/vercel-cli
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: vercel-settings

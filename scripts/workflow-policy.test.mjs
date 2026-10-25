@@ -21,8 +21,10 @@ const byFile = Object.fromEntries(workflows.map(({ file, wf }) => [file, wf]));
 // It runs by path from the repo root: `pnpm --filter … exec` would run it in tools/vercel-cli, where
 // there's no .vercel/output to deploy.
 const VERCEL_CLI = 'tools/vercel-cli/node_modules/.bin/vercel';
+// No --prod: vercel is that package's devDependency, so `pnpm audit --prod` gates only what
+// production runs (the CLI has its own monthly audit, docs/operations.md).
 const VERCEL_INSTALL =
-  'pnpm install --prod --frozen-lockfile --ignore-scripts --filter @wishlist/vercel-cli';
+  'pnpm install --frozen-lockfile --ignore-scripts --filter @wishlist/vercel-cli';
 const PROD_INSTALL =
   'pnpm install --prod --frozen-lockfile --ignore-scripts --filter @wishlist/api';
 const MIGRATOR = 'apps/api/src/db/migrate-cli.ts';
@@ -438,8 +440,10 @@ const cliPkgPath = join(root, 'tools/vercel-cli/package.json');
 const cliPkg = existsSync(cliPkgPath) ? JSON.parse(readFileSync(cliPkgPath, 'utf8')) : {};
 if (cliPkg.name !== '@wishlist/vercel-cli')
   fail('tools/vercel-cli/package.json: name must be @wishlist/vercel-cli');
-if (!/^\d+\.\d+\.\d+$/.test(cliPkg.dependencies?.vercel ?? ''))
-  fail('tools/vercel-cli/package.json: dependencies.vercel must be an exact x.y.z version');
+if (!/^\d+\.\d+\.\d+$/.test(cliPkg.devDependencies?.vercel ?? ''))
+  fail('tools/vercel-cli/package.json: devDependencies.vercel must be an exact x.y.z version');
+if (Object.keys(cliPkg.dependencies ?? {}).length > 0)
+  fail('tools/vercel-cli/package.json: no dependencies; the CLI is a devDependency (D85)');
 
 const renovate = JSON.parse(readFileSync(join(root, 'renovate.json'), 'utf8'));
 if (!renovate.extends?.includes('helpers:pinGitHubActionDigests'))

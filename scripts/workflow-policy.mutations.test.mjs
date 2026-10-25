@@ -153,7 +153,15 @@ const mutations = [
     'an unpinned Vercel CLI version',
     'tools/vercel-cli/package.json',
     (pkg) => {
-      pkg.dependencies.vercel = '^64.7.0';
+      pkg.devDependencies.vercel = '^64.7.0';
+    },
+  ],
+  [
+    'the Vercel CLI as a production dependency, inside the prod audit gate (D85)',
+    'tools/vercel-cli/package.json',
+    (pkg) => {
+      pkg.dependencies = { vercel: pkg.devDependencies.vercel };
+      delete pkg.devDependencies;
     },
   ],
   [
