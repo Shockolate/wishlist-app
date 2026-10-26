@@ -50,7 +50,7 @@ These would make it a failure even if it technically works:
 
 ### 3.2 Which photos
 
-The first four items, in the list's own order (`position`), that have an `imageUrl` whose photo arrives in time and in a usable format. An item whose photo fails is skipped, and the next item with a photo is tried, until four photos or the time budget runs out. Items without a photo still count toward N.
+The first four items, in the list's own order (`position`), that have an `imageUrl` whose photo arrives in time and in a usable format. The API offers the first 8 items with an `imageUrl` (`PREVIEW_CANDIDATES`), and the web app requests all 8 photos in parallel within the 3-second budget (§5.1). Of those that arrive and decode in time, the first four in list order are drawn, so a fast photo never jumps ahead of an earlier item's; once those four are known, the requests still running are cancelled. A photo that fails is simply not among them. Items without a photo still count toward N.
 
 ### 3.3 Fallbacks
 
@@ -67,7 +67,7 @@ An empty list shows "Nothing on the list yet" in place of the count, with no gri
 ### 3.4 The text under the image
 
 - **Title (`og:title`, `<title>`):** the list's title, as today.
-- **Title in the picture:** the same title, minus any character that Instrument Serif and Geist can't draw, such as emoji and non-Latin scripts. `next/og` would otherwise fetch a fallback font or emoji set from a CDN while drawing, and the picture makes no outbound request except to the API. `og:title` keeps the full title.
+- **Title in the picture:** the same title, minus any character that Instrument Serif and Geist can't draw, such as emoji and non-Latin scripts *(Claude's call, pending Ted)*. `next/og` would otherwise fetch a fallback font or emoji set from a CDN while drawing, and the picture makes no outbound request except to the API. `og:title` keeps the full title.
 - **Description:** "12 things on Sam’s list. Pick a gift so nobody doubles up." "1 thing" for one. An empty list: "Nothing on Sam’s list yet." The name is `ownerDisplayName` with `’s` appended, always (so "James’s"). *(Wording is Claude's call; Ted can change it.)*
 - **Image alt (`og:image:alt`):** "Sam’s wishlist: 12 things on the list" (the title, then the count line). *(Claude's call.)*
 
@@ -85,7 +85,7 @@ Hanker's server downloads item photos to build the image. This reverses §6.8's 
 
 Limits *(Claude's calls)*:
 
-- Accept `image/jpeg`, `image/png` and `image/webp`. The web app converts each to what `next/og` draws (§5.2). Anything else is skipped.
+- Accept `image/jpeg`, `image/png` and `image/webp`, and only when the body starts with that type's signature (magic bytes), so nothing else rides in under an image type. The web app converts each to what `next/og` draws (§5.2). Anything else is skipped. The photo endpoint answers with `X-Content-Type-Options: nosniff`.
 - At most 2 MB per photo, counted as it streams, and skipped if larger.
 - Each photo travels in its own response, never several in one: a Vercel Function's response body is capped at 4.5 MB, and four photos of up to 2 MB each could exceed it.
 - A total budget of 3 seconds for all photos, fetched in parallel. Chat apps give up on slow previews within a few seconds.
@@ -102,7 +102,7 @@ The web app builds the image with Next's built-in `next/og` (`ImageResponse`), i
 
 The page's `og:image` has to point at something that knows which list to draw. D56 kept the token out of every metadata URL (`og:url`, canonical), and `site-metadata.spec.ts` checks it, exempting only image URLs because the image was static.
 
-The image lives under the share page, at `/s/<shareToken>/preview.jpg`. It is a route handler, not Next's `opengraph-image` file convention, which the first draft named. A file-convention image overrides the page's `openGraph.images`, has a static alt text unless `generateImageMetadata` adds an ID segment to the URL, and is awkward to answer with a JPEG. A route handler lets `shareMetadata` own the URL, the dynamic alt text and the type, and lets a unit test see them (Plan 12 ruling 1). The chat app fetching the image already fetched the page at that token, so the token reaches no new party. The image route then needs everything the share page has: `Referrer-Policy: no-referrer` and `X-Robots-Tag: noindex` (today `next.config.ts` lists only the exact path `/s/:shareToken`), the `robots.txt` disallow, Sentry's `redactTokens` (already covers the segment after `/s/`), and a `404` for an unknown or rotated token.
+The image lives under the share page, at `/s/<shareToken>/preview.jpg`. It is a route handler, not Next's `opengraph-image` file convention, which the first draft named. A file-convention image overrides the page's `openGraph.images`, has a static alt text unless `generateImageMetadata` adds an ID segment to the URL, and is awkward to answer with a JPEG. A route handler lets `shareMetadata` own the URL, the dynamic alt text and the type, and lets a unit test see them (Plan 12 ruling 1). The chat app fetching the image already fetched the page at that token, so the token reaches no new party. The image route then needs everything the share page has: `Referrer-Policy: no-referrer` and `X-Robots-Tag: noindex` (today `next.config.ts` lists only the exact path `/s/:shareToken`), the `robots.txt` disallow, Sentry's `redactTokens` (already covers the segment after `/s/`), and a `404` for an unknown or rotated token. A request whose URL has a query string is also `404`, before any work: the CDN caches by the full URL, so `?n=1`, `?n=2`, … would each draw afresh and spend the list's photo budget (§5.5). The page's `og:image` never has one.
 
 The rejected alternative was a URL that doesn't carry the token (for example one keyed by a hash of it), which needs a lookup column and a migration. `site-metadata.spec.ts`'s check that no metadata URL carries the token keeps its exemption for image URLs, with a comment saying why.
 
@@ -114,7 +114,7 @@ The rejected alternative was a URL that doesn't carry the token (for example one
 
 ### 5.5 Load and caching *(Claude's calls)*
 
-Each uncached image request can trigger up to four outbound fetches, from a URL anyone with the link can hit.
+Each uncached image request can trigger up to eight outbound fetches (§3.2), from a URL anyone with the link can hit. The per-list limit of 120 photos an hour therefore covers about 15 renders an hour, and the CDN cache (below) means a busy link renders far less often than it is fetched. A query string on the image's URL is refused (§5.3), so it can't be used to miss the cache.
 
 - Photo fetching is rate-limited **per list**, plus one overall limit, in the claim limits' style (§6.6), with its own buckets. When a limit is hit, the image is drawn without photos rather than failing.
 - **No per-IP limit** *(Claude's call, from the builder check)*. Two reasons. If the web app builds the image, the API sees the web function's own address on every call, not the visitor's, because Vercel's edge overwrites `x-real-ip`. And the visitors are mostly chat apps' crawlers, a few shared addresses serving every user of those apps, so a per-IP limit would strip photos from everyone's previews at busy times.
@@ -135,7 +135,7 @@ Amazon's and other shops' image hosts may refuse a server fetch or answer slowly
 
 - `apps/web/src/lib/site-metadata.ts`: `shareMetadata` takes the title, owner name and item count; the description and alt text as §3.4. Its tests change with it.
 - The new image route, and its headers in `next.config.ts` (§5.3).
-- `/privacy`: today it says Hanker's server visits a shop page when you paste a link. It must also say that Hanker's server fetches up to four of a list's item photos to draw the share link's preview, keeps none of them, and that chat apps that show the preview keep their own copy. *(Claude's call: the privacy page must stay true.)*
+- `/privacy`: today it says Hanker's server visits a shop page when you paste a link. It must also say: "When you share your list’s link, Hanker’s server fetches photos of up to eight of your items from the shops to draw up to four in the link’s preview picture, and keeps none of them. Apps that show the preview, like Messages, Slack or Discord, keep their own copy." *(Claude's call: the privacy page must stay true.)*
 - The site-trust spec's §4.5 and anti-goal, D56, and §6.8's "Images" bullet are amended to point here.
 
 ## 8. Decisions taken in review
