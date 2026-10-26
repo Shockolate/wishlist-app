@@ -18,8 +18,17 @@ export const resolveAll: Resolve = createCaresResolve();
 /** How unfurl introduces itself (D34): honestly, with a page to read about it. */
 export const USER_AGENT = 'Mozilla/5.0 (compatible; Hanker/1.0; +https://hanker.dev)';
 
+/** What one kind of fetch sends, and the schemes each of its hops may use. */
+interface HopRules {
+  headers: Record<string, string>;
+  protocols: readonly string[];
+}
+
 // No Accept-Encoding: we'd rather receive plain bytes (Plan 3a rule 8).
-const PAGE_HEADERS = { 'user-agent': USER_AGENT, accept: 'text/html', 'accept-language': 'en' };
+const PAGE_RULES: HopRules = {
+  headers: { 'user-agent': USER_AGENT, accept: 'text/html', 'accept-language': 'en' },
+  protocols: ['http:', 'https:'],
+};
 const PHOTO_HEADERS = { 'user-agent': USER_AGENT, accept: PREVIEW_PHOTO_TYPES.join(', ') };
 
 export interface PageFetcherOptions {
@@ -29,6 +38,8 @@ export interface PageFetcherOptions {
   maxBytes?: number;
   maxRawBytes?: number;
   maxRedirects?: number;
+  /** The schemes fetchImage allows on every hop; https only. Production never sets it (tests do). */
+  imageProtocols?: readonly string[];
 }
 
 /**
@@ -82,6 +93,7 @@ export class PageFetcher {
   private readonly maxBytes: number;
   private readonly maxRawBytes: number;
   private readonly maxRedirects: number;
+  private readonly photoRules: HopRules;
 
   constructor(options: PageFetcherOptions = {}) {
     this.policy = options.policy ?? PUBLIC_WEB;
@@ -90,13 +102,14 @@ export class PageFetcher {
     this.maxBytes = options.maxBytes ?? 1_048_576;
     this.maxRawBytes = options.maxRawBytes ?? 1_048_576;
     this.maxRedirects = options.maxRedirects ?? 3;
+    this.photoRules = { headers: PHOTO_HEADERS, protocols: options.imageProtocols ?? ['https:'] };
   }
 
   async fetch(rawUrl: string): Promise<FetchedPage> {
     return this.hops(
       rawUrl,
       undefined,
-      PAGE_HEADERS,
+      PAGE_RULES,
       () => false,
       async (res, url, signal) => {
         // Only a 200 is the page. A bot check can answer 202 with a script, and a 204 has nothing.
@@ -122,15 +135,16 @@ export class PageFetcher {
   }
 
   /**
-   * Fetches one photo for a share preview under the same rules as `fetch` (Plan 12). Only a 200
-   * of a type in PREVIEW_PHOTO_TYPES is the photo. A body past `maxBytes` is TOO_LARGE, never its
-   * start: half an image is no use.
+   * Fetches one photo for a share preview under the same rules as `fetch` (Plan 12), except that
+   * every hop must be https (`imageProtocols`), else INVALID_URL. Only a 200 of a type in
+   * PREVIEW_PHOTO_TYPES is the photo. A body past `maxBytes` is TOO_LARGE, never its start: half an
+   * image is no use.
    */
   async fetchImage(rawUrl: string): Promise<FetchedPhoto> {
     return this.hops<Extract<FetchedPhoto, { ok: true }>, PhotoFailureReason>(
       rawUrl,
       undefined,
-      PHOTO_HEADERS,
+      this.photoRules,
       () => false,
       async (res, _url, signal) => {
         if (res.statusCode !== 200) {
@@ -169,7 +183,7 @@ export class PageFetcher {
     return this.hops(
       rawUrl,
       signal,
-      PAGE_HEADERS,
+      PAGE_RULES,
       stopAt,
       async (res, _url, deadline) => {
         await res.body.dump();
@@ -183,15 +197,15 @@ export class PageFetcher {
 
   /**
    * The hop loop `fetch`, `resolve` and `fetchImage` share: vet, connect to the vetted address,
-   * follow redirects by hand. `answer` handles the first response that isn't a redirect. `R` is the
-   * reasons a caller can get. TypeScript can't see what's thrown, so the two `as R` casts rest on
-   * this: only fetchImage's `answer` throws NOT_IMAGE, so fetch and resolve keep
-   * UnfurlFailureReason.
+   * follow redirects by hand. `rules` says what to send and which schemes a hop may use. `answer`
+   * handles the first response that isn't a redirect. `R` is the reasons a caller can get.
+   * TypeScript can't see what's thrown, so the two `as R` casts rest on this: only fetchImage's
+   * `answer` throws NOT_IMAGE, so fetch and resolve keep UnfurlFailureReason.
    */
   private async hops<T extends { ok: true }, R extends PhotoFailureReason = UnfurlFailureReason>(
     rawUrl: string,
     external: AbortSignal | undefined,
-    headers: Record<string, string>,
+    rules: HopRules,
     stopAt: (url: URL) => boolean,
     answer: (res: Dispatcher.ResponseData, url: URL, signal: AbortSignal) => Promise<T>,
     stopped?: (url: URL) => T,
@@ -213,13 +227,13 @@ export class PageFetcher {
         // No hop starts after the deadline.
         signal.throwIfAborted();
         if (stopped && stopAt(url)) return stopped(url);
-        await this.vet(url, vetted, signal);
+        await this.vet(url, rules.protocols, vetted, signal);
         // undici acts on an abort only once the socket is connected, so a server that stalls TCP
         // or the TLS handshake would outlast the deadline. untilAborted() enforces it. If it wins
         // the race, the abandoned request rejects later, when `finally` destroys the agent, and
         // untilAborted() has always observed that rejection.
         const res = await untilAborted(
-          request(url, { dispatcher: agent, method: 'GET', headers, signal }),
+          request(url, { dispatcher: agent, method: 'GET', headers: rules.headers, signal }),
           signal,
         );
         if (res.statusCode >= 300 && res.statusCode < 400) {
@@ -239,10 +253,19 @@ export class PageFetcher {
     }
   }
 
-  /** Spec §6.8's checks on one hop, before any connection. Records what passed, for the lookup. */
-  private async vet(url: URL, vetted: Map<string, string[]>, signal: AbortSignal): Promise<void> {
+  /**
+   * Spec §6.8's checks on one hop, before any connection. Records what passed, for the lookup.
+   * `protocols` can narrow http and https, never widen them.
+   */
+  private async vet(
+    url: URL,
+    protocols: readonly string[],
+    vetted: Map<string, string[]>,
+    signal: AbortSignal,
+  ): Promise<void> {
     if (url.protocol !== 'http:' && url.protocol !== 'https:')
       throw new FetchFailure('INVALID_URL');
+    if (!protocols.includes(url.protocol)) throw new FetchFailure('INVALID_URL');
     if (url.username || url.password) throw new FetchFailure('INVALID_URL');
     const port = url.port ? Number(url.port) : url.protocol === 'https:' ? 443 : 80;
     const host = bareHost(url.hostname);

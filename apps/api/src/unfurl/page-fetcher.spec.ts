@@ -141,6 +141,8 @@ beforeAll(async () => {
         return res.end(JPEG);
       case '/to-photo':
         return redirect(res, '/photo.jpg');
+      case '/to-https-photo':
+        return redirect(res, `https://shop.test:${port}/photo.jpg`);
       case '/slow':
         return; // Never answers.
       default:
@@ -173,8 +175,14 @@ function hosts(map: Record<string, string[]>): Resolve {
   };
 }
 
-const fetcher = (options: Pick<PageFetcherOptions, 'timeoutMs' | 'maxBytes'> = {}) =>
+const fetcher = (
+  options: Pick<PageFetcherOptions, 'timeoutMs' | 'maxBytes' | 'imageProtocols'> = {},
+) =>
   new PageFetcher({ policy: FIXTURE, resolve: hosts({ 'shop.test': ['127.0.0.1'] }), ...options });
+
+/** The fixture server speaks only http, so photo tests let fetchImage use it (Plan 12). */
+const photoFetcher = (options: Pick<PageFetcherOptions, 'maxBytes'> = {}) =>
+  fetcher({ imageProtocols: ['http:'], ...options });
 
 const at = (path: string) => `http://shop.test:${port}${path}`;
 
@@ -494,7 +502,7 @@ describe('PageFetcher.resolve: following a short link (retailer lookups §5.1)',
 
 describe('PageFetcher.fetchImage: a photo for a share preview (Plan 12)', () => {
   it('fetchImage returns a jpeg’s bytes and type', async () => {
-    expect(await fetcher().fetchImage(at('/photo.jpg'))).toEqual({
+    expect(await photoFetcher().fetchImage(at('/photo.jpg'))).toEqual({
       ok: true,
       contentType: 'image/jpeg',
       bytes: JPEG,
@@ -504,7 +512,7 @@ describe('PageFetcher.fetchImage: a photo for a share preview (Plan 12)', () => 
   it.each(['/page', '/photo.svg'])(
     'fetchImage refuses a page that isn’t an image (%s)',
     async (path) => {
-      expect(await fetcher().fetchImage(at(path))).toMatchObject({
+      expect(await photoFetcher().fetchImage(at(path))).toMatchObject({
         ok: false,
         reason: 'NOT_IMAGE',
       });
@@ -512,7 +520,7 @@ describe('PageFetcher.fetchImage: a photo for a share preview (Plan 12)', () => 
   );
 
   it('fetchImage refuses an encoding it can’t decode as NOT_IMAGE, without crashing', async () => {
-    expect(await fetcher().fetchImage(at('/photo.zstd'))).toMatchObject({
+    expect(await photoFetcher().fetchImage(at('/photo.zstd'))).toMatchObject({
       ok: false,
       reason: 'NOT_IMAGE',
     });
@@ -521,14 +529,14 @@ describe('PageFetcher.fetchImage: a photo for a share preview (Plan 12)', () => 
   });
 
   it('fetchImage wants a 200', async () => {
-    expect(await fetcher().fetchImage(at('/forbidden'))).toMatchObject({
+    expect(await photoFetcher().fetchImage(at('/forbidden'))).toMatchObject({
       ok: false,
       reason: 'BLOCKED_BY_SITE',
     });
   });
 
   it('fetchImage refuses an image over maxBytes', async () => {
-    expect(await fetcher({ maxBytes: 10 }).fetchImage(at('/photo-11.png'))).toMatchObject({
+    expect(await photoFetcher({ maxBytes: 10 }).fetchImage(at('/photo-11.png'))).toMatchObject({
       ok: false,
       reason: 'TOO_LARGE',
     });
@@ -536,16 +544,44 @@ describe('PageFetcher.fetchImage: a photo for a share preview (Plan 12)', () => 
   });
 
   it('fetchImage follows a redirect and re-vets it', async () => {
-    expect(await fetcher().fetchImage(at('/to-photo'))).toMatchObject({ ok: true, bytes: JPEG });
-    expect(await fetcher().fetchImage(at('/to-metadata'))).toMatchObject({
+    expect(await photoFetcher().fetchImage(at('/to-photo'))).toMatchObject({
+      ok: true,
+      bytes: JPEG,
+    });
+    expect(await photoFetcher().fetchImage(at('/to-metadata'))).toMatchObject({
       ok: false,
       reason: 'DISALLOWED_ADDRESS',
     });
   });
 
   it('fetchImage asks for images', async () => {
-    await fetcher().fetchImage(at('/photo.jpg'));
+    await photoFetcher().fetchImage(at('/photo.jpg'));
     expect(seen[0]?.headers.accept).toBe('image/jpeg, image/png, image/webp');
     expect(seen[0]?.headers['user-agent']).toBe(USER_AGENT);
+  });
+
+  it('fetchImage refuses an http URL by default', async () => {
+    expect(await fetcher().fetchImage(at('/photo.jpg'))).toMatchObject({
+      ok: false,
+      reason: 'INVALID_URL',
+    });
+    expect(seen).toEqual([]);
+  });
+
+  it('fetchImage checks every redirect hop’s scheme', async () => {
+    expect(await photoFetcher().fetchImage(at('/to-https-photo'))).toMatchObject({
+      ok: false,
+      reason: 'INVALID_URL',
+    });
+    expect(seen.map((s) => s.url)).toEqual(['/to-https-photo']);
+  });
+
+  it('leaves fetch and resolve on http and https', async () => {
+    expect((await fetcher().fetch(at('/page'))).ok).toBe(true);
+    const isHttps = (url: URL) => url.protocol === 'https:';
+    expect(await fetcher().resolve(at('/to-https-photo'), isHttps)).toEqual({
+      ok: true,
+      url: new URL(`https://shop.test:${port}/photo.jpg`),
+    });
   });
 });
