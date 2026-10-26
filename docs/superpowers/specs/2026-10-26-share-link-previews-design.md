@@ -1,7 +1,7 @@
 # Share Link Previews — Design
 
 - **Date:** 2026-10-26
-- **Status:** Approved by Ted, 2026-10-26. The builder check's questions were answered by Ted the same day (§8).
+- **Status:** Approved by Ted, 2026-10-26. The builder check's questions were answered by Ted the same day (§8). Plan 12 implements it (D90–D92).
 - **Author:** Ted Armstrong (with Claude)
 - **Amends:** [`2026-10-21-site-trust-basics-design.md`](2026-10-21-site-trust-basics-design.md) §2's anti-goal "A link preview that leaks something" and §4.5's share-page rules, with D56; and [`2026-10-07-wishlist-app-design.md`](2026-10-07-wishlist-app-design.md) §6.8's rule that the server never fetches an item's image. The plan assigns decision numbers from the next free one (D90 at the time of writing).
 - **Origin:** Ted, in conversation on 2026-10-26. The layout mockups (option A, chosen) and its fallbacks are in `.superpowers/brainstorm/` locally.
@@ -67,6 +67,7 @@ An empty list shows "Nothing on the list yet" in place of the count, with no gri
 ### 3.4 The text under the image
 
 - **Title (`og:title`, `<title>`):** the list's title, as today.
+- **Title in the picture:** the same title, minus any character that Instrument Serif and Geist can't draw, such as emoji and non-Latin scripts. `next/og` would otherwise fetch a fallback font or emoji set from a CDN while drawing, and the picture makes no outbound request except to the API. `og:title` keeps the full title.
 - **Description:** "12 things on Sam’s list. Pick a gift so nobody doubles up." "1 thing" for one. An empty list: "Nothing on Sam’s list yet." The name is `ownerDisplayName` with `’s` appended, always (so "James’s"). *(Wording is Claude's call; Ted can change it.)*
 - **Image alt (`og:image:alt`):** "Sam’s wishlist: 12 things on the list" (the title, then the count line). *(Claude's call.)*
 
@@ -80,7 +81,7 @@ Everything in [AGENTS.md](../../../AGENTS.md) applies: exact pins, platform APIs
 
 ### 5.1 Fetching photos (decided by Ted, 2026-10-26)
 
-Hanker's server downloads item photos to build the image. This reverses §6.8's "the server never fetches it" for this one purpose. Every photo fetch obeys §6.8's rules as unfurl does: https only, port 443, no userinfo, the c-ares resolver, the address allowlist, connecting to the vetted IP, at most 3 redirect hops each re-checked, and the `Hanker/1.0` User-Agent. The existing code for this lives in the API (`apps/api/src/unfurl/address-policy.ts`, `dns.ts`, `page-fetcher.ts`); the web app has no such guard, so **no photo is fetched from the web app directly**.
+Hanker's server downloads item photos to build the image. This reverses §6.8's "the server never fetches it" for this one purpose. Every photo fetch obeys §6.8's rules as unfurl does: https only on every hop (the first URL and each redirect; a refused hop is `INVALID_URL`), port 443 only (`PUBLIC_HTTPS`), no userinfo, the c-ares resolver, the address allowlist, connecting to the vetted IP, at most 3 redirect hops each re-checked, and the `Hanker/1.0` User-Agent. The existing code for this lives in the API (`apps/api/src/unfurl/address-policy.ts`, `dns.ts`, `page-fetcher.ts`); the web app has no such guard, so **no photo is fetched from the web app directly**.
 
 Limits *(Claude's calls)*:
 
@@ -101,7 +102,7 @@ The web app builds the image with Next's built-in `next/og` (`ImageResponse`), i
 
 The page's `og:image` has to point at something that knows which list to draw. D56 kept the token out of every metadata URL (`og:url`, canonical), and `site-metadata.spec.ts` checks it, exempting only image URLs because the image was static.
 
-The image lives under the share page, `/s/<shareToken>/opengraph-image` (Next's file convention). The chat app fetching the image already fetched the page at that token, so the token reaches no new party. The image route then needs everything the share page has: `Referrer-Policy: no-referrer` and `X-Robots-Tag: noindex` (today `next.config.ts` lists only the exact path `/s/:shareToken`), the `robots.txt` disallow, Sentry's `redactTokens` (already covers the segment after `/s/`), and a `404` for an unknown or rotated token.
+The image lives under the share page, at `/s/<shareToken>/preview.jpg`. It is a route handler, not Next's `opengraph-image` file convention, which the first draft named. A file-convention image overrides the page's `openGraph.images`, has a static alt text unless `generateImageMetadata` adds an ID segment to the URL, and is awkward to answer with a JPEG. A route handler lets `shareMetadata` own the URL, the dynamic alt text and the type, and lets a unit test see them (Plan 12 ruling 1). The chat app fetching the image already fetched the page at that token, so the token reaches no new party. The image route then needs everything the share page has: `Referrer-Policy: no-referrer` and `X-Robots-Tag: noindex` (today `next.config.ts` lists only the exact path `/s/:shareToken`), the `robots.txt` disallow, Sentry's `redactTokens` (already covers the segment after `/s/`), and a `404` for an unknown or rotated token.
 
 The rejected alternative was a URL that doesn't carry the token (for example one keyed by a hash of it), which needs a lookup column and a migration. `site-metadata.spec.ts`'s check that no metadata URL carries the token keeps its exemption for image URLs, with a comment saying why.
 
@@ -117,6 +118,7 @@ Each uncached image request can trigger up to four outbound fetches, from a URL 
 
 - Photo fetching is rate-limited **per list**, plus one overall limit, in the claim limits' style (§6.6), with its own buckets. When a limit is hit, the image is drawn without photos rather than failing.
 - **No per-IP limit** *(Claude's call, from the builder check)*. Two reasons. If the web app builds the image, the API sees the web function's own address on every call, not the visitor's, because Vercel's edge overwrites `x-real-ip`. And the visitors are mostly chat apps' crawlers, a few shared addresses serving every user of those apps, so a per-IP limit would strip photos from everyone's previews at busy times.
+- **The photo endpoint's order of answers.** A malformed item ID is refused before any query, so it is `404 PHOTO_UNAVAILABLE` even when the token is also dead. A well-formed item ID on a dead or rotated link is `404 SHARE_LINK_NOT_FOUND`. Every other failure is `404 PHOTO_UNAVAILABLE`: an item that isn't on this list, an item without a photo, a failed fetch. A photo is counted against the limits only once the item is known to have one.
 - The composed image may be cached at Vercel's CDN for up to 10 minutes (`s-maxage`). Accepted: for up to 10 minutes after the link is rotated, the old image URL still returns the old preview. It shows only the title, count and photos, to someone who already had the link.
 
 ### 5.6 Failure

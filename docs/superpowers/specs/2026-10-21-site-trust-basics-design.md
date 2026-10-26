@@ -41,6 +41,7 @@ These would make it a failure even if it technically works:
 - **A footer that advertises an address that bounces.** Nothing showing `hello@hanker.dev` reaches production before the forwarding is proven (§5).
 - **A footer that gets in a gifter's way** on a share page or claim page.
 - **A link preview that leaks something.** A share link's preview shows the list's title and nothing else from the list. Previews are fetched by whatever app displays them, sometimes on that app's servers.
+  - *Amended by [share link previews](2026-10-26-share-link-previews-design.md) (D90):* share pages now also preview the item count and up to four item photos. Nothing about claims. D56 still governs every other page.
 - **A new third party or tracker.** The cost stays $0 and no new service sees user data.
 - **Legal copy that reads like boilerplate.** It should sound like the rest of Hanker.
 
@@ -134,6 +135,7 @@ Option C from the mockups: **a terracotta gift tag with a dark-ink outline and a
   - The title is the list's own title, as today.
   - The description is exactly **"Pick a gift so nobody doubles up."**
   - The image is the same one.
+  - *Amended by [share link previews](2026-10-26-share-link-previews-design.md) (D90): the description and image now show the item count and up to four item photos, and the image is per list, at `/s/<shareToken>/preview.jpg`. D56 still governs every other page.*
   - Nothing else from the list appears: no items, photos or claim counts. The description doesn't vary with `ownerSeesClaims`, because a line like "they won't see who's getting what" would be false for owners who opted in.
   - `og:url` and any canonical URL must not contain the token. Omit them on token pages.
 - **Claim pages (`/c/[manageToken]`) and the auth token pages** use the site defaults only.
