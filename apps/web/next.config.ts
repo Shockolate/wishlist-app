@@ -92,11 +92,13 @@ const nextConfig: NextConfig = {
       },
       // Token pages (spec §6.7): no Referer can carry the token, and search engines skip them.
       // Your gifts follows them (design §5.7): it lists share links, claimer names and the private
-      // Bought tick, so it sends no Referer and stays out of search.
+      // Bought tick, so it sends no Referer and stays out of search. The share preview image's URL
+      // carries the share token too (Plan 12, design §5.3).
       ...[
         '/verify-email',
         '/reset-password/confirm',
         '/s/:shareToken',
+        '/s/:shareToken/preview.jpg',
         '/c/:manageToken',
         '/gifts',
       ].map((source) => ({

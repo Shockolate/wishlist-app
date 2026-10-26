@@ -100,3 +100,13 @@ test('/privacy says what Your gifts keeps (Your gifts §5.11)', async ({ page })
     'A gifter who had one of your items on Your gifts keeps a note with its title and your display name for about 30 days, or until they clear it.',
   );
 });
+
+test('/privacy says what drawing a share link’s preview fetches and keeps (share link previews §7)', async ({
+  page,
+}) => {
+  await page.goto('/privacy');
+  // The preview route asks the API for at most PREVIEW_PHOTOS photos and stores none of them.
+  await expect(page.getByRole('main')).toContainText(
+    'When you share your list’s link, Hanker’s server fetches up to four of your items’ photos from the shops to draw the link’s preview picture, and keeps none of them. Apps that show the preview, like Messages, Slack or Discord, keep their own copy.',
+  );
+});

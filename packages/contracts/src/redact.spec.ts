@@ -15,6 +15,16 @@ describe('redactTokens', () => {
       '/api/shared/[redacted]/items/3f1c',
     ],
     [
+      'a share preview photo API path (Plan 12)',
+      `/api/shared/${CAPABILITY}/photos/3f1c2b7a-9d4e-4f60-8a1b-2c3d4e5f6a7b`,
+      '/api/shared/[redacted]/photos/3f1c2b7a-9d4e-4f60-8a1b-2c3d4e5f6a7b',
+    ],
+    [
+      'a share preview image (Plan 12)',
+      `https://hanker.dev/s/${CAPABILITY}/preview.jpg`,
+      'https://hanker.dev/s/[redacted]/preview.jpg',
+    ],
+    [
       'a ContractMismatchError message',
       `Response from /claims/${CAPABILITY} does not match its contract`,
       'Response from /claims/[redacted] does not match its contract',

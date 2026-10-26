@@ -8,10 +8,17 @@ interface Props {
   params: Promise<{ shareToken: string }>;
 }
 
-/** The list's own title and one fixed line, never the token (Global Constraints). */
+/**
+ * The list's title, owner and item count, which every viewer sees alike, and its preview image
+ * (Plan 12). The token is in the image's URL alone (design §5.3).
+ */
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const list = await loadSharedList((await params).shareToken);
-  return shareMetadata(list.title);
+  const { shareToken } = await params;
+  const list = await loadSharedList(shareToken);
+  return shareMetadata(
+    { title: list.title, ownerDisplayName: list.ownerDisplayName, itemCount: list.items.length },
+    shareToken,
+  );
 }
 
 /** `/s/[shareToken]` (spec §7): the page a share link opens. */
