@@ -241,8 +241,8 @@ importers:
         version: 4.6.7
     devDependencies:
       '@nestjs/cli':
-        specifier: 12.0.9
-        version: 12.0.9(@swc/core@1.16.18(@swc/helpers@0.5.23))(@types/node@24.19.2)(prettier@3.9.10)
+        specifier: 12.0.10
+        version: 12.0.10(@swc/core@1.16.18(@swc/helpers@0.5.23))(@types/node@24.19.2)(prettier@3.9.10)
       '@nestjs/testing':
         specifier: 12.2.0
         version: 12.2.0(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@7.2.0))(@nestjs/core@12.2.0)(@nestjs/platform-express@12.2.0)
@@ -1838,8 +1838,8 @@ packages:
       '@emnapi/core': ^1.7.1 || ^2.0.0-alpha.4
       '@emnapi/runtime': ^1.7.1 || ^2.0.0-alpha.4
 
-  '@nestjs/cli@12.0.9':
-    resolution: {integrity: sha512-jny3o6hItqBnWM7gMsxDQKj/DyzQnojcFm0nI5kXvc/3Fl6uvIDbZfXDm42LzgSEptYKxOsYXjBw0u5EHLj5Sg==}
+  '@nestjs/cli@12.0.10':
+    resolution: {integrity: sha512-sFtiyJaiZe2cPqFCLhgzje5lnU1ANaGuDeaOClWMkECRC20W2m6NkqG6gnUgv+nspejIVyTG9yIyn4mXGJ9Y9g==}
     engines: {node: '>= 20.11'}
     hasBin: true
     peerDependencies:
@@ -8066,7 +8066,7 @@ snapshots:
       '@tybys/wasm-util': 0.10.4
     optional: true
 
-  '@nestjs/cli@12.0.9(@swc/core@1.16.18(@swc/helpers@0.5.23))(@types/node@24.19.2)(prettier@3.9.10)':
+  '@nestjs/cli@12.0.10(@swc/core@1.16.18(@swc/helpers@0.5.23))(@types/node@24.19.2)(prettier@3.9.10)':
     dependencies:
       '@angular-devkit/core': 22.2.3(chokidar@5.0.0)
       '@angular-devkit/schematics': 22.2.3(chokidar@5.0.0)
