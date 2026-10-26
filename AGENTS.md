@@ -74,7 +74,7 @@ Don't weaken or delete a test to get green. If a test is wrong, say why.
   - **Tags (Plan 7b):** the share page filters in one client island, `ShareFilterList`. Its logic is in `lib/share-filters.ts` and `parsePrice` in contracts. Filtered cards are `hidden`, never unmounted. The edit form sends `tags` only when the tag field changed, and the add form only when it has some. Tag changes are mutations in `lib/list-mutations.ts`.
   - **Add box (Plan 9):** a link and an idea both open the add form (`add-item.tsx`); an idea is never saved at once. Suggested tags come from `use-tag-suggestions.ts`: one request when a form mounts with a title and another when the title loses focus with a new one, and only the latest answer is shown.
   - Error copy lives in `src/lib/messages.ts`, and field-validation copy in `src/lib/form-errors.ts`.
-  - UI pieces are hand-copied, shadcn/ui-style, in `src/components/ui`, on the theme tokens in `globals.css`. Terracotta (`primary`) never carries text.
+  - UI pieces are hand-copied, shadcn/ui-style, in `src/components/ui`, on the theme tokens in `globals.css`. Text on terracotta (`primary`) is white (`primary-foreground`), and focus rings are espresso; a focused primary button adds a white band inside the ring (D89).
 
 ## Git and pull requests
 

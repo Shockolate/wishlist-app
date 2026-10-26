@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils';
 
-// The filter row's pills (design §4, mockup A "charcoal when active"): parchment off, espresso on,
-// never terracotta. The button is the 44px hit area; the pill drawn inside it is 40px tall.
+// The filter row's pills (D89): canvas with slate text off, terracotta with white text on. The
+// button is the 44px hit area; the pill drawn inside it is 40px tall.
 
 /** The button around a pill. Its focus ring follows the pill's round ends. */
 export const PILL_HIT =
@@ -12,14 +12,14 @@ export function pillFace(on: boolean, outlined = false): string {
   return cn(
     'inline-flex min-h-10 items-center gap-1.5 rounded-full border px-4 text-[15px] font-medium whitespace-nowrap transition-colors duration-150',
     on
-      ? 'border-foreground bg-foreground text-background'
+      ? 'border-primary bg-primary text-primary-foreground'
       : outlined
         ? 'border-input bg-transparent text-foreground'
-        : 'border-input/30 bg-placeholder text-foreground',
+        : 'border-input/30 bg-card text-muted-foreground',
   );
 }
 
-/** A pill's count: small, tabular, muted; lighter and warm on espresso. */
+/** A pill's count: small, tabular, muted; softened white on terracotta (4.6:1). */
 export function pillCount(on: boolean): string {
-  return cn('text-xs tabular-nums', on ? 'text-placeholder/80' : 'text-muted-foreground');
+  return cn('text-xs tabular-nums', on ? 'text-primary-foreground/80' : 'text-muted-foreground');
 }

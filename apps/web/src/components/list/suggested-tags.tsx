@@ -90,7 +90,7 @@ export function SuggestedTags({
         // WCAG 2.5.3 (label in name) forbids. pointer-events-none lets a press on it reach the button.
         <span
           key={chip.key}
-          className="relative inline-flex max-w-full rounded-full border-[1.5px] border-dashed border-input hover:bg-placeholder has-[button:focus-visible]:outline-2 has-[button:focus-visible]:outline-offset-3 has-[button:focus-visible]:outline-ring"
+          className="relative inline-flex max-w-full rounded-full border-[1.5px] border-dashed border-input hover:bg-placeholder has-[button:focus-visible]:outline-2 has-[button:focus-visible]:outline-offset-2 has-[button:focus-visible]:outline-ring"
         >
           <button
             type="button"

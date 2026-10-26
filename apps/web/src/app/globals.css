@@ -1,21 +1,23 @@
 @import 'tailwindcss';
 
 /*
- * Hanker's Warm Editorial palette (Ted, 2026-10-10; Plan 2b's theme table). The names follow
- * shadcn/ui's semantic tokens, so components copied from it work unchanged. Terracotta (--primary)
- * is for actions only: at 2.9:1 on sand it can't carry text, so text on it is espresso.
+ * Hanker's Warm Editorial palette (D28, revised by D89 on 2026-10-26). The names follow shadcn/ui's
+ * semantic tokens, so components copied from it work unchanged. Terracotta (--primary) is dark
+ * enough to carry white text (6.3:1), and is 5.6:1 as text on a card. Rust (--primary-hover) is
+ * 8.9:1 with white. The espresso ring is 15:1 or more on every surface.
  */
 :root {
-  --background: #faf7f2;
-  --foreground: #1e1b18;
-  --card: #ffffff;
-  --card-foreground: #1e1b18;
-  --primary: #ff5a4d;
-  --primary-foreground: #1e1b18;
+  --background: #fbf9f5;
+  --foreground: #1f1a17;
+  --card: #f4f0e8;
+  --card-foreground: #1f1a17;
+  --primary: #a63d20;
+  --primary-hover: #822e15;
+  --primary-foreground: #ffffff;
   --muted-foreground: #5c554e;
-  --border: #1e1b18;
+  --border: #5c554e;
   --input: #8c847b;
-  --ring: #1e1b18;
+  --ring: #1f1a17;
   --success: #6b8e78;
   --success-foreground: #3f5a49;
   --success-wash: #e6eee8;
@@ -29,6 +31,7 @@
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
   --color-primary-foreground: var(--primary-foreground);
   --color-muted-foreground: var(--muted-foreground);
   --color-border: var(--border);
@@ -48,7 +51,7 @@
 @layer base {
   :focus-visible {
     outline: 2px solid var(--ring);
-    outline-offset: 3px;
+    outline-offset: 2px;
   }
 
   a {
