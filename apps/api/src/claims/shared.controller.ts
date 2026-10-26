@@ -52,6 +52,8 @@ export class SharedController {
   /** One item's photo for the preview image, fetched by the API (Plan 12, design §5.1). */
   @Get(':shareToken/photos/:itemId')
   @Header('Cache-Control', 'no-store')
+  // The bytes come from a shop; the type is the one we checked (design §5.1), never a browser's guess.
+  @Header('X-Content-Type-Options', 'nosniff')
   async photo(
     @Param('shareToken') shareToken: string,
     @Param('itemId') itemId: string,

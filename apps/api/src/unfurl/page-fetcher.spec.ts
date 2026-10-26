@@ -22,7 +22,10 @@ const CAFE_1252 = Buffer.concat([
   Buffer.from([0xe9]),
   Buffer.from('</title>'),
 ]);
-const JPEG = Buffer.from([0xff, 0xd8, 0xff]);
+const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0]);
+const WEBP = Buffer.concat([Buffer.from('RIFF'), Buffer.from([4, 0, 0, 0]), Buffer.from('WEBP')]);
+const SVG = '<svg xmlns="http://www.w3.org/2000/svg"/>';
 
 let server: Server;
 let port = 0;
@@ -132,10 +135,27 @@ beforeAll(async () => {
         return res.end(JPEG);
       case '/photo.svg':
         res.writeHead(200, { 'content-type': 'image/svg+xml' });
-        return res.end('<svg xmlns="http://www.w3.org/2000/svg"/>');
+        return res.end(SVG);
+      case '/photo.webp':
+        res.writeHead(200, { 'content-type': 'image/webp' });
+        return res.end(WEBP);
       case '/photo-11.png':
         res.writeHead(200, { 'content-type': 'image/png' });
-        return res.end(Buffer.alloc(11));
+        return res.end(PNG);
+      case '/svg-as-png':
+        res.writeHead(200, { 'content-type': 'image/png' });
+        return res.end(SVG);
+      case '/jpeg-as-png':
+        res.writeHead(200, { 'content-type': 'image/png' });
+        return res.end(JPEG);
+      case '/riff-not-webp':
+        res.writeHead(200, { 'content-type': 'image/webp' });
+        return res.end(
+          Buffer.concat([Buffer.from('RIFF'), Buffer.from([4, 0, 0, 0]), Buffer.from('WAVE')]),
+        );
+      case '/empty.jpg':
+        res.writeHead(200, { 'content-type': 'image/jpeg' });
+        return res.end();
       case '/photo.zstd':
         res.writeHead(200, { 'content-type': 'image/jpeg', 'content-encoding': 'zstd' });
         return res.end(JPEG);
@@ -509,8 +529,25 @@ describe('PageFetcher.fetchImage: a photo for a share preview (Plan 12)', () => 
     });
   });
 
+  it.each([
+    ['/photo-11.png', 'image/png', PNG],
+    ['/photo.webp', 'image/webp', WEBP],
+  ])('fetchImage returns bytes that match their type (%s)', async (path, contentType, bytes) => {
+    expect(await photoFetcher().fetchImage(at(path))).toEqual({ ok: true, contentType, bytes });
+  });
+
   it.each(['/page', '/photo.svg'])(
     'fetchImage refuses a page that isn’t an image (%s)',
+    async (path) => {
+      expect(await photoFetcher().fetchImage(at(path))).toMatchObject({
+        ok: false,
+        reason: 'NOT_IMAGE',
+      });
+    },
+  );
+
+  it.each(['/svg-as-png', '/jpeg-as-png', '/riff-not-webp', '/empty.jpg'])(
+    'fetchImage refuses bytes that don’t match the declared type (%s)',
     async (path) => {
       expect(await photoFetcher().fetchImage(at(path))).toMatchObject({
         ok: false,

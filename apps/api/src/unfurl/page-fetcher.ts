@@ -61,7 +61,10 @@ export type FetchedPhoto =
   | { ok: true; bytes: Buffer; contentType: PreviewPhotoType }
   | { ok: false; reason: PhotoFailureReason; host?: string };
 
-/** A failure with a known reason. fetch() throws these internally and returns them as results. */
+/**
+ * A failure with a known reason. fetch(), resolve() and fetchImage() throw these internally and
+ * return them as results.
+ */
 class FetchFailure extends Error {
   constructor(readonly reason: PhotoFailureReason) {
     super(reason);
@@ -71,8 +74,8 @@ class FetchFailure extends Error {
 
 /**
  * Fetches one HTML page for unfurl, or one share preview photo, under spec §6.8's rules:
- * - Every hop is checked before connecting: http or https, no userinfo, an allowed port, and every
- *   address the host resolves to allowed by the policy.
+ * - Every hop is checked before connecting: http or https (https only for fetchImage), no userinfo,
+ *   an allowed port, and every address the host resolves to allowed by the policy.
  * - The connection goes to an address that was checked, through undici's `connect.lookup`, so
  *   DNS can't change between the check and the connection (rebinding).
  * - Redirects are followed by hand, each hop checked again.
@@ -137,8 +140,9 @@ export class PageFetcher {
   /**
    * Fetches one photo for a share preview under the same rules as `fetch` (Plan 12), except that
    * every hop must be https (`imageProtocols`), else INVALID_URL. Only a 200 of a type in
-   * PREVIEW_PHOTO_TYPES is the photo. A body past `maxBytes` is TOO_LARGE, never its start: half an
-   * image is no use.
+   * PREVIEW_PHOTO_TYPES, whose bytes start with that type's signature, is the photo: the web hands
+   * the bytes to its decoder, so a declared type must not hide anything else (an SVG, say). A body
+   * past `maxBytes` is TOO_LARGE, never its start: half an image is no use.
    */
   async fetchImage(rawUrl: string): Promise<FetchedPhoto> {
     return this.hops<Extract<FetchedPhoto, { ok: true }>, PhotoFailureReason>(
@@ -165,6 +169,7 @@ export class PageFetcher {
         const body = decoded(res.body, res.headers['content-encoding'], raw, 'NOT_IMAGE');
         const { bytes, truncated } = await readCapped(body, this.maxBytes, raw);
         if (truncated) throw new FetchFailure('TOO_LARGE');
+        if (!hasSignature(bytes, contentType)) throw new FetchFailure('NOT_IMAGE');
         return { ok: true, bytes, contentType };
       },
     );
@@ -334,6 +339,22 @@ function mediaType(contentType: string): string | undefined {
 
 function isPhotoType(type: string | undefined): type is PreviewPhotoType {
   return (PREVIEW_PHOTO_TYPES as readonly (string | undefined)[]).includes(type);
+}
+
+/** Whether `bytes` start with the magic bytes of `type`: JPEG, PNG, or WebP's RIFF....WEBP. */
+function hasSignature(bytes: Buffer, type: PreviewPhotoType): boolean {
+  const startsWith = (offset: number, signature: readonly number[]) =>
+    bytes.length >= offset + signature.length &&
+    signature.every((byte, i) => bytes[offset + i] === byte);
+  switch (type) {
+    case 'image/jpeg':
+      return startsWith(0, [0xff, 0xd8, 0xff]);
+    case 'image/png':
+      return startsWith(0, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    case 'image/webp':
+      // 'RIFF', a 4-byte length, then 'WEBP'.
+      return startsWith(0, [0x52, 0x49, 0x46, 0x46]) && startsWith(8, [0x57, 0x45, 0x42, 0x50]);
+  }
 }
 
 /**

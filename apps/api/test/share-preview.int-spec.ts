@@ -121,6 +121,7 @@ describe('GET /shared/:shareToken/photos/:itemId (Plan 12)', () => {
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toMatch(/^image\/png/);
     expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
     expect([...(res.body as Buffer)]).toEqual([1, 2, 3]);
     expect(t.photos.urls).toEqual([imageOf(1)]);
   });

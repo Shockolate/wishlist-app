@@ -16,6 +16,11 @@ export const PREVIEW_PHOTO_MAX_BYTES = 2_097_152;
 /**
  * What `GET /shared/:shareToken/preview` answers (Plan 12). It is `.strict()` so nothing else, claim
  * data above all, can ride along: the response is public to anyone holding the share link.
+ *
+ * It is the only strict response schema: every other one lets the web ignore fields it doesn't
+ * know. So a field the API adds here must ship to the web, made tolerant of it, before the API
+ * sends it, or the deployed web rejects every answer and its preview image breaks during the deploy
+ * window.
  */
 export const SharePreviewResponseSchema = z
   .object({
