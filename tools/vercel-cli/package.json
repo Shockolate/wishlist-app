@@ -4,6 +4,6 @@
   "type": "module",
   "description": "The Vercel CLI, pinned with its whole dependency tree by the lockfile. Jobs that hold deploy secrets install only this package (D85). A devDependency: it deploys Hanker and never runs in it, so the production audit gate leaves it to the monthly dev-tooling audit (docs/operations.md)",
   "devDependencies": {
-    "vercel": "64.7.0"
+    "vercel": "65.2.0"
   }
 }
