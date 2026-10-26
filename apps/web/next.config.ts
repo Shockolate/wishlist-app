@@ -67,6 +67,11 @@ const nextConfig: NextConfig = {
   productionBrowserSourceMaps: Boolean(process.env.SENTRY_DSN_WEB),
   // Maps for the server bundles, so the web server reports TypeScript lines at runtime (D52).
   experimental: { serverSourceMaps: true },
+  // The share preview image reads its fonts and the gift tag from disk at render time, which Next's
+  // tracing can't see, so they're named here to ship with the route's function (Plan 12 ruling 8).
+  outputFileTracingIncludes: {
+    '/s/[shareToken]/preview.jpg': ['./assets/fonts/*.ttf', './src/app/icon.svg'],
+  },
   async rewrites() {
     return [{ source: '/api/:path*', destination: `${API_ORIGIN}/api/:path*` }];
   },

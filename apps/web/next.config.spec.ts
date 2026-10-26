@@ -68,6 +68,13 @@ describe('next.config', () => {
     expect(config.productionBrowserSourceMaps).toBe(true);
   });
 
+  it('ships the share preview’s fonts and gift tag with its route, which reads them from disk (Plan 12)', async () => {
+    const config = await loadConfig('https://api.example.test');
+    expect(config.outputFileTracingIncludes).toEqual({
+      '/s/[shareToken]/preview.jpg': ['./assets/fonts/*.ttf', './src/app/icon.svg'],
+    });
+  });
+
   it('refuses to load without TURNSTILE_SITE_KEY (Plan 2b rule 11)', async () => {
     await expect(loadConfig('https://api.example.test', '')).rejects.toThrow(
       /TURNSTILE_SITE_KEY must be set/,
