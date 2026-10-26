@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isPublicAddress, PUBLIC_WEB } from './address-policy.js';
+import { isPublicAddress, PUBLIC_HTTPS, PUBLIC_WEB } from './address-policy.js';
 
 describe('isPublicAddress (spec §6.8: an allowlist)', () => {
   it.each([
@@ -50,5 +50,13 @@ describe('PUBLIC_WEB', () => {
     expect(PUBLIC_WEB.allows('93.184.216.34', 80)).toBe(true);
     expect(PUBLIC_WEB.allows('93.184.216.34', 8080)).toBe(false);
     expect(PUBLIC_WEB.allows('127.0.0.1', 443)).toBe(false);
+  });
+});
+
+describe('PUBLIC_HTTPS', () => {
+  it('allows a public address on 443 only', () => {
+    expect(PUBLIC_HTTPS.allows('8.8.8.8', 443)).toBe(true);
+    expect(PUBLIC_HTTPS.allows('8.8.8.8', 80)).toBe(false);
+    expect(PUBLIC_HTTPS.allows('127.0.0.1', 443)).toBe(false);
   });
 });

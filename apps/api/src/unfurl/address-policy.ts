@@ -28,3 +28,8 @@ export function isPublicAddress(address: string): boolean {
 export const PUBLIC_WEB: AddressPolicy = {
   allows: (address, port) => (port === 80 || port === 443) && isPublicAddress(address),
 };
+
+/** Share preview photos: public addresses, on 443 only (Plan 12). */
+export const PUBLIC_HTTPS: AddressPolicy = {
+  allows: (address, port) => port === 443 && isPublicAddress(address),
+};

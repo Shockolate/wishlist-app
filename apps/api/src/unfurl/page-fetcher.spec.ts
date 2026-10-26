@@ -8,7 +8,13 @@ import { createServer as createNetServer, type AddressInfo, type Socket } from '
 import { gzipSync } from 'node:zlib';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { PUBLIC_WEB, type AddressPolicy } from './address-policy.js';
-import { PageFetcher, USER_AGENT, pinnedLookup, type Resolve } from './page-fetcher.js';
+import {
+  PageFetcher,
+  USER_AGENT,
+  pinnedLookup,
+  type PageFetcherOptions,
+  type Resolve,
+} from './page-fetcher.js';
 
 const PAGE = '<html><head><title>Kettle</title></head></html>';
 const CAFE_1252 = Buffer.concat([
@@ -16,6 +22,7 @@ const CAFE_1252 = Buffer.concat([
   Buffer.from([0xe9]),
   Buffer.from('</title>'),
 ]);
+const JPEG = Buffer.from([0xff, 0xd8, 0xff]);
 
 let server: Server;
 let port = 0;
@@ -120,6 +127,20 @@ beforeAll(async () => {
         res.writeHead(200, { 'content-type': 'text/html', 'content-encoding': 'gzip' });
         for (const chunk of paddedGzip()) res.write(chunk);
         return; // Never ends.
+      case '/photo.jpg':
+        res.writeHead(200, { 'content-type': 'image/jpeg; charset=binary' });
+        return res.end(JPEG);
+      case '/photo.svg':
+        res.writeHead(200, { 'content-type': 'image/svg+xml' });
+        return res.end('<svg xmlns="http://www.w3.org/2000/svg"/>');
+      case '/photo-11.png':
+        res.writeHead(200, { 'content-type': 'image/png' });
+        return res.end(Buffer.alloc(11));
+      case '/photo.zstd':
+        res.writeHead(200, { 'content-type': 'image/jpeg', 'content-encoding': 'zstd' });
+        return res.end(JPEG);
+      case '/to-photo':
+        return redirect(res, '/photo.jpg');
       case '/slow':
         return; // Never answers.
       default:
@@ -152,7 +173,7 @@ function hosts(map: Record<string, string[]>): Resolve {
   };
 }
 
-const fetcher = (options: { timeoutMs?: number } = {}) =>
+const fetcher = (options: Pick<PageFetcherOptions, 'timeoutMs' | 'maxBytes'> = {}) =>
   new PageFetcher({ policy: FIXTURE, resolve: hosts({ 'shop.test': ['127.0.0.1'] }), ...options });
 
 const at = (path: string) => `http://shop.test:${port}${path}`;
@@ -468,5 +489,63 @@ describe('PageFetcher.resolve: following a short link (retailer lookups §5.1)',
       reason: 'TIMEOUT',
     });
     expect(seen).toEqual([]);
+  });
+});
+
+describe('PageFetcher.fetchImage: a photo for a share preview (Plan 12)', () => {
+  it('fetchImage returns a jpeg’s bytes and type', async () => {
+    expect(await fetcher().fetchImage(at('/photo.jpg'))).toEqual({
+      ok: true,
+      contentType: 'image/jpeg',
+      bytes: JPEG,
+    });
+  });
+
+  it.each(['/page', '/photo.svg'])(
+    'fetchImage refuses a page that isn’t an image (%s)',
+    async (path) => {
+      expect(await fetcher().fetchImage(at(path))).toMatchObject({
+        ok: false,
+        reason: 'NOT_IMAGE',
+      });
+    },
+  );
+
+  it('fetchImage refuses an encoding it can’t decode as NOT_IMAGE, without crashing', async () => {
+    expect(await fetcher().fetchImage(at('/photo.zstd'))).toMatchObject({
+      ok: false,
+      reason: 'NOT_IMAGE',
+    });
+    // Let the destroyed body emit; Vitest fails the run on an unhandled 'error'.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  });
+
+  it('fetchImage wants a 200', async () => {
+    expect(await fetcher().fetchImage(at('/forbidden'))).toMatchObject({
+      ok: false,
+      reason: 'BLOCKED_BY_SITE',
+    });
+  });
+
+  it('fetchImage refuses an image over maxBytes', async () => {
+    expect(await fetcher({ maxBytes: 10 }).fetchImage(at('/photo-11.png'))).toMatchObject({
+      ok: false,
+      reason: 'TOO_LARGE',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  });
+
+  it('fetchImage follows a redirect and re-vets it', async () => {
+    expect(await fetcher().fetchImage(at('/to-photo'))).toMatchObject({ ok: true, bytes: JPEG });
+    expect(await fetcher().fetchImage(at('/to-metadata'))).toMatchObject({
+      ok: false,
+      reason: 'DISALLOWED_ADDRESS',
+    });
+  });
+
+  it('fetchImage asks for images', async () => {
+    await fetcher().fetchImage(at('/photo.jpg'));
+    expect(seen[0]?.headers.accept).toBe('image/jpeg, image/png, image/webp');
+    expect(seen[0]?.headers['user-agent']).toBe(USER_AGENT);
   });
 });
