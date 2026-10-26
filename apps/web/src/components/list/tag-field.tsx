@@ -235,7 +235,7 @@ function TagCombobox({
             ref={chipRow}
             className={cn(
               'flex min-h-12 flex-wrap items-center gap-1.5 rounded-control border-[1.5px] border-input bg-card px-2 py-1.5',
-              'has-[input:focus-visible]:outline-2 has-[input:focus-visible]:outline-offset-3 has-[input:focus-visible]:outline-ring',
+              'has-[input:focus-visible]:outline-2 has-[input:focus-visible]:outline-offset-2 has-[input:focus-visible]:outline-ring',
               props['aria-invalid'] && 'border-destructive',
             )}
           >
