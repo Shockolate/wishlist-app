@@ -513,6 +513,7 @@ These are the initial values. They're configurable, and every limited endpoint r
 | signup, resend-verification, reset-request | 3 per hour per email, and 20 per hour per IP |
 | `POST …/claims`, `PATCH /claims/*` | 30 per hour per list, and 20 per hour per IP (amended in Plan 4a: the list, not the share token). `POST` and `DELETE /claims/*/link`, a name or quantity change through `PATCH /me/gifts/*`, and Let it go (`DELETE /me/gifts/*` on a live claim) count against the same buckets; a Bought-only `PATCH` and Clear count against neither (Plan 10b) |
 | `POST /wishlist/unfurl` | 60 per hour per user |
+| `GET /shared/:shareToken/photos/:itemId` | 120 per hour per list, and 3000 per hour overall. No per-IP limit ([share link previews](2026-10-26-share-link-previews-design.md) §5.5). Counted only once the item is known to have a photo |
 
 **Buckets and order (Plan 2a).** Signup, resend-verification and reset-request share one per-address and one per-IP bucket: together they cap the mail one inbox or one IP can trigger. Those endpoints check the per-IP limit, then Turnstile, then the per-address limit, so failed challenges can't use up a victim's budget. Password confirmations on `/me` count against login's per-address bucket. Keys store a SHA-256 of the email or IP, never the raw value.
 

@@ -94,7 +94,7 @@ Limits *(Claude's calls)*:
 
 ### 5.2 Where the image is built (decided by Ted, 2026-10-26)
 
-The web app builds the image with Next's built-in `next/og` (`ImageResponse`), in the site's own fonts. It picks the candidate items from the guest view of the list (§5.4) and gets each photo from a new API endpoint on the share token and item, which fetches it under §5.1's rules and enforces the limits. One photo per request (§5.1).
+The web app builds the image with Next's built-in `next/og` (`ImageResponse`), in the site's own fonts. It picks the candidate items from `GET /shared/:shareToken/preview`, a response with no claim fields (§5.4), and gets each photo from a new API endpoint on the share token and item, which fetches it under §5.1's rules and enforces the limits. One photo per request (§5.1).
 
 **Image optimisation (decided by Ted, 2026-10-26):** the web app uses `sharp` to shrink each photo to its tile size before drawing, and to re-encode the finished image as a JPEG. `sharp` is already in the lockfile as Next's optional dependency (0.35.5 at the time of writing); it becomes a direct, exactly pinned dependency of `apps/web`, at the version Next resolves. *(Claude's call:)* the finished JPEG should be at most 300 KB, which keeps it well inside every chat app's limits, WhatsApp's reported one included. The builder picks the quality setting that meets it on a four-photo list and records the sizes measured.
 
@@ -108,8 +108,8 @@ The rejected alternative was a URL that doesn't carry the token (for example one
 
 ### 5.4 Claims never reach the image
 
-- The image route calls the API **without** forwarding the visitor's cookie, so it always gets a guest's view, and uses only `title`, `ownerDisplayName`, the number of items and each item's `imageUrl` and order.
-- `generateMetadata` on the share page keeps forwarding the cookie (it shares `loadSharedList` with the page), and uses only the title, the owner's name and the item count, which are the same for every viewer.
+- The image route reads the list from `GET /shared/:shareToken/preview`, not `GET /shared`. That response carries only the title, the owner's name, the item count and up to 8 photo item IDs in list order, with no claim fields at all, so the guarantee holds by construction and not by the web remembering to ignore fields. The route also calls the API **without** forwarding the visitor's cookie.
+- `generateMetadata` on the share page keeps forwarding the cookie (it shares `loadSharedList` with the page), and uses only the title, the owner's name and the item count from it, which are the same for every viewer.
 - Tests assert that the preview's inputs ignore `remaining`, `claimed` and `claims[]`: the same list with and without claims produces the same metadata and the same chosen photos.
 
 ### 5.5 Load and caching *(Claude's calls)*
