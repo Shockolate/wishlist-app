@@ -10,6 +10,8 @@ import type { AmazonLookup } from '../unfurl/amazon-lookup.js';
 import type { EtsyLookup } from '../unfurl/etsy-lookup.js';
 import type { LookupResult } from '../unfurl/lookup-result.js';
 import type { MetadataFetcher } from '../unfurl/metadata-fetcher.js';
+import type { FetchedPhoto } from '../unfurl/page-fetcher.js';
+import type { PhotoFetcher } from '../unfurl/photo-fetcher.js';
 
 /** A clock tests move by hand. */
 export class FakeClock implements Clock {
@@ -79,6 +81,17 @@ export class FakeMetadataFetcher implements MetadataFetcher {
   readonly urls: string[] = [];
 
   fetch(url: string): Promise<UnfurlResponse> {
+    this.urls.push(url);
+    return Promise.resolve(this.next);
+  }
+}
+
+/** Share preview photo stand-in. Set `next`; `urls` records every URL asked for. */
+export class FakePhotoFetcher implements PhotoFetcher {
+  next: FetchedPhoto = { ok: false, reason: 'UNREACHABLE' };
+  readonly urls: string[] = [];
+
+  fetch(url: string): Promise<FetchedPhoto> {
     this.urls.push(url);
     return Promise.resolve(this.next);
   }

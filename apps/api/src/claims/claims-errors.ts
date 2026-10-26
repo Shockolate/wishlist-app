@@ -31,6 +31,13 @@ export const claimExceedsRemaining = (remaining: number): AppError =>
     remaining,
   });
 
+/**
+ * Every way a share preview photo can't be had looks the same (Plan 12 ruling 4): an item not on
+ * this list, one without a photo, a malformed item ID, or a fetch that failed.
+ */
+export const photoUnavailable = (): AppError =>
+  new AppError(404, ErrorCode.PHOTO_UNAVAILABLE, 'This photo is not available.');
+
 /** Malformed, unknown and deleted claims all look the same (spec §2). */
 export const claimNotFound = (): AppError =>
   new AppError(

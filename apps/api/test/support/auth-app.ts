@@ -12,10 +12,12 @@ import {
   FakeCronHeartbeat,
   FakeEmailSender,
   FakeMetadataFetcher,
+  FakePhotoFetcher,
   FakeTagSuggester,
 } from '../../src/testing/fakes.js';
 import { TAG_SUGGESTER } from '../../src/tag-suggest/tag-suggester.js';
 import { METADATA_FETCHER } from '../../src/unfurl/metadata-fetcher.js';
+import { PHOTO_FETCHER } from '../../src/unfurl/photo-fetcher.js';
 import { createTestApp } from './app.js';
 
 export const TEST_START = new Date('2026-10-01T12:00:00.000Z');
@@ -27,6 +29,7 @@ export interface AuthTestApp {
   captcha: FakeCaptcha;
   breaches: FakeBreachedPasswords;
   unfurl: FakeMetadataFetcher;
+  photos: FakePhotoFetcher;
   suggester: FakeTagSuggester;
   heartbeat: FakeCronHeartbeat;
   /** Rewinds the clock and clears every fake. Call it in beforeEach. */
@@ -43,6 +46,7 @@ export async function createAuthTestApp(
   const captcha = new FakeCaptcha();
   const breaches = new FakeBreachedPasswords();
   const unfurl = new FakeMetadataFetcher();
+  const photos = new FakePhotoFetcher();
   const suggester = new FakeTagSuggester();
   const heartbeat = new FakeCronHeartbeat();
   const app = await createTestApp({
@@ -60,6 +64,8 @@ export async function createAuthTestApp(
         .useValue(breaches)
         .overrideProvider(METADATA_FETCHER)
         .useValue(unfurl)
+        .overrideProvider(PHOTO_FETCHER)
+        .useValue(photos)
         .overrideProvider(TAG_SUGGESTER)
         .useValue(suggester)
         .overrideProvider(CRON_HEARTBEAT)
@@ -72,6 +78,7 @@ export async function createAuthTestApp(
     captcha,
     breaches,
     unfurl,
+    photos,
     suggester,
     heartbeat,
     reset() {
@@ -84,6 +91,8 @@ export async function createAuthTestApp(
       breaches.checked.length = 0;
       unfurl.next = { failureReason: 'NO_METADATA' };
       unfurl.urls.length = 0;
+      photos.next = { ok: false, reason: 'UNREACHABLE' };
+      photos.urls.length = 0;
       suggester.next = { ok: true, names: [] };
       suggester.inputs.length = 0;
       heartbeat.pings.length = 0;
