@@ -1,10 +1,6 @@
 import type { Metadata } from 'next';
 import { SITE_ORIGIN, TAGLINE } from './site';
-import { previewAlt, previewDescription, SHARE_DESCRIPTION } from './share-preview';
-
-// Defined in share-preview.ts, which builds the longer description; re-exported so this stays the
-// one place the metadata's callers import it from.
-export { SHARE_DESCRIPTION };
+import { previewAlt, previewDescription } from './share-preview';
 
 export const PREVIEW_IMAGE = {
   url: '/hanker-preview.png',

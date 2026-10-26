@@ -105,8 +105,9 @@ test('/privacy says what drawing a share link’s preview fetches and keeps (sha
   page,
 }) => {
   await page.goto('/privacy');
-  // The preview route asks the API for at most PREVIEW_PHOTOS photos and stores none of them.
+  // The preview route asks the API for the photos of up to PREVIEW_CANDIDATES items at once, draws
+  // at most PREVIEW_PHOTOS of them, and stores none.
   await expect(page.getByRole('main')).toContainText(
-    'When you share your list’s link, Hanker’s server fetches up to four of your items’ photos from the shops to draw the link’s preview picture, and keeps none of them. Apps that show the preview, like Messages, Slack or Discord, keep their own copy.',
+    'When you share your list’s link, Hanker’s server fetches photos of up to eight of your items from the shops to draw up to four in the link’s preview picture, and keeps none of them. Apps that show the preview, like Messages, Slack or Discord, keep their own copy.',
   );
 });

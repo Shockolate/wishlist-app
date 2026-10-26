@@ -145,6 +145,22 @@ test('a dead link’s image is 404', async ({ page, browser, baseURL }) => {
   expect(res.status()).toBe(404);
 });
 
+test('the preview image refuses a query string, so it can’t dodge the CDN cache', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const base = baseURL ?? '';
+  await verifiedOwner(page, base, 'previews-query');
+  const token = await shareTokenOf(page.request);
+
+  const chatApp = (await guest(browser, base)).request;
+  expect((await chatApp.get(`/s/${token}/preview.jpg`)).status()).toBe(200);
+  const res = await chatApp.get(`/s/${token}/preview.jpg?n=1`);
+  expect(res.status()).toBe(404);
+  expect(res.headers()['x-robots-tag']).toBe('noindex');
+});
+
 test('a claim page previews only the site defaults', async ({ page, browser, baseURL }) => {
   const base = baseURL ?? '';
   await verifiedOwner(page, base, 'previews-claim');

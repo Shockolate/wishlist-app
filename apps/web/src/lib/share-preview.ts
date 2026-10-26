@@ -27,8 +27,9 @@ export function previewAlt(title: string, itemCount: number): string {
 
 /**
  * The title's size steps down with its length, in UTF-16 units (`string.length`), so a long title
- * never overflows. Past 40 units it is clamped to three lines with an ellipsis. With no photo grid
- * the title has the whole width, so each step is 1.25× larger.
+ * never overflows. Every size is clamped to three lines with an ellipsis, but only a title past 40
+ * units can reach the clamp. With no photo grid the title has the whole width, so each step is
+ * 1.25× larger.
  */
 export function titleSizeFor(
   title: string,

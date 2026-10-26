@@ -1,3 +1,4 @@
+import { notFound } from 'next/navigation';
 import { renderSharePreview } from '@/lib/share-preview-image';
 import { loadPreview, loadPreviewPhotos } from '@/lib/share-preview.server';
 
@@ -8,11 +9,15 @@ export const dynamic = 'force-dynamic';
  * `/s/[shareToken]/preview.jpg`: the share link's preview image (Plan 12 ruling 1). A dead link is
  * `404`; a photo that fails is left out, never a failure (design §5.6). It calls nothing but the
  * API.
+ *
+ * A query string is `404` before any work: the CDN caches by full URL, so `?n=1`, `?n=2`, … would
+ * each draw afresh and spend the list's photo budget. The page's `og:image` never has one.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: RouteContext<'/s/[shareToken]/preview.jpg'>,
 ): Promise<Response> {
+  if (new URL(request.url).search !== '') notFound();
   const { shareToken } = await params;
   const preview = await loadPreview(shareToken);
   const photos = await loadPreviewPhotos(shareToken, preview.photoItemIds);

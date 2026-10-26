@@ -29,9 +29,9 @@ export default function PrivacyPage() {
         your list’s tag names, to Cloudflare’s AI to suggest tags for it.
       </p>
       <p>
-        When you share your list’s link, Hanker’s server fetches up to four of your items’ photos
-        from the shops to draw the link’s preview picture, and keeps none of them. Apps that show
-        the preview, like Messages, Slack or Discord, keep their own copy.
+        When you share your list’s link, Hanker’s server fetches photos of up to eight of your items
+        from the shops to draw up to four in the link’s preview picture, and keeps none of them.
+        Apps that show the preview, like Messages, Slack or Discord, keep their own copy.
       </p>
 
       <h2>If you claim a gift</h2>
