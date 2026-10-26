@@ -1,8 +1,10 @@
 import type { Metadata } from 'next';
 import { SITE_ORIGIN, TAGLINE } from './site';
+import { SHARE_DESCRIPTION } from './share-preview';
 
-/** A share link's preview line. Fixed, so it's true whether or not the owner sees claims. */
-export const SHARE_DESCRIPTION = 'Pick a gift so nobody doubles up.';
+// Defined in share-preview.ts, which builds the longer description; re-exported so this stays the
+// one place the metadata's callers import it from.
+export { SHARE_DESCRIPTION };
 
 export const PREVIEW_IMAGE = {
   url: '/hanker-preview.png',
