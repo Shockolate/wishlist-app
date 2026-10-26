@@ -1,5 +1,5 @@
 import sharp from 'sharp';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   drawableText,
   preparePhoto,
@@ -46,11 +46,27 @@ beforeAll(async () => {
   });
 });
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
 describe('renderSharePreview', () => {
+  // Every render must stay offline (Review Focus 2). Yoga's wasm loads from an inline `data:` URI
+  // on the first render, so those go to the real fetch; anything else is recorded and refused.
+  const network = vi.fn<(url: string) => void>();
+
+  beforeEach(() => {
+    const realFetch = globalThis.fetch;
+    network.mockReset();
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url.startsWith('data:')) return realFetch(input, init);
+      network(url);
+      throw new Error('no network');
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    expect(network).not.toHaveBeenCalled();
+  });
+
   it('draws a 1200×630 JPEG under 300 KB with four photos', async () => {
     const out = await renderSharePreview({ title: 'Sam’s wishlist', itemCount: 12, photos });
 
@@ -93,16 +109,12 @@ describe('renderSharePreview', () => {
   });
 
   it('draws emoji and Persian titles without asking the network', async () => {
-    const fetch = vi.fn(() => {
-      throw new Error('no network');
-    });
-    vi.stubGlobal('fetch', fetch);
-
     // Cyrillic is in Geist but not Instrument Serif, so the title falls back to Geist, not a fetch.
-    for (const title of ['🎂 Sam’s birthday', 'فهرست آرزو', 'Список желаний']) {
+    // `W̶i̶s̶h̶` and `x̣` carry combining marks only Geist has, after letters Instrument Serif has.
+    for (const title of ['🎂 Sam’s birthday', 'فهرست آرزو', 'Список желаний', 'W̶i̶s̶h̶', 'x̣']) {
       await expectPreviewJpeg(await renderSharePreview({ title, itemCount: 2, photos }));
     }
-    expect(fetch).not.toHaveBeenCalled();
+    expect(network).not.toHaveBeenCalled();
   });
 });
 
@@ -118,6 +130,13 @@ describe('drawableText', () => {
     await expect(drawableText('🎂 Sam’s  birthday 👨‍👩‍👧')).resolves.toBe('Sam’s birthday');
     await expect(drawableText('فهرست آرزو')).resolves.toBe('');
   });
+
+  it('drops a letter whose mark is only in the font the letter is not drawn from', async () => {
+    // next/og draws each grapheme from the first font with its first code point: here Instrument
+    // Serif, which lacks U+0336 and U+0323, so the whole grapheme would be fetched from elsewhere.
+    await expect(drawableText('Sam’s W̶i̶s̶h̶ list')).resolves.toBe('Sam’s list');
+    await expect(drawableText('x̣')).resolves.toBe('');
+  });
 });
 
 describe('preparePhoto', () => {
@@ -131,6 +150,20 @@ describe('preparePhoto', () => {
 
   it('skips bytes that are not an image', async () => {
     await expect(preparePhoto(Buffer.from('not an image'))).resolves.toBeNull();
+  });
+
+  it('skips an image sharp can read that is not a JPEG, PNG or WebP', async () => {
+    const svg = Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800"><rect width="800" height="800" fill="red"/></svg>',
+    );
+    const gif = await sharp({
+      create: { width: 800, height: 800, channels: 3, background: '#808080' },
+    })
+      .gif()
+      .toBuffer();
+
+    await expect(preparePhoto(svg)).resolves.toBeNull();
+    await expect(preparePhoto(gif)).resolves.toBeNull();
   });
 
   it('skips an image over the pixel limit without decoding it', async () => {

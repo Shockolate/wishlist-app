@@ -34,13 +34,21 @@ const MUTED = '#5c554e';
 const SERIF = 'Instrument Serif';
 const SANS = 'Geist';
 
+/** What a photo may be (PREVIEW_PHOTO_TYPES), as `sharp` names the formats. */
+const PHOTO_FORMATS: ReadonlySet<string> = new Set(['jpeg', 'png', 'webp']);
+
 /**
- * Shrinks a photo to the one-photo tile, cropped to fill it. `null` if `sharp` can't decode it, or
- * if it has more than 40 million pixels, which `sharp` refuses from the header without decoding.
+ * Shrinks a photo to the one-photo tile, cropped to fill it. `null` if `sharp` can't read it, if
+ * its bytes are anything but a JPEG, PNG or WebP whatever its Content-Type said (so no SVG, TIFF
+ * or GIF reaches a decoder), or if it has more than 40 million pixels, which `sharp` refuses from
+ * the header without decoding.
  */
 export async function preparePhoto(bytes: Uint8Array): Promise<Buffer | null> {
   try {
-    return await sharp(bytes, { limitInputPixels: PHOTO_MAX_PIXELS })
+    const image = sharp(bytes, { limitInputPixels: PHOTO_MAX_PIXELS });
+    const { format } = await image.metadata();
+    if (!format || !PHOTO_FORMATS.has(format)) return null;
+    return await image
       .rotate() // upright by its EXIF orientation, as a phone photo is shown on the page
       .resize(GRID, GRID, { fit: 'cover' })
       .jpeg({ quality: 85, mozjpeg: true })
@@ -52,8 +60,8 @@ export async function preparePhoto(bytes: Uint8Array): Promise<Buffer | null> {
 
 type Assets = {
   fonts: { name: string; data: Buffer; weight: 400; style: 'normal' }[];
-  /** Every code point one of the fonts has a glyph for. */
-  covered: Set<number>;
+  /** The code points each font has a glyph for, in the title's font order: SERIF, then SANS. */
+  titleCoverage: Set<number>[];
   icon: string;
 };
 
@@ -70,7 +78,7 @@ async function readAssets(): Promise<Assets> {
       { name: SERIF, data: serif, weight: 400, style: 'normal' },
       { name: SANS, data: sans, weight: 400, style: 'normal' },
     ],
-    covered: new Set([...codePoints(serif), ...codePoints(sans)]),
+    titleCoverage: [codePoints(serif), codePoints(sans)],
     icon: `data:image/svg+xml;base64,${icon.toString('base64')}`,
   };
 }
@@ -146,19 +154,26 @@ function codePoints(font: Buffer): Set<number> {
 }
 
 /**
- * The text with every grapheme neither font can draw removed. next/og fetches a font from Google
- * or an emoji from a CDN for any grapheme its fonts lack, and fails the whole render if an emoji
- * fetch fails, so it must never see one (Review Focus 2). A title wholly in another script, as
- * `فهرست آرزو`, is drawn empty, under its count line.
+ * The title with every grapheme next/og can't draw from its own fonts removed. next/og fetches a
+ * font from Google or an emoji from a CDN for any grapheme it can't draw, and fails the whole
+ * render if an emoji fetch fails, so it must never see one (Review Focus 2). A title wholly in
+ * another script, as `فهرست آرزو`, is drawn empty, under its count line.
+ *
+ * This follows satori's rule: a grapheme is drawn from the first font, in the text's order (its
+ * own family, then the others as loaded), that has the grapheme's first code point, and only if
+ * that same font has every code point in it. So `W̶` is dropped: Instrument Serif has the W, and
+ * only Geist has the stroke.
  */
 export async function drawableText(text: string): Promise<string> {
-  const { covered } = await loadAssets();
+  const { titleCoverage } = await loadAssets();
   const graphemes = new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(
     text.normalize('NFC'),
   );
   let kept = '';
   for (const { segment } of graphemes) {
-    const drawable = [...segment].every((char) => covered.has(char.codePointAt(0)!));
+    const codes = [...segment].map((char) => char.codePointAt(0)!);
+    const font = titleCoverage.find((covered) => covered.has(codes[0]!));
+    const drawable = font !== undefined && codes.every((code) => font.has(code));
     if (drawable || /^\s+$/.test(segment)) kept += segment;
   }
   return kept.replace(/\s+/g, ' ').trim();
@@ -267,6 +282,8 @@ export async function renderSharePreview(input: {
   const { fonts, icon } = await loadAssets();
   const title = await drawableText(input.title);
   const preview = <Preview {...input} title={title} icon={icon} />;
+  // @vercel/og rasterises its SVG with sharp when it can import it (it can: sharp is a dependency
+  // here), and with its bundled resvg wasm otherwise.
   const png = await new ImageResponse(preview, {
     ...PREVIEW_SIZE,
     fonts,
