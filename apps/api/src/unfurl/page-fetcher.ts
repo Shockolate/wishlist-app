@@ -1,7 +1,11 @@
 import { isIP, type LookupFunction } from 'node:net';
 import { pipeline, Transform, type Readable, type TransformCallback } from 'node:stream';
 import { createBrotliDecompress, createGunzip, createInflate } from 'node:zlib';
-import type { UnfurlFailureReason } from '@wishlist/contracts';
+import {
+  PREVIEW_PHOTO_TYPES,
+  type PreviewPhotoType,
+  type UnfurlFailureReason,
+} from '@wishlist/contracts';
 import { Agent, request, type Dispatcher } from 'undici';
 import { PUBLIC_WEB, type AddressPolicy } from './address-policy.js';
 import { createCaresResolve, type Resolve } from './dns.js';
@@ -14,8 +18,18 @@ export const resolveAll: Resolve = createCaresResolve();
 /** How unfurl introduces itself (D34): honestly, with a page to read about it. */
 export const USER_AGENT = 'Mozilla/5.0 (compatible; Hanker/1.0; +https://hanker.dev)';
 
+/** What one kind of fetch sends, and the schemes each of its hops may use. */
+interface HopRules {
+  headers: Record<string, string>;
+  protocols: readonly string[];
+}
+
 // No Accept-Encoding: we'd rather receive plain bytes (Plan 3a rule 8).
-const REQUEST_HEADERS = { 'user-agent': USER_AGENT, accept: 'text/html', 'accept-language': 'en' };
+const PAGE_RULES: HopRules = {
+  headers: { 'user-agent': USER_AGENT, accept: 'text/html', 'accept-language': 'en' },
+  protocols: ['http:', 'https:'],
+};
+const PHOTO_HEADERS = { 'user-agent': USER_AGENT, accept: PREVIEW_PHOTO_TYPES.join(', ') };
 
 export interface PageFetcherOptions {
   policy?: AddressPolicy;
@@ -24,6 +38,8 @@ export interface PageFetcherOptions {
   maxBytes?: number;
   maxRawBytes?: number;
   maxRedirects?: number;
+  /** The schemes fetchImage allows on every hop; https only. Production never sets it (tests do). */
+  imageProtocols?: readonly string[];
 }
 
 /**
@@ -37,18 +53,29 @@ export type ResolvedLink = { ok: true; url: URL } | FetchFailed;
 
 export type FetchFailed = { ok: false; reason: UnfurlFailureReason; host?: string };
 
-/** A failure with a known reason. fetch() throws these internally and returns them as results. */
+/** Unfurl's reasons, plus one only an image fetch gives: the answer wasn't a photo we draw. */
+export type PhotoFailureReason = UnfurlFailureReason | 'NOT_IMAGE';
+
+/** A photo's bytes and type, or why there isn't one (Plan 12). */
+export type FetchedPhoto =
+  | { ok: true; bytes: Buffer; contentType: PreviewPhotoType }
+  | { ok: false; reason: PhotoFailureReason; host?: string };
+
+/**
+ * A failure with a known reason. fetch(), resolve() and fetchImage() throw these internally and
+ * return them as results.
+ */
 class FetchFailure extends Error {
-  constructor(readonly reason: UnfurlFailureReason) {
+  constructor(readonly reason: PhotoFailureReason) {
     super(reason);
     this.name = 'FetchFailure';
   }
 }
 
 /**
- * Fetches one HTML page for unfurl, under spec §6.8's rules:
- * - Every hop is checked before connecting: http or https, no userinfo, an allowed port, and every
- *   address the host resolves to allowed by the policy.
+ * Fetches one HTML page for unfurl, or one share preview photo, under spec §6.8's rules:
+ * - Every hop is checked before connecting: http or https (https only for fetchImage), no userinfo,
+ *   an allowed port, and every address the host resolves to allowed by the policy.
  * - The connection goes to an address that was checked, through undici's `connect.lookup`, so
  *   DNS can't change between the check and the connection (rebinding).
  * - Redirects are followed by hand, each hop checked again.
@@ -69,6 +96,7 @@ export class PageFetcher {
   private readonly maxBytes: number;
   private readonly maxRawBytes: number;
   private readonly maxRedirects: number;
+  private readonly photoRules: HopRules;
 
   constructor(options: PageFetcherOptions = {}) {
     this.policy = options.policy ?? PUBLIC_WEB;
@@ -77,12 +105,14 @@ export class PageFetcher {
     this.maxBytes = options.maxBytes ?? 1_048_576;
     this.maxRawBytes = options.maxRawBytes ?? 1_048_576;
     this.maxRedirects = options.maxRedirects ?? 3;
+    this.photoRules = { headers: PHOTO_HEADERS, protocols: options.imageProtocols ?? ['https:'] };
   }
 
   async fetch(rawUrl: string): Promise<FetchedPage> {
     return this.hops(
       rawUrl,
       undefined,
+      PAGE_RULES,
       () => false,
       async (res, url, signal) => {
         // Only a 200 is the page. A bot check can answer 202 with a script, and a 204 has nothing.
@@ -100,9 +130,47 @@ export class PageFetcher {
           throw new FetchFailure('NOT_HTML');
         }
         const raw = new RawCap(this.maxRawBytes);
-        const body = decoded(res.body, res.headers['content-encoding'], raw);
+        const body = decoded(res.body, res.headers['content-encoding'], raw, 'NOT_HTML');
         const { bytes, truncated } = await readCapped(body, this.maxBytes, raw);
         return { ok: true, url, html: decodeHtml(bytes, type), truncated };
+      },
+    );
+  }
+
+  /**
+   * Fetches one photo for a share preview under the same rules as `fetch` (Plan 12), except that
+   * every hop must be https (`imageProtocols`), else INVALID_URL. Only a 200 of a type in
+   * PREVIEW_PHOTO_TYPES, whose bytes start with that type's signature, is the photo: the web hands
+   * the bytes to its decoder, so a declared type must not hide anything else (an SVG, say). A body
+   * past `maxBytes` is TOO_LARGE, never its start: half an image is no use.
+   */
+  async fetchImage(rawUrl: string): Promise<FetchedPhoto> {
+    return this.hops<Extract<FetchedPhoto, { ok: true }>, PhotoFailureReason>(
+      rawUrl,
+      undefined,
+      this.photoRules,
+      () => false,
+      async (res, _url, signal) => {
+        if (res.statusCode !== 200) {
+          await res.body.dump();
+          // dump() resolves on close, so a deadline that passed while draining must be TIMEOUT.
+          signal.throwIfAborted();
+          throw new FetchFailure('BLOCKED_BY_SITE');
+        }
+        const type = res.headers['content-type'];
+        const contentType = typeof type === 'string' ? mediaType(type) : undefined;
+        if (!isPhotoType(contentType)) {
+          await res.body.dump();
+          // dump() resolves on close, so a deadline that passed while draining must be TIMEOUT.
+          signal.throwIfAborted();
+          throw new FetchFailure('NOT_IMAGE');
+        }
+        const raw = new RawCap(this.maxRawBytes);
+        const body = decoded(res.body, res.headers['content-encoding'], raw, 'NOT_IMAGE');
+        const { bytes, truncated } = await readCapped(body, this.maxBytes, raw);
+        if (truncated) throw new FetchFailure('TOO_LARGE');
+        if (!hasSignature(bytes, contentType)) throw new FetchFailure('NOT_IMAGE');
+        return { ok: true, bytes, contentType };
       },
     );
   }
@@ -120,6 +188,7 @@ export class PageFetcher {
     return this.hops(
       rawUrl,
       signal,
+      PAGE_RULES,
       stopAt,
       async (res, _url, deadline) => {
         await res.body.dump();
@@ -132,21 +201,25 @@ export class PageFetcher {
   }
 
   /**
-   * The hop loop `fetch` and `resolve` share: vet, connect to the vetted address, follow redirects
-   * by hand. `answer` handles the first response that isn't a redirect.
+   * The hop loop `fetch`, `resolve` and `fetchImage` share: vet, connect to the vetted address,
+   * follow redirects by hand. `rules` says what to send and which schemes a hop may use. `answer`
+   * handles the first response that isn't a redirect. `R` is the reasons a caller can get.
+   * TypeScript can't see what's thrown, so the two `as R` casts rest on this: only fetchImage's
+   * `answer` throws NOT_IMAGE, so fetch and resolve keep UnfurlFailureReason.
    */
-  private async hops<T extends { ok: true }>(
+  private async hops<T extends { ok: true }, R extends PhotoFailureReason = UnfurlFailureReason>(
     rawUrl: string,
     external: AbortSignal | undefined,
+    rules: HopRules,
     stopAt: (url: URL) => boolean,
     answer: (res: Dispatcher.ResponseData, url: URL, signal: AbortSignal) => Promise<T>,
     stopped?: (url: URL) => T,
-  ): Promise<T | FetchFailed> {
+  ): Promise<T | { ok: false; reason: R; host?: string }> {
     let url: URL;
     try {
       url = new URL(rawUrl);
     } catch {
-      return { ok: false, reason: 'INVALID_URL' };
+      return { ok: false, reason: 'INVALID_URL' as R };
     }
     // The hostnames checked during this fetch, with the addresses that passed. pinnedLookup serves
     // only these, and the agent dies with this fetch (Plan 3a rule 10).
@@ -159,13 +232,13 @@ export class PageFetcher {
         // No hop starts after the deadline.
         signal.throwIfAborted();
         if (stopped && stopAt(url)) return stopped(url);
-        await this.vet(url, vetted, signal);
+        await this.vet(url, rules.protocols, vetted, signal);
         // undici acts on an abort only once the socket is connected, so a server that stalls TCP
         // or the TLS handshake would outlast the deadline. untilAborted() enforces it. If it wins
         // the race, the abandoned request rejects later, when `finally` destroys the agent, and
         // untilAborted() has always observed that rejection.
         const res = await untilAborted(
-          request(url, { dispatcher: agent, method: 'GET', headers: REQUEST_HEADERS, signal }),
+          request(url, { dispatcher: agent, method: 'GET', headers: rules.headers, signal }),
           signal,
         );
         if (res.statusCode >= 300 && res.statusCode < 400) {
@@ -179,16 +252,25 @@ export class PageFetcher {
         return await answer(res, url, signal);
       }
     } catch (error) {
-      return { ok: false, reason: reasonFor(error, signal), host: url.hostname };
+      return { ok: false, reason: reasonFor(error, signal) as R, host: url.hostname };
     } finally {
       await agent.destroy();
     }
   }
 
-  /** Spec §6.8's checks on one hop, before any connection. Records what passed, for the lookup. */
-  private async vet(url: URL, vetted: Map<string, string[]>, signal: AbortSignal): Promise<void> {
+  /**
+   * Spec §6.8's checks on one hop, before any connection. Records what passed, for the lookup.
+   * `protocols` can narrow http and https, never widen them.
+   */
+  private async vet(
+    url: URL,
+    protocols: readonly string[],
+    vetted: Map<string, string[]>,
+    signal: AbortSignal,
+  ): Promise<void> {
     if (url.protocol !== 'http:' && url.protocol !== 'https:')
       throw new FetchFailure('INVALID_URL');
+    if (!protocols.includes(url.protocol)) throw new FetchFailure('INVALID_URL');
     if (url.username || url.password) throw new FetchFailure('INVALID_URL');
     const port = url.port ? Number(url.port) : url.protocol === 'https:' ? 443 : 80;
     const host = bareHost(url.hostname);
@@ -255,11 +337,37 @@ function mediaType(contentType: string): string | undefined {
   return contentType.split(';')[0]?.trim().toLowerCase();
 }
 
+function isPhotoType(type: string | undefined): type is PreviewPhotoType {
+  return (PREVIEW_PHOTO_TYPES as readonly (string | undefined)[]).includes(type);
+}
+
+/** Whether `bytes` start with the magic bytes of `type`: JPEG, PNG, or WebP's RIFF....WEBP. */
+function hasSignature(bytes: Buffer, type: PreviewPhotoType): boolean {
+  const startsWith = (offset: number, signature: readonly number[]) =>
+    bytes.length >= offset + signature.length &&
+    signature.every((byte, i) => bytes[offset + i] === byte);
+  switch (type) {
+    case 'image/jpeg':
+      return startsWith(0, [0xff, 0xd8, 0xff]);
+    case 'image/png':
+      return startsWith(0, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    case 'image/webp':
+      // 'RIFF', a 4-byte length, then 'WEBP'.
+      return startsWith(0, [0x52, 0x49, 0x46, 0x46]) && startsWith(8, [0x57, 0x45, 0x42, 0x50]);
+  }
+}
+
 /**
  * The body, decompressed. We ask for no compression, but some servers send it anyway (Plan 3a rule
- * 8). pipeline() destroys every stage on an error, so an abort still ends the read.
+ * 8). pipeline() destroys every stage on an error, so an abort still ends the read. An encoding we
+ * can't decode is `refusal`: the body isn't what the caller asked for.
  */
-function decoded(body: Readable, encoding: string | string[] | undefined, raw: RawCap): Readable {
+function decoded(
+  body: Readable,
+  encoding: string | string[] | undefined,
+  raw: RawCap,
+  refusal: 'NOT_HTML' | 'NOT_IMAGE',
+): Readable {
   const ignore = () => undefined;
   // A repeated header arrives as an array. It's unknown, like any encoding we can't decode.
   const name = Array.isArray(encoding) ? undefined : (encoding ?? '').trim().toLowerCase();
@@ -279,7 +387,7 @@ function decoded(body: Readable, encoding: string | string[] | undefined, raw: R
       // already completed nobody else listens, and an unhandled 'error' exits the process.
       body.on('error', ignore);
       body.destroy();
-      throw new FetchFailure('NOT_HTML');
+      throw new FetchFailure(refusal);
   }
 }
 
@@ -379,7 +487,7 @@ function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
 }
 
 /** Plan 3a rule 7: a known failure keeps its reason; the deadline is TIMEOUT; the rest UNREACHABLE. */
-function reasonFor(error: unknown, signal: AbortSignal): UnfurlFailureReason {
+function reasonFor(error: unknown, signal: AbortSignal): PhotoFailureReason {
   if (error instanceof FetchFailure) return error.reason;
   if (signal.aborted) return 'TIMEOUT';
   return 'UNREACHABLE';

@@ -32,14 +32,15 @@ export async function seedItem(
   email: string,
   title: string,
   quantity = 1,
+  imageUrl: string | null = null,
 ): Promise<string> {
   const wishlistId = await wishlistIdOf(db, email);
   const { rows } = await db.pool.query<{ id: string }>(
-    `insert into items (id, wishlist_id, title, quantity, position)
-     values (gen_random_uuid(), $1, $2, $3,
+    `insert into items (id, wishlist_id, title, quantity, image_url, position)
+     values (gen_random_uuid(), $1, $2, $3, $4,
              (select coalesce(max(position) + 1, 0) from items where wishlist_id = $1))
      returning id`,
-    [wishlistId, title, quantity],
+    [wishlistId, title, quantity, imageUrl],
   );
   return first(rows, 'item').id;
 }

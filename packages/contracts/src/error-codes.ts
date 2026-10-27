@@ -49,6 +49,8 @@ export const ErrorCode = {
   TAG_LIMIT_REACHED: 'TAG_LIMIT_REACHED',
   /** 422: ticking a tag would give the item more than 10 tags (design §6). */
   ITEM_TAG_LIMIT_REACHED: 'ITEM_TAG_LIMIT_REACHED',
+  /** 404: a share preview photo that can't be had: no such item on this list, no photo, or the shop wouldn't give it (Plan 12). */
+  PHOTO_UNAVAILABLE: 'PHOTO_UNAVAILABLE',
   /** Synthesized by the web client when an error response isn't problem+json (e.g. a Vercel edge page). */
   UNEXPECTED_RESPONSE: 'UNEXPECTED_RESPONSE',
 } as const;
