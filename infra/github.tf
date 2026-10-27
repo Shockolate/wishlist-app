@@ -93,6 +93,10 @@ resource "github_repository_ruleset" "main" {
         integration_id = 15368
       }
       required_check {
+        context        = "infra"
+        integration_id = 15368
+      }
+      required_check {
         context        = "integration"
         integration_id = 15368
       }
@@ -137,6 +141,42 @@ resource "github_repository_environment" "preview" {
   environment       = "preview"
   repository        = "wishlist-app"
   wait_timer        = 0
+}
+
+# infra-plan holds the read-only plan credentials and the state passphrase for infra-plan.yml, which
+# runs PR code with them: the trust model's second named exception (spec §3.7). Its required
+# reviewer lives in repository settings, so a PR can't remove it, unlike the workflow's own guard
+# steps. No branch policy, because PR branches vary. Self-review stays allowed, or nobody could
+# approve; admins can't bypass, so even Ted's own runs wait for his approval.
+resource "github_repository_environment" "infra_plan" {
+  repository          = "wishlist-app"
+  environment         = "infra-plan"
+  can_admins_bypass   = false
+  prevent_self_review = false
+
+  reviewers {
+    users = [6685146] # Shockolate (gh api user)
+  }
+}
+
+# infra-drift holds the same credentials for the monthly drift check, which only runs main's
+# reviewed code. No reviewer, because a scheduled run can't wait for one; the branch policy is the
+# control (spec §3.8).
+resource "github_repository_environment" "infra_drift" {
+  repository        = "wishlist-app"
+  environment       = "infra-drift"
+  can_admins_bypass = false
+
+  deployment_branch_policy {
+    custom_branch_policies = true
+    protected_branches     = false
+  }
+}
+
+resource "github_repository_environment_deployment_policy" "infra_drift_main" {
+  repository     = "wishlist-app"
+  environment    = github_repository_environment.infra_drift.environment
+  branch_pattern = "main"
 }
 
 # Written by hand, not generated: config generation doesn't cover for_each imports.
