@@ -31,8 +31,38 @@ Later plans add: domain and DNS, Resend and Turnstile (Plan 2); Cloudflare R2 ba
 - **Previews live in a second project, `wishlist-preview`** (D87), in the same organization, Postgres 17, AWS us-east-1. It holds `preview-seed` and the `pr-*` branches and never any production data. Its key is a project-scoped organization API key, so the preview environment can't reach production's project, and previews get their own compute quota and 10-branch cap. Neon's Free plan allows 100 projects, with compute, branches and data transfer counted per project.
 - **Pooled** connection string → the API's runtime `DATABASE_URL` (stored in Vercel as a sensitive variable).
 - **Direct** connection string → migrations only (`DATABASE_URL_DIRECT`).
+- Both end in **`sslmode=verify-full`**, not the console's `sslmode=require`. See [TLS: `sslmode=verify-full`](#tls-sslmodeverify-full).
 - The free plan scales compute to zero after 5 idle minutes. The first query afterwards takes a few hundred ms longer.
 - Point-in-time restore covers **6 hours** on the free plan. Nightly backups arrive in Plan 5.
+
+### TLS: `sslmode=verify-full`
+
+Every connection string `pg` reads (`DATABASE_URL` and `DATABASE_URL_DIRECT`) ends in `sslmode=verify-full`. Neon's console hands out `sslmode=require`, so change it before storing the value. Keep any other parameter, such as `channel_binding=require`.
+
+**Why:** `pg` 8 treats `require` as `verify-full` and warns about it on every cold start (`SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'`). `pg` 9 gives `require` libpq's meaning: encryption without checking the certificate, so anyone between Vercel and Neon could pose as the database. No test would notice, because local and test Postgres don't use TLS. Writing `verify-full` keeps today's behavior through that upgrade. Neon recommends it, and its certificates chain to Let's Encrypt's ISRG Root X1, which Node trusts already, so no `sslrootcert` is needed. A Renovate rule holds `pg` majors on the Dependency Dashboard until this has been checked.
+
+**Not covered:**
+
+- **libpq clients** (`psql`, and `pg_dump` with `DATABASE_URL_BACKUP`) keep `sslmode=require`, which in libpq encrypts but doesn't check the certificate. `verify-full` there also needs `PGSSLROOTCERT` pointing at the system's root certificates ([Neon](https://neon.com/docs/connect/connect-securely#location-of-system-root-certificates)).
+- **Previews** get their strings from Neon's branch action in `preview.yml`, with `require`, so their logs still show the warning. That's harmless on `pg` 8. Rewrite them in `preview.yml` before approving `pg` 9.
+
+**Switching an existing value.** Do both, then merge to `main` (or redeploy): runtime variables apply to the next deployment. That deploy runs the migration with the new direct string and starts the API with the new pooled one, which is the check. Copy each string from Neon → `wishlist` → **Connect**, on the production branch, and paste it at the hidden prompt as Neon gives it. The shell changes `sslmode`, and refuses a string that has no `sslmode=require` to change or that is the wrong kind of connection:
+
+```bash
+# DATABASE_URL: the pooled string (Connection pooling on; the host contains -pooler)
+read -rs URL && URL=${URL/sslmode=require/sslmode=verify-full} \
+  && [[ $URL == *sslmode=verify-full* && $URL == *-pooler.* ]] \
+  && printf %s "$URL" | pnpm vercel env update DATABASE_URL --environment production --sensitive --yes --project wishlist-api --scope shockolate \
+  || echo "Refusing: not a pooled string with sslmode=require"; unset URL
+
+# DATABASE_URL_DIRECT: the direct string (Connection pooling off)
+read -rs URL && URL=${URL/sslmode=require/sslmode=verify-full} \
+  && [[ $URL == *sslmode=verify-full* && $URL != *-pooler.* ]] \
+  && printf %s "$URL" | gh secret set DATABASE_URL_DIRECT --env production \
+  || echo "Refusing: not a direct string with sslmode=require"; unset URL
+```
+
+**Check:** after the deploy, the `migrate` job's log has no `SECURITY WARNING` line, and neither does the API's runtime log (Vercel → `wishlist-api` → Logs, search `SECURITY WARNING`) after a request that opens a connection, such as `curl -fsS https://hanker.dev/api/health`. That request answering `200` also proves `verify-full` connects. If it answers `503` and the log shows a certificate error, put `require` back the same way. `pg` 8 checks the certificate either way, so going back changes nothing until `pg` 9.
 
 ## Vercel projects
 
@@ -168,7 +198,7 @@ The privacy page says Sentry's error reports have IP addresses removed. [Sentry 
 
 | Where                              | Name                                                                                                                          | Value                                                                                                                                                                                                                            |
 | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Vercel `wishlist-api` → Production | `DATABASE_URL` (sensitive)                                                                                                    | Neon pooled string                                                                                                                                                                                                               |
+| Vercel `wishlist-api` → Production | `DATABASE_URL` (sensitive)                                                                                                    | Neon pooled string, with `sslmode=verify-full` ([TLS](#tls-sslmodeverify-full))                                                                                                                                                  |
 | Vercel `wishlist-api` → Production | `APP_ORIGIN`                                                                                                                  | Web production origin. The CSRF guard compares it exactly, and email links use it                                                                                                                                                |
 | Vercel `wishlist-api` → Production | `CRON_SECRET` (sensitive)                                                                                                     | 48 random bytes, base64. Vercel Cron sends it as a bearer token. Unset means the cron refuses everyone                                                                                                                           |
 | Vercel `wishlist-api` → Production | `TURNSTILE_SECRET_KEY` (sensitive)                                                                                            | **Unset until the end of Plan 4 (D31).** While unset, sign-up, resend-verification and reset-request answer `503 CAPTCHA_UNAVAILABLE`, and the web app says sign-ups are paused. Setting it opens sign-up: see "Opening sign-up" |
@@ -281,7 +311,7 @@ SELECT rolsuper, rolcreaterole, rolcreatedb, rolbypassrls
 FROM pg_roles WHERE rolname = 'hanker_backup';     -- all f
 ```
 
-Set `DATABASE_URL_BACKUP` to the role's **direct** connection string with `sslmode=require`. `pg_dump` doesn't work reliably through the pooler.
+Set `DATABASE_URL_BACKUP` to the role's **direct** connection string with `sslmode=require`. `pg_dump` doesn't work reliably through the pooler. It's libpq, not `pg`, so `require` is right here (see [TLS](#tls-sslmodeverify-full)).
 
 **3. R2.** In the Cloudflare dashboard, under R2. The bucket is now managed in `infra/cloudflare.tf`. Its lifecycle and lock rules can't be imported, so they stay dashboard settings, and `postcondition`s there fail every plan if either is loosened: change a rule here and its assertion in the same PR.
 
