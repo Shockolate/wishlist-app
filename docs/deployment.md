@@ -115,7 +115,7 @@ Turn DNSSEC off only with the same **Configuration** → **Disable DNSSEC**. Bef
 
 Vercel issues the certificates for `hanker.dev` and `www.hanker.dev` from Let's Encrypt, over HTTP-01. The record is `cloudflare_dns_record.caa` in [`infra/cloudflare.tf`](../infra/cloudflare.tf): change it in a PR ([Changing infrastructure](#changing-infrastructure)).
 
-Don't add an `issuewild` record. Universal SSL is on for the zone, so once any CAA record exists, Cloudflare adds its own `issue` and `issuewild` records. These cover Let's Encrypt, Google Trust Services, SSL.com and Sectigo, and Cloudflare may change the list. They show only in `dig`, not in the dashboard or the plan. That's expected: the zone still goes from allowing every public CA to allowing those four.
+Don't add an `issuewild` record. Universal SSL is on for the zone, so once any CAA record exists, Cloudflare adds its own `issue` and `issuewild` records. On 2026-10-27 they covered Let's Encrypt, Google Trust Services (`pki.goog`), SSL.com, DigiCert and Sectigo (as `comodoca.com`), and Cloudflare may change the list. They show only in `dig`, not in the dashboard or the plan. That's expected: the zone still goes from allowing every public CA to allowing those five.
 
 `www.hanker.dev` is a CNAME to Vercel. A CA checking CAA for it follows the CNAME, so Vercel's own policy applies there (on 2026-10-27, `dig +short CAA www.hanker.dev` showed Let's Encrypt, Google Trust Services, Sectigo and GlobalSign). Vercel says that's expected, and you can't add CAA at that name.
 
