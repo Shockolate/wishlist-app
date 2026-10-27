@@ -36,6 +36,8 @@ Later plans add: domain and DNS, Resend and Turnstile (Plan 2); Cloudflare R2 ba
 
 ## Vercel projects
 
+**Managed in [`infra/vercel.tf`](../infra/vercel.tf) since 2026-10-27 (D100):** the settings below and both domains. Change them in a PR ([Infrastructure as code](#infrastructure-as-code)), not with these commands. Env vars and the automation bypass stay here: Vercel can't read sensitive values back, and managing the bypass (the provider's separate `vercel_project_protection_bypass` resource) would put its secret in state (D96).
+
 Both projects were created and configured from the CLI, so the setup is reproducible and checkable through the API instead of dashboard clicks:
 
 ```bash
@@ -73,15 +75,15 @@ printf '%s' '{"generate":{"note":"GitHub Actions smoke tests (wishlist-app)"}}' 
 
 ## Domain and DNS
 
-`hanker.dev` is registered at Cloudflare, and DNS stays there (spec §10).
+`hanker.dev` is registered at Cloudflare, and DNS stays there (spec §10). **The Vercel, Resend and DMARC records and DNSSEC are managed in [`infra/cloudflare.tf`](../infra/cloudflare.tf)** (2026-10-27); change them in a PR. Email Routing's records stay in the dashboard.
 
-| Record                                                                                                                                                                | Points at                                                                                         | Proxy                                                                        |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `hanker.dev` and `www.hanker.dev`                                                                                                                                     | The records Vercel → `wishlist-web` → Settings → Domains shows. `www` redirects to the apex (308) | **DNS only (grey cloud).** Proxying breaks Vercel's certificates and caching |
-| Resend's records for `mail.hanker.dev`: MX and SPF `TXT` on `send.mail.hanker.dev`, DKIM `TXT` on `resend._domainkey.mail.hanker.dev`                                 | The records Resend → Domains shows                                                                | DNS only                                                                     |
-| `hanker.dev` `CAA` (`0 issue "letsencrypt.org"`). Cloudflare adds hidden records for its own CAs ([DNSSEC and CAA](#dnssec-and-caa))                                  | Not an address: it limits which CAs may issue certificates                                        | Not proxiable                                                                |
-| `_dmarc.hanker.dev` (`TXT`)                                                                                                                                           | `v=DMARC1; p=none;`. Monitor first, then tighten                                                  | DNS only                                                                     |
-| `hanker.dev` MX and SPF `TXT` (Email Routing); Resend's records for `hanker.dev`: MX and SPF `TXT` on `send.hanker.dev`, DKIM `TXT` on `resend._domainkey.hanker.dev` | The records Cloudflare → Email Routing and Resend → Domains show                                  | DNS only                                                                     |
+| Record                                                                                                                                                                                                                             | Points at                                                                                         | Proxy                                                                        |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `hanker.dev` and `www.hanker.dev`                                                                                                                                                                                                  | The records Vercel → `wishlist-web` → Settings → Domains shows. `www` redirects to the apex (308) | **DNS only (grey cloud).** Proxying breaks Vercel's certificates and caching |
+| Resend's records for `mail.hanker.dev`: `send` and `rsend` CNAMEs to `forge.rmta.net`, DKIM `TXT` on `resend._domainkey.mail.hanker.dev`                                                                                           | The records Resend → Domains shows                                                                | DNS only                                                                     |
+| `hanker.dev` `CAA` (`0 issue "letsencrypt.org"`). **Not applied yet** (none existed at the 2026-10-27 import): add it in `infra/cloudflare.tf`. Cloudflare adds hidden records for its own CAs ([DNSSEC and CAA](#dnssec-and-caa)) | Not an address: it limits which CAs may issue certificates                                        | Not proxiable                                                                |
+| `_dmarc.hanker.dev` (`TXT`)                                                                                                                                                                                                        | `v=DMARC1; p=none;`. Monitor first, then tighten                                                  | DNS only                                                                     |
+| `hanker.dev` MX and SPF `TXT` and `cf2024-1._domainkey` (Email Routing, not managed in code); Resend's records for `hanker.dev`: `send` and `rsend` CNAMEs to `forge.rmta.net`, DKIM `TXT` on `resend._domainkey.hanker.dev`       | The records Cloudflare → Email Routing and Resend → Domains show                                  | DNS only                                                                     |
 
 - **Turnstile:** Cloudflare → Turnstile → widget "Hanker", hostname `hanker.dev`, mode Managed. The site key is the `TURNSTILE_SITE_KEY` repo variable. The secret key stays offline until sign-up opens.
 - **The canonical origin:** `APP_ORIGIN` and the `APP_PRODUCTION_ORIGIN` repo variable are both `https://hanker.dev`. State-changing calls from any other origin, including the `*.vercel.app` production alias, get `403 FORBIDDEN_ORIGIN`.
@@ -290,7 +292,7 @@ FROM pg_roles WHERE rolname = 'hanker_backup';     -- all f
 
 Set `DATABASE_URL_BACKUP` to the role's **direct** connection string with `sslmode=require`. `pg_dump` doesn't work reliably through the pooler.
 
-**3. R2.** In the Cloudflare dashboard, under R2:
+**3. R2.** In the Cloudflare dashboard, under R2. The bucket is now managed in `infra/cloudflare.tf`. Its lifecycle and lock rules can't be imported, so they stay dashboard settings, and `postcondition`s there fail every plan if either is loosened: change a rule here and its assertion in the same PR.
 
 - **Bucket:** create `hanker-backups` with automatic location and Standard storage. Keep it private: no public access, no custom domain.
 - **Lifecycle rule:** under the bucket's Settings → Object lifecycle rules, add a rule for prefix `daily/` that deletes objects 30 days after upload.
@@ -378,7 +380,7 @@ A backup job that passes proves only that bytes reached R2. The drill proves the
 
 ## Monitoring
 
-Better Stack's free plan watches the site and the backup, and emails you (D47). Create these in Better Stack → Uptime, with email alerts to you:
+Better Stack's free plan watches the site and the backup, and emails you (D47). **The three monitors are managed in [`infra/betterstack.tf`](../infra/betterstack.tf)** (2026-10-27); change them in a PR. The two heartbeats stay in the dashboard: the provider doesn't mark a heartbeat's URL sensitive, so a plan would print it. They were created in Better Stack → Uptime, with email alerts to you:
 
 | Monitor              | URL                                  | Check every                                              | Proves                                                                                        |
 | -------------------- | ------------------------------------ | -------------------------------------------------------- | --------------------------------------------------------------------------------------------- |

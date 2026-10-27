@@ -632,6 +632,104 @@ const mutations = [
       wf.jobs.changes.environment = 'infra-plan';
     },
   ],
+  // Rule 15 (D99): the drift check runs main's code only, and fails on drift.
+  [
+    'a drift check dispatched from a branch (Review Focus 5)',
+    'infra-drift.yml',
+    (wf) => {
+      delete wf.jobs.drift.if;
+    },
+  ],
+  [
+    'a drift check triggered by pull_request',
+    'infra-drift.yml',
+    (wf) => {
+      wf.on.pull_request = null;
+    },
+  ],
+  [
+    'a drift check that passes on drift',
+    'infra-drift.yml',
+    (wf) => {
+      const s = runStep(wf.jobs.drift, /tofu -chdir=infra plan/);
+      s.run = s.run.replace(' -detailed-exitcode', '');
+    },
+  ],
+  [
+    'the plan job using the infra-drift environment',
+    'infra-plan.yml',
+    (wf) => {
+      wf.jobs.plan.environment = 'infra-drift';
+    },
+  ],
+  // Final review I-2: what a step holding the infra credentials runs, and with which env, is pinned.
+  [
+    'tofu show -json next to the passphrase (prints it in plaintext)',
+    'infra-plan.yml',
+    (wf) => {
+      const s = runStep(wf.jobs.plan, /tofu -chdir=infra show/);
+      s.run = s.run.replace('-no-color', '-json');
+    },
+  ],
+  [
+    'TF_LOG on the infra plan step',
+    'infra-plan.yml',
+    (wf) => {
+      runStep(wf.jobs.plan, /tofu -chdir=infra plan/).env.TF_LOG = 'DEBUG';
+    },
+  ],
+  [
+    'TF_CLI_ARGS_show in the infra plan job',
+    'infra-plan.yml',
+    (wf) => {
+      wf.jobs.plan.env.TF_CLI_ARGS_show = '-json';
+    },
+  ],
+  [
+    'TF_LOG at workflow level in the drift check',
+    'infra-drift.yml',
+    (wf) => {
+      wf.env = { TF_LOG: 'TRACE' };
+    },
+  ],
+  [
+    'a step-level TF_CLI_CONFIG_FILE overriding /dev/null',
+    'infra-plan.yml',
+    (wf) => {
+      runStep(wf.jobs.plan, /tofu -chdir=infra plan/).env.TF_CLI_CONFIG_FILE = 'infra/.tofurc';
+    },
+  ],
+  [
+    'a proxy on the infra plan step',
+    'infra-plan.yml',
+    (wf) => {
+      runStep(wf.jobs.plan, /tofu -chdir=infra plan/).env.HTTPS_PROXY = 'http://proxy.example';
+    },
+  ],
+  [
+    'a command chained onto a tofu plan line',
+    'infra-plan.yml',
+    (wf) => {
+      const s = runStep(wf.jobs.plan, /tofu -chdir=infra plan/);
+      s.run = `${s.run} && env | base64`;
+    },
+  ],
+  [
+    'a command chained onto the drift check plan line',
+    'infra-drift.yml',
+    (wf) => {
+      const s = runStep(wf.jobs.drift, /tofu -chdir=infra plan/);
+      s.run = `${s.run}; env > drift.txt`;
+    },
+  ],
+  [
+    'a two-dot diff deciding whether a PR touches the infra (final review I-3)',
+    'infra-plan.yml',
+    (wf) => {
+      const s = runStep(wf.jobs.changes, /git diff/);
+      s.run = s.run.replace('"$BASE_SHA...$HEAD_SHA"', '"$BASE_SHA" "$HEAD_SHA"');
+    },
+  ],
 ];
 
 function copyRoot() {
@@ -673,6 +771,7 @@ for (const f of [
   'backup.yml',
   'scorecard.yml',
   'infra-plan.yml',
+  'infra-drift.yml',
 ])
   rewrite(base, f);
 const baseline = check(base);

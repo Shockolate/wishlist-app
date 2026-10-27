@@ -534,7 +534,29 @@ const INFRA_ENV_JOBS = {
   'infra-plan': 'infra-plan.yml#plan',
   'infra-drift': 'infra-drift.yml#drift',
 };
-const TOFU_SECRET_LINE = /^tofu -chdir=infra (init|plan|show)\b/;
+// The only commands a step holding the infra credentials may run, exactly (final review I-2): no
+// -json (tofu show -json prints sensitive values and the passphrase in plaintext), and nothing
+// chained on. show's one redirect writes the redacted text to a file.
+const TOFU_SECRET_LINES = [
+  /^tofu -chdir=infra init -lockfile=readonly$/,
+  /^tofu -chdir=infra plan -lock=false( -detailed-exitcode)? -out=[\w.-]+$/,
+  /^tofu -chdir=infra show -no-color [\w.-]+ > [\w.-]+$/,
+];
+// Env a step holding the infra credentials may set: the credentials themselves, nothing else.
+const INFRA_STEP_ENV = new Set([
+  'TF_VAR_state_passphrase',
+  'AWS_ACCESS_KEY_ID',
+  'AWS_SECRET_ACCESS_KEY',
+  'CLOUDFLARE_API_TOKEN',
+  'GITHUB_TOKEN',
+  'VERCEL_API_TOKEN',
+  'BETTERUPTIME_API_TOKEN',
+]);
+const INFRA_JOB_ENV = { TF_CLI_CONFIG_FILE: '/dev/null', TF_IN_AUTOMATION: '1', TF_INPUT: '0' };
+// Env that changes what tofu, a provider or the HTTP client does: logging that can dump response
+// bodies, extra CLI arguments, another CLI config, a proxy, another endpoint or CA.
+const TOFU_STEERING_ENV =
+  /^(TF_LOG|TF_CLI_ARGS|TF_CLI_CONFIG_FILE|TF_PLUGIN|TF_REGISTRY|HTTPS?_PROXY$|ALL_PROXY$|NO_PROXY$|SSL_CERT|AWS_(ENDPOINT|CA_BUNDLE|CONFIG_FILE|SHARED_CREDENTIALS_FILE))/i;
 // A tofu subcommand: `tofu`, any global flags (-chdir=…), then the command word.
 const tofuCommand = (words) => new RegExp(`\\btofu(\\s+-\\S+)*\\s+(${words})\\b`);
 const TOFU_WRITE = tofuCommand('apply|import|state|destroy|force-unlock|taint|untaint');
@@ -571,13 +593,24 @@ for (const { file, wf } of workflows) {
     if (secretsIn(job.env).length) fail(`${where}: secrets at job level; scope them to tofu steps`);
     if (String(job.env?.TF_CLI_CONFIG_FILE) !== '/dev/null')
       fail(`${where}: set TF_CLI_CONFIG_FILE: /dev/null (a CLI config could bypass the lockfile)`);
+    for (const [key, value] of Object.entries(job.env ?? {}))
+      if (!(key in INFRA_JOB_ENV) || String(value) !== INFRA_JOB_ENV[key])
+        fail(`${where}: job env is exactly ${JSON.stringify(INFRA_JOB_ENV)}; not ${key}`);
+    for (const key of Object.keys(wf.env ?? {}))
+      if (TOFU_STEERING_ENV.test(key))
+        fail(`${file}: no ${key} at workflow level in an infra workflow`);
     for (const st of steps) {
+      for (const key of Object.keys(st.env ?? {}))
+        if (TOFU_STEERING_ENV.test(key)) fail(`${where}: no ${key} on a step in an infra job`);
       if (secretsIn(st).length === 0) continue;
       if (st.uses) fail(`${where}: no action may hold the infra credentials (${st.uses})`);
+      for (const key of Object.keys(st.env ?? {}))
+        if (!INFRA_STEP_ENV.has(key))
+          fail(`${where}: a step holding the infra credentials sets only them, not ${key}`);
       for (const l of lines(st))
-        if (!TOFU_SECRET_LINE.test(l))
+        if (!TOFU_SECRET_LINES.some((re) => re.test(l)))
           fail(
-            `${where}: steps holding the infra credentials run only tofu init, plan or show: ${l}`,
+            `${where}: steps holding the infra credentials run only the pinned tofu commands: ${l}`,
           );
     }
   }
@@ -600,12 +633,45 @@ else {
   ])
     if (!planIf.includes(want)) fail(`infra-plan.yml#plan: its if must include ${want}`);
   if (envName(plan ?? {}) !== 'infra-plan') fail('infra-plan.yml#plan: use environment infra-plan');
+  // Final review I-3: diff from the merge base (three dots). Two dots compare base's tip, so a stale
+  // branch "touches" every infra change merged since it branched, and asks Ted to approve a plan
+  // that shows reverting main.
+  if (
+    !commandLines(infraPlan.jobs?.changes ?? {}).some((l) => l.includes('"$BASE_SHA...$HEAD_SHA"'))
+  )
+    fail('infra-plan.yml#changes: diff "$BASE_SHA...$HEAD_SHA" (from the merge base)');
   for (const name of ['changes', 'comment']) {
     const job = infraPlan.jobs?.[name];
     if (!job) fail(`infra-plan.yml: missing job ${name}`);
     else if (secretsIn(job).length || job.environment)
       fail(`infra-plan.yml#${name}: holds no secret and no environment`);
   }
+}
+
+// Rule 15 (D99): the drift check runs main's reviewed code only, on a schedule or by hand, and
+// fails on drift. infra-drift has no reviewer (a schedule can't wait), so the ref check and the
+// environment's main-only branch policy are its controls.
+const infraDrift = byFile['infra-drift.yml'];
+if (!infraDrift) fail('infra-drift.yml: missing (D99)');
+else {
+  const on = infraDrift.on ?? infraDrift[true] ?? {};
+  const triggers = typeof on === 'string' ? [on] : Array.isArray(on) ? on : Object.keys(on);
+  if (
+    triggers.some((t) => !['schedule', 'workflow_dispatch'].includes(t)) ||
+    !triggers.includes('schedule')
+  )
+    fail('infra-drift.yml: trigger only on schedule and workflow_dispatch');
+  const drift = infraDrift.jobs?.drift;
+  if (!String(drift?.if ?? '').includes("github.ref == 'refs/heads/main'"))
+    fail("infra-drift.yml#drift: must only run on main (if: github.ref == 'refs/heads/main')");
+  if (envName(drift ?? {}) !== 'infra-drift')
+    fail('infra-drift.yml#drift: use environment infra-drift');
+  if (
+    !commandLines(drift ?? {}).some(
+      (l) => TOFU_PLAN.test(l) && /(^|\s)-detailed-exitcode(\s|$)/.test(l),
+    )
+  )
+    fail('infra-drift.yml#drift: plan with -detailed-exitcode, so drift fails the run');
 }
 
 if (failures.length > 0) {

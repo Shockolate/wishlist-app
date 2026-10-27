@@ -54,6 +54,7 @@ jobs:
           scripts/install-tofu.test.sh
           scripts/infra-guard.test.sh
           scripts/infra-plan-comment.test.sh
+          scripts/infra-drift-result.test.sh
           scripts/extract-sourcemaps.test.sh
           node scripts/workflow-policy.mutations.test.mjs
           node scripts/workflow-policy.test.mjs
