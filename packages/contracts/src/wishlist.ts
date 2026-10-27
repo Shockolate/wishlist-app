@@ -34,7 +34,7 @@ const blankToNull = (value: string | null) => (value === '' ? null : value);
  * Postgres can't store U+0000 in a text column, so it would be a 500. Notes and links refuse only
  * that one character: a note keeps its newlines and tabs.
  */
-const NUL_MESSAGE = 'Remove the invisible character';
+const NUL_MESSAGE = 'Remove the invisible character.';
 const hasNoNul = (value: string) => !value.includes('\u0000');
 
 /**
@@ -122,7 +122,7 @@ export const UpdateWishlistRequestSchema = z
       body.title !== undefined ||
       body.showClaimsToOwner !== undefined ||
       body.suggestTags !== undefined,
-    { message: 'Change the title or a setting' },
+    { message: 'Change the title or a setting.' },
   );
 export type UpdateWishlistRequest = z.infer<typeof UpdateWishlistRequestSchema>;
 

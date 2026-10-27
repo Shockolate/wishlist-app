@@ -100,7 +100,7 @@ describe('addTypedTag (Plan 7b ruling 7)', () => {
   it('refuses an 11th tag', () => {
     const ten: ItemTagRef[] = Array.from({ length: 10 }, (_, i) => ({ name: `Tag ${String(i)}` }));
     expect(addTypedTag(ten, 'Kitchen', all)).toEqual({
-      error: 'An item can have at most 10 tags.',
+      error: 'An item can have up to 10 tags.',
     });
     // A tag it already has is still a no-op, not an error.
     expect(addTypedTag(ten, 'tag 3', all)).toEqual({ tags: ten });
@@ -144,7 +144,7 @@ describe('addPendingTags (spec §7: typed text is added on save, comma by comma)
     expect(addPendingTags(ten, 'Kitchen', all)).toEqual({
       tags: ten,
       left: 'Kitchen',
-      error: 'An item can have at most 10 tags.',
+      error: 'An item can have up to 10 tags.',
     });
   });
 });

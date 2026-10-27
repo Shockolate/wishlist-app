@@ -53,7 +53,7 @@ export function verificationEmail(appOrigin: string, token: string): Rendered {
     SUBJECTS.verification,
     ['Welcome to Hanker. Confirm your email address to start your wishlist.'],
     [{ label: 'Confirm your email', href: `${appOrigin}/verify-email?token=${token}` }],
-    "This link expires in 24 hours. If you didn't sign up, ignore this email.",
+    'This link works once, within 24 hours. If you didn’t sign up, ignore this email.',
   );
 }
 
@@ -62,19 +62,19 @@ export function accountExistsEmail(appOrigin: string): Rendered {
     SUBJECTS.accountExists,
     ['Someone tried to sign up for Hanker with this email address, but it already has an account.'],
     [
-      { label: 'Log in', href: `${appOrigin}/login` },
+      { label: 'Sign in', href: `${appOrigin}/login` },
       { label: 'Forgot your password? Reset it', href: `${appOrigin}/reset-password` },
     ],
-    "If this wasn't you, ignore this email. Nothing has changed.",
+    'If this wasn’t you, ignore this email. Nothing has changed.',
   );
 }
 
 export function passwordResetEmail(appOrigin: string, token: string): Rendered {
   return compose(
     SUBJECTS.passwordReset,
-    ['Use this link to choose a new password. It works once, within one hour.'],
+    ['Use this link to choose a new password. It works once, within an hour.'],
     [{ label: 'Reset your password', href: `${appOrigin}/reset-password/confirm?token=${token}` }],
-    "Resetting signs you out on every device. If you didn't ask for this, ignore this email.",
+    'Resetting signs you out on every device. If you didn’t ask for this, ignore this email.',
   );
 }
 

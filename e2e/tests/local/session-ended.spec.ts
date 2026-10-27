@@ -28,7 +28,7 @@ test('after the session ends on another device, Back from login can’t show sig
   // The phone's next client-side navigation finds its session gone, and lands on login.
   await nav.getByRole('link', { name: 'Your list' }).click();
   await expect(page).toHaveURL('/login?next=%2Flist');
-  await expect(page.getByRole('heading', { name: 'Log in' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
 
   await page.goBack();
   await expect(page.getByText(`Signed in as ${email}`)).toBeHidden();

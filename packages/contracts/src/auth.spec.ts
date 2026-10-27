@@ -125,7 +125,7 @@ describe('DisplayNameSchema (Plan 2b rule 14)', () => {
   ])('rejects %s', (_label, name) => {
     const result = DisplayNameSchema.safeParse(name);
     expect(result.success).toBe(false);
-    expect(result.error?.issues[0]?.message).toBe('Use visible characters only');
+    expect(result.error?.issues[0]?.message).toBe('Use visible characters only.');
   });
 
   it.each([

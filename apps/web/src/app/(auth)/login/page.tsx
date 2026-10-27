@@ -4,7 +4,7 @@ import { FreshDocument } from '@/components/auth/fresh-document';
 import { LoginForm } from '@/components/auth/login-form';
 import { safeNext } from '@/lib/safe-next';
 
-export const metadata: Metadata = { title: 'Log in' };
+export const metadata: Metadata = { title: 'Sign in' };
 
 export default async function LoginPage({
   searchParams,

@@ -11,7 +11,7 @@ import { errorMessage, hasCode, LIST_CHANGE_NOT_SAVED } from '@/lib/messages';
 import { useUnseenListFailure } from '@/lib/off-page-failure';
 import { cn } from '@/lib/utils';
 
-/** The signed-in header: the wordmark, the account pages, and Log out. */
+/** The signed-in header: the wordmark, the account pages, and Sign out. */
 export function AccountHeader({ current }: { current: 'list' | 'gifts' | 'settings' }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +59,7 @@ export function AccountHeader({ current }: { current: 'list' | 'gifts' | 'settin
           </NavLink>
         </nav>
         <Button variant="secondary" size="compact" onClick={logOut} disabled={busy}>
-          Log out
+          Sign out
         </Button>
         {error ? (
           <Notice tone="error" className="basis-full">

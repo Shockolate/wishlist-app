@@ -73,7 +73,7 @@ export function NameForm({ displayName }: { displayName: string }) {
       <div role="status">
         {saved ? (
           <Notice tone="success" announce={false} className="mt-4">
-            Name saved
+            Name saved.
           </Notice>
         ) : null}
       </div>

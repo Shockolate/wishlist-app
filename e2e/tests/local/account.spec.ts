@@ -24,7 +24,9 @@ test('the home greets the user, asks an unverified one to confirm, and settings 
   await page.goto('/settings');
   await page.getByLabel('Display name').fill('Ada L.');
   await page.getByRole('button', { name: 'Save name' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Name saved' })).toHaveText('Name saved');
+  await expect(page.getByRole('status').filter({ hasText: 'Name saved' })).toHaveText(
+    'Name saved.',
+  );
   await page.reload();
   await expect(page.getByLabel('Display name')).toHaveValue('Ada L.');
 });
@@ -58,21 +60,21 @@ test('changes the password, keeps this device, and the old password stops workin
 
   // A logout that never reaches the API says so, and leaves the person where they were.
   await page.route('**/api/auth/logout', (route) => route.abort());
-  await page.getByRole('button', { name: 'Log out' }).click();
+  await page.getByRole('button', { name: 'Sign out' }).click();
   // Filtered by text: Next's route announcer is also role="alert".
   await expect(
-    page.getByRole('alert').filter({ hasText: "We couldn't reach Hanker. Check your connection" }),
+    page.getByRole('alert').filter({ hasText: 'We couldn’t reach Hanker. Check your connection' }),
   ).toBeVisible();
   await expect(page).toHaveURL('/settings');
-  await expect(page.getByRole('button', { name: 'Log out' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Sign out' })).toBeEnabled();
   await page.unroute('**/api/auth/logout');
 
-  await page.getByRole('button', { name: 'Log out' }).click();
+  await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page).toHaveURL('/');
   // Back must not restore the signed-in page from the router's in-memory cache.
   await page.goBack();
   await expect(page).toHaveURL('/login?next=%2Flist');
-  await expect(page.getByRole('heading', { name: 'Log in' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
   await expect(page.getByText('Hello, Ada.')).toBeHidden();
   expect(await logInViaApi(page.request, baseURL ?? '', email)).toBe(401);
   expect(await logInViaApi(page.request, baseURL ?? '', email, NEW_PASSWORD)).toBe(204);
@@ -117,5 +119,5 @@ test('a stale session cookie leads to login, not a loop (Plan 2b Review Focus 2)
   ]);
   await page.goto('/');
   await expect(page).toHaveURL('/login?next=%2Flist');
-  await expect(page.getByRole('heading', { name: 'Log in' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
 });

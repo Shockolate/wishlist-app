@@ -46,7 +46,7 @@ test('Back to a token page shows its button again, because stripping the token k
   await expect(page.getByRole('button', { name: 'Confirm my email' })).toBeVisible();
   await expect.poll(() => page.url()).not.toContain('token=');
 
-  await page.getByRole('link', { name: 'Log in' }).click();
+  await page.getByRole('link', { name: 'Sign in' }).click();
   await expect(page).toHaveURL('/login');
   await page.goBack();
   await expect(page.getByRole('button', { name: 'Confirm my email' })).toBeVisible();

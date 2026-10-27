@@ -15,7 +15,7 @@ const JOINERS = /[\u200C\u200D]/gu;
 const BLANK_LETTERS = /[\p{Default_Ignorable_Code_Point}\u2800]/gu;
 
 /** The message for a value that fails `visibleOnly`. */
-export const VISIBLE_ONLY_MESSAGE = 'Use visible characters only';
+export const VISIBLE_ONLY_MESSAGE = 'Use visible characters only.';
 
 /**
  * Whether a trimmed name or title is made of visible characters (D35, D41). An empty value passes:

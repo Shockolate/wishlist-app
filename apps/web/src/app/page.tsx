@@ -24,7 +24,7 @@ export default function HomePage() {
                 Create your list
               </Link>
               <Link href="/login" className={buttonVariants({ variant: 'secondary' })}>
-                Log in
+                Sign in
               </Link>
             </div>
           </div>

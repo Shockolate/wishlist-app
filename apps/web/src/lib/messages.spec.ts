@@ -40,7 +40,7 @@ describe('errorMessage (spec §7, §9)', () => {
 
   it('explains a lost connection and a version mismatch', () => {
     expect(errorMessage(new TypeError('Failed to fetch'))).toBe(
-      "We couldn't reach Hanker. Check your connection and try again.",
+      'We couldn’t reach Hanker. Check your connection and try again.',
     );
     expect(errorMessage(new ContractMismatchError('GET /me', []))).toBe(
       'Hanker was just updated. Reload the page and try again.',
@@ -57,8 +57,8 @@ describe('errorMessage (spec §7, §9)', () => {
 describe('tag error copy (Plan 7b)', () => {
   it.each([
     [ErrorCode.TAG_NAME_TAKEN, 'You already have a tag called that.'],
-    [ErrorCode.TAG_LIMIT_REACHED, 'Your list has 50 tags, the most it can hold.'],
-    [ErrorCode.ITEM_TAG_LIMIT_REACHED, 'An item can have at most 10 tags.'],
+    [ErrorCode.TAG_LIMIT_REACHED, 'A list can have up to 50 tags.'],
+    [ErrorCode.ITEM_TAG_LIMIT_REACHED, 'An item can have up to 10 tags.'],
   ])('says %s in the table’s words', (code, message) => {
     expect(errorMessage(apiError(code, { status: 422 }))).toBe(message);
   });
@@ -67,9 +67,9 @@ describe('tag error copy (Plan 7b)', () => {
 describe('fieldErrors', () => {
   it('turns a VALIDATION_FAILED problem into messages by field', () => {
     const error = apiError(ErrorCode.VALIDATION_FAILED, {
-      errors: [{ path: 'displayName', message: 'Use visible characters only' }],
+      errors: [{ path: 'displayName', message: 'Use visible characters only.' }],
     });
-    expect(fieldErrors(error)).toEqual({ displayName: 'Use visible characters only' });
+    expect(fieldErrors(error)).toEqual({ displayName: 'Use visible characters only.' });
   });
 
   it('is empty for anything else', () => {
@@ -97,13 +97,13 @@ describe('listErrorMessage (Plan 3b rule 4)', () => {
       'Your list changed on another device, so we’ve reloaded it.',
     );
     expect(listErrorMessage(apiError(ErrorCode.LIST_FULL, { status: 422 }))).toBe(
-      'Your list is full: 200 items is the most it can hold.',
+      'Your list is full. A list can have up to 200 items.',
     );
   });
 
   it('falls back to errorMessage for everything else', () => {
     expect(listErrorMessage(new TypeError('Failed to fetch'))).toBe(
-      "We couldn't reach Hanker. Check your connection and try again.",
+      'We couldn’t reach Hanker. Check your connection and try again.',
     );
   });
 });
