@@ -1,8 +1,6 @@
 import type { Metadata } from 'next';
 import { SITE_ORIGIN, TAGLINE } from './site';
-
-/** A share link's preview line. Fixed, so it's true whether or not the owner sees claims. */
-export const SHARE_DESCRIPTION = 'Pick a gift so nobody doubles up.';
+import { previewAlt, previewDescription } from './share-preview';
 
 export const PREVIEW_IMAGE = {
   url: '/hanker-preview.png',
@@ -29,18 +27,32 @@ export const rootMetadata: Metadata = {
   twitter: { card: 'summary_large_image' },
 };
 
-/** A share page's preview: the list's own title and one fixed line, nothing else from the list. */
-export function shareMetadata(listTitle: string): Metadata {
-  return {
-    title: listTitle,
-    description: SHARE_DESCRIPTION,
-    // A page's openGraph replaces the layout's whole object, so the image is restated, not inherited.
-    openGraph: {
-      type: 'website',
-      siteName: 'Hanker',
-      title: listTitle,
-      description: SHARE_DESCRIPTION,
-      images: [PREVIEW_IMAGE],
+/**
+ * A share page's preview (Plan 12, design §3.4): the list's title, a line naming the owner and how
+ * many things are on it, and the list's own image. Only what every viewer of the link sees alike,
+ * never a claim. The image's URL carries the token (design §5.3): whoever fetches the image already
+ * fetched the page at that token.
+ */
+export function shareMetadata(
+  list: { title: string; ownerDisplayName: string; itemCount: number },
+  shareToken: string,
+): Metadata {
+  const description = previewDescription(list.ownerDisplayName, list.itemCount);
+  const images = [
+    {
+      url: `/s/${shareToken}/preview.jpg`,
+      // PREVIEW_SIZE's, as literals: importing it would pull sharp into every page's metadata.
+      width: 1200,
+      height: 630,
+      type: 'image/jpeg',
+      alt: previewAlt(list.title, list.itemCount),
     },
+  ];
+  return {
+    title: list.title,
+    description,
+    // A page's openGraph replaces the layout's whole object, so everything is restated here.
+    openGraph: { type: 'website', siteName: 'Hanker', title: list.title, description, images },
+    twitter: { card: 'summary_large_image', images },
   };
 }

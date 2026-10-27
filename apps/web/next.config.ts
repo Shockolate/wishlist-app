@@ -67,6 +67,11 @@ const nextConfig: NextConfig = {
   productionBrowserSourceMaps: Boolean(process.env.SENTRY_DSN_WEB),
   // Maps for the server bundles, so the web server reports TypeScript lines at runtime (D52).
   experimental: { serverSourceMaps: true },
+  // The share preview image reads its fonts and the gift tag from disk at render time, which Next's
+  // tracing can't see, so they're named here to ship with the route's function (Plan 12 ruling 8).
+  outputFileTracingIncludes: {
+    '/s/[shareToken]/preview.jpg': ['./assets/fonts/*.ttf', './src/app/icon.svg'],
+  },
   async rewrites() {
     return [{ source: '/api/:path*', destination: `${API_ORIGIN}/api/:path*` }];
   },
@@ -87,11 +92,13 @@ const nextConfig: NextConfig = {
       },
       // Token pages (spec §6.7): no Referer can carry the token, and search engines skip them.
       // Your gifts follows them (design §5.7): it lists share links, claimer names and the private
-      // Bought tick, so it sends no Referer and stays out of search.
+      // Bought tick, so it sends no Referer and stays out of search. The share preview image's URL
+      // carries the share token too (Plan 12, design §5.3).
       ...[
         '/verify-email',
         '/reset-password/confirm',
         '/s/:shareToken',
+        '/s/:shareToken/preview.jpg',
         '/c/:manageToken',
         '/gifts',
       ].map((source) => ({

@@ -51,6 +51,15 @@ test('an unknown share page is a 404 that search engines skip (spec §6.7)', asy
   ).toBeVisible();
 });
 
+test('an unknown share link’s preview image is a 404 that search engines skip (share link previews §5.3)', async ({
+  request,
+}) => {
+  // A 404 rather than a 500 proves the route's module, with sharp and next/og, loads here.
+  const res = await request.get('/s/AAAAAAAAAAAAAAAAAAAAAA/preview.jpg');
+  expect(res.status()).toBe(404);
+  expect(res.headers()['x-robots-tag']).toBe('noindex');
+});
+
 test('security.txt is served as text (RFC 9116)', async ({ request }) => {
   const res = await request.get('/.well-known/security.txt');
   expect(res.status()).toBe(200);

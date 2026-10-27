@@ -68,6 +68,13 @@ describe('next.config', () => {
     expect(config.productionBrowserSourceMaps).toBe(true);
   });
 
+  it('ships the share preview’s fonts and gift tag with its route, which reads them from disk (Plan 12)', async () => {
+    const config = await loadConfig('https://api.example.test');
+    expect(config.outputFileTracingIncludes).toEqual({
+      '/s/[shareToken]/preview.jpg': ['./assets/fonts/*.ttf', './src/app/icon.svg'],
+    });
+  });
+
   it('refuses to load without TURNSTILE_SITE_KEY (Plan 2b rule 11)', async () => {
     await expect(loadConfig('https://api.example.test', '')).rejects.toThrow(
       /TURNSTILE_SITE_KEY must be set/,
@@ -89,6 +96,15 @@ describe('next.config', () => {
       ]);
     }
   });
+
+  it('gives the share preview image the share page’s headers, since its URL carries the token (Plan 12, design §5.3)', async () => {
+    const rules = (await (await loadConfig('https://api.example.test')).headers?.()) ?? [];
+    expect(rules.find((rule) => rule.source === '/s/:shareToken/preview.jpg')?.headers).toEqual([
+      { key: 'Referrer-Policy', value: 'no-referrer' },
+      { key: 'X-Robots-Tag', value: 'noindex' },
+    ]);
+  });
+
   it('turns off the browser features Hanker never uses, but not clipboard or share (Plan 6)', async () => {
     const rules = (await (await loadConfig('https://api.example.test')).headers?.()) ?? [];
     const rule = rules.find((r) => r.source === '/:path*');
