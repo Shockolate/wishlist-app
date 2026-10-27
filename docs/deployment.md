@@ -651,14 +651,14 @@ These came out of Plan 1's final review. `scripts/workflow-policy.test.mjs` enfo
 
 Applied once, from the files in this repo:
 
-| Setting                           | Source                       | How                                                                                                                           |
-| --------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Ruleset on `main`                 | `.github/rulesets/main.json` | `gh api -X POST repos/Shockolate/wishlist-app/rulesets --input .github/rulesets/main.json` (update: `-X PUT …/rulesets/<id>`) |
-| CodeQL                            | default setup                | `gh api -X PATCH repos/Shockolate/wishlist-app/code-scanning/default-setup -f state=configured`                               |
-| Secret scanning + push protection | repo security settings       | `gh api -X PATCH repos/Shockolate/wishlist-app` with `security_and_analysis` enabled                                          |
-| Dependabot alerts                 | repo security settings       | `gh api -X PUT repos/Shockolate/wishlist-app/vulnerability-alerts`                                                            |
-| Auto-merge (used by Renovate)     | repo settings                | `gh repo edit --enable-auto-merge`                                                                                            |
-| Renovate                          | GitHub App                   | install from https://github.com/apps/renovate for this repo only                                                              |
+| Setting                           | Source                 | How                                                                                             |
+| --------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------- |
+| Ruleset on `main`                 | `infra/github.tf`      | Managed by OpenTofu ([Infrastructure as code](#infrastructure-as-code))                         |
+| CodeQL                            | default setup          | `gh api -X PATCH repos/Shockolate/wishlist-app/code-scanning/default-setup -f state=configured` |
+| Secret scanning + push protection | repo security settings | `gh api -X PATCH repos/Shockolate/wishlist-app` with `security_and_analysis` enabled            |
+| Dependabot alerts                 | repo security settings | `gh api -X PUT repos/Shockolate/wishlist-app/vulnerability-alerts`                              |
+| Auto-merge (used by Renovate)     | repo settings          | `gh repo edit --enable-auto-merge`                                                              |
+| Renovate                          | GitHub App             | install from https://github.com/apps/renovate for this repo only                                |
 
 Required checks: `checks`, `actionlint`, `integration`, `migrations-lint`, `e2e`. `preview` is advisory: a Vercel or Neon outage, or Neon's branch cap, shouldn't block merging code that passed CI.
 
