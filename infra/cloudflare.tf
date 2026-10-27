@@ -168,6 +168,22 @@ resource "cloudflare_dns_record" "dmarc" {
   zone_id                 = local.cloudflare_zone_id
 }
 
+# Only Let's Encrypt, Vercel's CA, may issue for the apex. Once any CAA record exists, Cloudflare
+# adds hidden ones for Universal SSL's CAs, which aren't managed here; www follows its CNAME to
+# Vercel's own. No prevent_destroy: deleting this is the rollback for a certificate error
+# (docs/deployment.md, DNSSEC and CAA).
+resource "cloudflare_dns_record" "caa" {
+  name    = "hanker.dev"
+  ttl     = 1
+  type    = "CAA"
+  zone_id = local.cloudflare_zone_id
+  data = {
+    flags = 0
+    tag   = "issue"
+    value = "letsencrypt.org"
+  }
+}
+
 # Cloudflare is the registrar too, so it publishes the DS record itself. Turning this off while the
 # DS record stands makes the domain unresolvable (docs/deployment.md, DNSSEC and CAA).
 resource "cloudflare_zone_dnssec" "hanker" {
