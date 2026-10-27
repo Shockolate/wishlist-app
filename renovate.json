@@ -50,6 +50,12 @@
       "dependencyDashboardApproval": true
     },
     {
+      "description": "pg 9 gives sslmode=require libpq's meaning: encryption without checking the certificate. Every check would still pass, because local and test Postgres don't use TLS. A major waits on the Dependency Dashboard for approval. Before approving, check every connection string pg reads says sslmode=verify-full, previews' included (docs/deployment.md, TLS: sslmode=verify-full)",
+      "matchPackageNames": ["pg"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+    {
       "description": "infra/ is OpenTofu, so providers resolve against OpenTofu's registry, whose hashes .terraform.lock.hcl records (D93). Provider bumps run next to secrets and always wait for review",
       "matchManagers": ["terraform"],
       "matchDatasources": ["terraform-provider"],
