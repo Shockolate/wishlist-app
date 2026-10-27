@@ -12,5 +12,9 @@ terraform {
       source  = "integrations/github"
       version = "6.13.0"
     }
+    betteruptime = {
+      source  = "BetterStackHQ/better-uptime"
+      version = "0.22.4"
+    }
   }
 }

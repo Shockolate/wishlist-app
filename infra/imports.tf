@@ -80,3 +80,18 @@ import {
   to       = github_actions_variable.repo[each.key]
   id       = "wishlist-app:${each.key}"
 }
+
+# Better Stack. Import IDs are the monitor IDs (the number in the dashboard's URL). The heartbeats
+# aren't imported: provider 0.22.4 doesn't mark their url sensitive, so a plan would print it.
+import {
+  to = betteruptime_monitor.live
+  id = "5098645"
+}
+import {
+  to = betteruptime_monitor.site
+  id = "5098650"
+}
+import {
+  to = betteruptime_monitor.deep
+  id = "5098697"
+}
