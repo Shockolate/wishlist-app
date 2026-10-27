@@ -72,6 +72,12 @@ jobs:
           uri=$(scripts/preview-seed.sh uri "$SEED_BRANCH_ID")
           echo "::add-mask::$uri"
           echo "SEED_DATABASE_URL=$uri" >> "$GITHUB_ENV"
+          # psql (libpq) keeps Neon's sslmode=require; the migration (pg) gets verify-full
+          # (docs/deployment.md, TLS: sslmode=verify-full).
+          pinned=${uri/sslmode=require/sslmode=verify-full}
+          [[ "$pinned" == *sslmode=verify-full* ]] || { echo "the seed's connection string has no sslmode=require" >&2; exit 1; }
+          echo "::add-mask::$pinned"
+          echo "SEED_DATABASE_URL_PG=$pinned" >> "$GITHUB_ENV"
 
       # The seed is a child of the preview project's empty default branch (D87), so it is never a
       # root branch and is wiped and rebuilt from zero on every run. That also proves every migration
@@ -82,7 +88,7 @@ jobs:
         run: psql "$SEED_DATABASE_URL" -v ON_ERROR_STOP=1 -c 'DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE; CREATE SCHEMA public;'
 
       - name: Migrate
-        run: DATABASE_URL_DIRECT="$SEED_DATABASE_URL" node apps/api/src/db/migrate-cli.ts
+        run: DATABASE_URL_DIRECT="$SEED_DATABASE_URL_PG" node apps/api/src/db/migrate-cli.ts
 
       - name: Report contents (seed data only; empty until Plan 2)
         run: |

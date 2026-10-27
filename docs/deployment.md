@@ -44,7 +44,8 @@ Every connection string `pg` reads (`DATABASE_URL` and `DATABASE_URL_DIRECT`) en
 **Not covered:**
 
 - **libpq clients** (`psql`, and `pg_dump` with `DATABASE_URL_BACKUP`) keep `sslmode=require`, which in libpq encrypts but doesn't check the certificate. `verify-full` there also needs `PGSSLROOTCERT` pointing at the system's root certificates ([Neon](https://neon.com/docs/connect/connect-securely#location-of-system-root-certificates)).
-- **Previews** get their strings from Neon's branch action in `preview.yml`, with `require`, so their logs still show the warning. That's harmless on `pg` 8. Rewrite them in `preview.yml` before approving `pg` 9.
+
+**Previews** use `verify-full` too. In `preview.yml`, Neon's branch action builds both strings with it (`ssl: verify-full`). In `preview-seed.yml`, the seed's migration gets a copy of the seed's string with `require` swapped for `verify-full`, and the step fails if there's no `require` to swap. The seed's `psql` steps keep the libpq string.
 
 **Switching an existing value.** Do both, then merge to `main` (or redeploy): runtime variables apply to the next deployment. That deploy runs the migration with the new direct string and starts the API with the new pooled one, which is the check. Copy each string from Neon → `wishlist` → **Connect**, on the production branch, and paste it at the hidden prompt as Neon gives it. The shell changes `sslmode`, and refuses a string that has no `sslmode=require` to change or that is the wrong kind of connection:
 
