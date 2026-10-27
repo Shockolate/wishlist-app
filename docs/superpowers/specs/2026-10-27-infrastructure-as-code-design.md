@@ -40,10 +40,14 @@ Everything in AGENTS.md applies, in particular: exact pins, stacked PRs with Con
 
 | Provider | Managed | Stays as it is |
 | --- | --- | --- |
-| **Cloudflare** (`cloudflare/cloudflare`) | `hanker.dev`'s DNS records for Vercel (apex, `www`) and Resend (both domains' MX, SPF and DKIM), `_dmarc`, the CAA record, DNSSEC, the `hanker-backups` bucket with its lifecycle and lock rules, the Turnstile widget | The zone itself (looked up, not managed), zone settings, Email Routing and the records it creates, every API token |
+| **Cloudflare** (`cloudflare/cloudflare`) | `hanker.dev`'s DNS records for Vercel (apex, `www`) and Resend (both domains' `send` and `rsend` CNAMEs and DKIM), `_dmarc`, DNSSEC, the `hanker-backups` bucket, the Turnstile widget. The bucket's lifecycle and lock rules are **asserted, not managed** (below) | The zone itself (its ID is a local, not managed), zone settings, Email Routing and the records it creates, every API token |
 | **GitHub** (`integrations/github`) | The repository's settings (auto-merge, secret scanning and push protection, vulnerability alerts), the `main` ruleset, the `production`, `preview`, `infra-plan` and `infra-drift` environments with their reviewers and branch policies, the repo variables | Every secret, CodeQL default setup, the Renovate app |
 | **Better Stack** (`BetterStackHQ/better-uptime`) | The Live, Site and Deep monitors and both heartbeats | Escalation and notification settings |
 | **Vercel** (`vercel/vercel`) | Both projects' settings (root directory, files outside root, framework, Node version, deployment protection, automation bypass), `hanker.dev` and `www.hanker.dev` with the 308 redirect, the API's non-secret production env vars (`APP_ORIGIN`, `EMAIL_TRANSPORT`, `EMAIL_FROM`, `CLOUDFLARE_ACCOUNT_ID`) | Every sensitive env var, deployments, everything `vercel.json` already sets (install command, cron, `git.deploymentEnabled`) |
+
+**The backup bucket's rules are asserted (amended 2026-10-27, Ted's choice).** Provider 5.28.1 can't import `r2_bucket_lifecycle` or `r2_bucket_lock`, and creating them would rewrite the rules that protect the backups. Data sources read them, and postconditions require an enabled `daily/` rule that deletes after 30 days and one that locks for 30 days. Every plan, the drift check included, fails if either is loosened. Changing a rule stays a dashboard step, with its assertion updated in the same PR.
+
+**What the live zone held at import (2026-10-27).** Resend's records are CNAMEs to `forge.rmta.net` (`send` and `rsend`, on both domains), not the MX and SPF `deployment.md` described. There's **no CAA record**: the runbook in `deployment.md` was never applied. Adding one is an ordinary infra PR after the imports, not part of them.
 
 **Out of scope:**
 
@@ -265,7 +269,7 @@ These are facts the design depends on that weren't confirmed. Verify each first,
 
 - **D93:** OpenTofu, one root module in `infra/`, exact pins, binary by checksum, no CLI config.
 - **D94:** state in R2 `hanker-tofu-state`, encrypted on the client (PBKDF2, AES-GCM, enforced for state and plans). CI never writes state.
-- **D95:** v1 scope is Cloudflare, GitHub, Better Stack and Vercel as listed in §3.1. Neon, Sentry, Resend and Email Routing are out, as are secret values and CI-owned resources. No authoritative resources over anything the code doesn't own.
+- **D95:** v1 scope is Cloudflare, GitHub, Better Stack and Vercel as listed in §3.1, with the backup bucket's lifecycle and lock rules asserted rather than managed. Neon, Sentry, Resend and Email Routing are out, as are secret values and CI-owned resources. No authoritative resources over anything the code doesn't own.
 - **D96:** secret values stay out of IaC. Only the computed secrets in §3.3 are accepted in state. No outputs.
 - **D97:** CI plans on PRs behind the `infra-plan` environment and Ted's approval. Ted applies locally from `main`. This is the trust model's second named exception (§3.7).
 - **D98:** separate plan and apply credentials. CI gets the weakest scope each provider offers, and write tokens stay local.

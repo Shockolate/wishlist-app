@@ -681,13 +681,13 @@ scripts/install-tofu.sh ~/.local/opt/tofu && export PATH="$HOME/.local/opt/tofu:
 tofu version   # must match infra/.opentofu-version
 ```
 
-Credentials go into a fresh shell's environment, typed or pasted from your password manager at a silent prompt. They never go in a file, your history or argv:
+Credentials go into a fresh shell's environment, typed or pasted from your password manager at a silent prompt. They never go in a file, your history or argv. Run this in a real terminal, and run `tofu` in that same terminal: a Claude Code `!` command gets a new, non-interactive shell each time, so `read` has nothing to read and nothing exported survives to the next command.
 
 ```bash
 export TF_CLI_CONFIG_FILE=/dev/null   # a CLI config's dev_overrides would bypass the lockfile
 read -rs TF_VAR_state_passphrase && export TF_VAR_state_passphrase
-read -rs AWS_ACCESS_KEY_ID && export AWS_ACCESS_KEY_ID           # R2 token for hanker-tofu-state
-read -rs AWS_SECRET_ACCESS_KEY && export AWS_SECRET_ACCESS_KEY
+read -rs AWS_ACCESS_KEY_ID && export AWS_ACCESS_KEY_ID           # the R2 token's Access Key ID
+read -rs AWS_SECRET_ACCESS_KEY && export AWS_SECRET_ACCESS_KEY   # …and its Secret Access Key
 # Once their providers are in infra/:
 read -rs CLOUDFLARE_API_TOKEN && export CLOUDFLARE_API_TOKEN
 read -rs VERCEL_API_TOKEN && export VERCEL_API_TOKEN
@@ -695,16 +695,18 @@ read -rs BETTERUPTIME_API_TOKEN && export BETTERUPTIME_API_TOKEN
 export GITHUB_TOKEN="$(gh auth token)"
 ```
 
-Each `read -rs` waits silently for one value and Enter. Close the shell when you're done.
+Each `read -rs` waits silently for one value and Enter. Close the shell when you're done. To check what's set without printing it: `echo "id=${#AWS_ACCESS_KEY_ID} secret=${#AWS_SECRET_ACCESS_KEY} pass=${#TF_VAR_state_passphrase}"`. R2's keys are 32 and 64 characters.
+
+With the 1Password CLI, `export NAME="$(op read 'op://<vault>/<item>/<field>')"` does the same without a prompt; the command line holds only the reference.
 
 ### One-off setup
 
 State can't describe the bucket that holds it, so the bucket and its first token are made by hand.
 
 1. **Bucket.** Cloudflare → R2 → create `hanker-tofu-state`: automatic location, Standard storage, private, no custom domain, **no lock rule and no lifecycle rule**. State is overwritten on every apply, so a lock would block it.
-2. **Apply token.** R2 → Manage API tokens → **Object Read & Write**, applied to `hanker-tofu-state` only. It's `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` above. It lives only in your password manager.
+2. **Apply token.** R2 → Manage API tokens → **Object Read & Write**, applied to `hanker-tofu-state` only. Cloudflare shows three values: the S3 backend uses the **Access Key ID** (`AWS_ACCESS_KEY_ID`) and the **Secret Access Key** (`AWS_SECRET_ACCESS_KEY`), not the Token value. The secret is shown once. It lives only in your password manager.
 3. **Passphrase.** Generate 32 characters or more in your password manager (OpenTofu's minimum is 16). Lose it and the state is unreadable: see Recovery.
-4. **Initialise,** on `main` with the three values exported: `tofu -chdir=infra init`. Expected: `Successfully configured the backend "s3"`. Then `tofu -chdir=infra plan` answers "No changes" until the first provider is imported.
+4. **Initialise,** on `main`, in a terminal where you've done [Local setup](#local-setup): `tofu -chdir=infra init`. Expected: `Successfully configured the backend "s3"`. Then `tofu -chdir=infra plan` answers "No changes" until the first provider is imported.
 
 ### Changing infrastructure
 
