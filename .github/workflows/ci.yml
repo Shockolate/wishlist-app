@@ -52,6 +52,7 @@ jobs:
           scripts/restore-drill.test.sh
           scripts/install-sentry-cli.test.sh
           scripts/install-tofu.test.sh
+          scripts/infra-guard.test.sh
           scripts/extract-sourcemaps.test.sh
           node scripts/workflow-policy.mutations.test.mjs
           node scripts/workflow-policy.test.mjs
