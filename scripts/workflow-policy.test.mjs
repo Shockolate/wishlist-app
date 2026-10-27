@@ -526,6 +526,88 @@ let automergeRules = 0;
 })(renovate, 'renovate.json');
 if (automergeRules > 1) fail('renovate.json: only one packageRules entry may automerge (D88)');
 
+// Rule 14 (D97, D99; spec 2026-10-27 §3.6–§3.9): OpenTofu. infra-plan.yml runs PR code next to the
+// plan credentials and the state passphrase, the trust model's second named exception (§3.7), so
+// both infra workflows are held to exactly this shape. The environment's required approval is the
+// boundary; these rules keep an honest edit from loosening what runs inside it.
+const INFRA_ENV_JOBS = {
+  'infra-plan': 'infra-plan.yml#plan',
+  'infra-drift': 'infra-drift.yml#drift',
+};
+const TOFU_SECRET_LINE = /^tofu -chdir=infra (init|plan|show)\b/;
+// A tofu subcommand: `tofu`, any global flags (-chdir=…), then the command word.
+const tofuCommand = (words) => new RegExp(`\\btofu(\\s+-\\S+)*\\s+(${words})\\b`);
+const TOFU_WRITE = tofuCommand('apply|import|state|destroy|force-unlock|taint|untaint');
+const TOFU_PLAN = tofuCommand('plan');
+const lines = (step) =>
+  String(step.run ?? '')
+    .replace(/\\\n/g, ' ')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('#'));
+for (const { file, wf } of workflows) {
+  const on = wf.on ?? wf[true] ?? {};
+  const triggers = typeof on === 'string' ? [on] : Array.isArray(on) ? on : Object.keys(on);
+  if (triggers.includes('pull_request_target'))
+    fail(`${file}: never pull_request_target; it runs with secrets on fork code (§3.6)`);
+  for (const [jobName, job] of Object.entries(wf.jobs ?? {})) {
+    const where = `${file}#${jobName}`;
+    const env = envName(job);
+    for (const [infraEnv, owner] of Object.entries(INFRA_ENV_JOBS))
+      if (env === infraEnv && where !== owner) fail(`${where}: only ${owner} may use ${infraEnv}`);
+    for (const line of commandLines(job)) {
+      if (TOFU_WRITE.test(line)) fail(`${where}: CI never writes state or infrastructure: ${line}`);
+      if (TOFU_PLAN.test(line) && !/(^|\s)-lock=false(\s|$)/.test(line))
+        fail(`${where}: CI plans with -lock=false and a read-only state token: ${line}`);
+    }
+    if (!(env in INFRA_ENV_JOBS)) continue;
+    const steps = job.steps ?? [];
+    const at = (re) => steps.findIndex((st) => lines(st).some((l) => re.test(l)));
+    const installAt = at(/^scripts\/install-tofu\.sh /);
+    const guardAt = at(/^scripts\/infra-guard\.sh\b/);
+    const secretAt = steps.findIndex((st) => secretsIn(st).length > 0);
+    if (!(installAt !== -1 && installAt < guardAt && (secretAt === -1 || guardAt < secretAt)))
+      fail(`${where}: run scripts/install-tofu.sh, then scripts/infra-guard.sh, before any secret`);
+    if (secretsIn(job.env).length) fail(`${where}: secrets at job level; scope them to tofu steps`);
+    if (String(job.env?.TF_CLI_CONFIG_FILE) !== '/dev/null')
+      fail(`${where}: set TF_CLI_CONFIG_FILE: /dev/null (a CLI config could bypass the lockfile)`);
+    for (const st of steps) {
+      if (secretsIn(st).length === 0) continue;
+      if (st.uses) fail(`${where}: no action may hold the infra credentials (${st.uses})`);
+      for (const l of lines(st))
+        if (!TOFU_SECRET_LINE.test(l))
+          fail(
+            `${where}: steps holding the infra credentials run only tofu init, plan or show: ${l}`,
+          );
+    }
+  }
+}
+const infraPlan = byFile['infra-plan.yml'];
+if (!infraPlan) fail('infra-plan.yml: missing (D97)');
+else {
+  const on = infraPlan.on ?? infraPlan[true] ?? {};
+  const triggers = typeof on === 'string' ? [on] : Array.isArray(on) ? on : Object.keys(on);
+  if (triggers.length !== 1 || triggers[0] !== 'pull_request')
+    fail('infra-plan.yml: trigger only on pull_request');
+  const plan = infraPlan.jobs?.plan;
+  const planIf = String(plan?.if ?? '');
+  const needs = [plan?.needs ?? []].flat();
+  if (!needs.includes('changes')) fail('infra-plan.yml#plan: must need changes');
+  for (const want of [
+    "needs.changes.outputs.infra == 'true'",
+    'github.event.pull_request.head.repo.full_name == github.repository',
+    "github.event.pull_request.user.type != 'Bot'",
+  ])
+    if (!planIf.includes(want)) fail(`infra-plan.yml#plan: its if must include ${want}`);
+  if (envName(plan ?? {}) !== 'infra-plan') fail('infra-plan.yml#plan: use environment infra-plan');
+  for (const name of ['changes', 'comment']) {
+    const job = infraPlan.jobs?.[name];
+    if (!job) fail(`infra-plan.yml: missing job ${name}`);
+    else if (secretsIn(job).length || job.environment)
+      fail(`infra-plan.yml#${name}: holds no secret and no environment`);
+  }
+}
+
 if (failures.length > 0) {
   console.error(`workflow-policy: ${failures.length} violation(s)\n- ${failures.join('\n- ')}`);
   process.exit(1);

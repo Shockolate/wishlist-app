@@ -531,6 +531,107 @@ const mutations = [
       wf.jobs.e2e.services = { db: { image: 'postgres:17' } };
     },
   ],
+  // Rule 14 (D97): infra-plan.yml runs PR code next to the plan credentials.
+  [
+    'an infra plan for a bot PR (Review Focus 4)',
+    'infra-plan.yml',
+    (wf) => {
+      wf.jobs.plan.if = wf.jobs.plan.if
+        .replace(" &&\ngithub.event.pull_request.user.type != 'Bot'", '')
+        .replace(" && github.event.pull_request.user.type != 'Bot'", '');
+      if (wf.jobs.plan.if.includes("!= 'Bot'")) throw new Error('mutation target not found');
+    },
+  ],
+  [
+    'an infra plan for a fork PR',
+    'infra-plan.yml',
+    (wf) => {
+      const before = wf.jobs.plan.if;
+      wf.jobs.plan.if = before.replace(
+        /github\.event\.pull_request\.head\.repo\.full_name == github\.repository &&\s*/,
+        '',
+      );
+      if (wf.jobs.plan.if === before) throw new Error('mutation target not found');
+    },
+  ],
+  [
+    'infra-plan triggered by pull_request_target',
+    'infra-plan.yml',
+    (wf) => {
+      wf.on = { pull_request_target: wf.on.pull_request };
+    },
+  ],
+  [
+    'a tofu apply in the plan job',
+    'infra-plan.yml',
+    (wf) => {
+      const s = runStep(wf.jobs.plan, /tofu -chdir=infra plan/);
+      s.run = `${s.run}\ntofu -chdir=infra apply -auto-approve pr.tfplan`;
+    },
+  ],
+  [
+    'an infra plan that takes the state lock',
+    'infra-plan.yml',
+    (wf) => {
+      const s = runStep(wf.jobs.plan, /tofu -chdir=infra plan/);
+      s.run = s.run.replace(' -lock=false', '');
+    },
+  ],
+  [
+    'the infra guard moved after init',
+    'infra-plan.yml',
+    (wf) => {
+      const steps = wf.jobs.plan.steps;
+      const at = steps.findIndex((s) => /infra-guard\.sh/.test(s.run ?? ''));
+      if (at === -1) throw new Error('mutation target not found');
+      const [guard] = steps.splice(at, 1);
+      const init = steps.findIndex((s) => /tofu -chdir=infra init/.test(s.run ?? ''));
+      steps.splice(init + 1, 0, guard);
+    },
+  ],
+  [
+    'pnpm install in the infra plan job',
+    'infra-plan.yml',
+    (wf) => {
+      wf.jobs.plan.steps.splice(1, 0, { run: 'pnpm install --frozen-lockfile' });
+    },
+  ],
+  [
+    'a non-tofu command holding the infra credentials',
+    'infra-plan.yml',
+    (wf) => {
+      runStep(wf.jobs.plan, /tofu -chdir=infra show/).run = 'env > plan.txt';
+    },
+  ],
+  [
+    'an action holding the infra credentials',
+    'infra-plan.yml',
+    (wf) => {
+      const s = usesStep(wf.jobs.plan, 'actions/upload-artifact@');
+      s.env = { TOKEN: '${{ secrets.TOFU_VERCEL_API_TOKEN }}' };
+    },
+  ],
+  [
+    'the infra plan job without TF_CLI_CONFIG_FILE=/dev/null',
+    'infra-plan.yml',
+    (wf) => {
+      delete wf.jobs.plan.env.TF_CLI_CONFIG_FILE;
+    },
+  ],
+  [
+    'a secret on the infra plan comment job',
+    'infra-plan.yml',
+    (wf) => {
+      wf.jobs.comment.env = { TOKEN: '${{ secrets.TOFU_VERCEL_API_TOKEN }}' };
+    },
+  ],
+  [
+    'another job using the infra-plan environment',
+    'infra-plan.yml',
+    (wf) => {
+      wf.jobs.changes.environment = 'infra-plan';
+    },
+  ],
 ];
 
 function copyRoot() {
@@ -565,7 +666,14 @@ const problems = [];
 
 // Baseline: the real workflows, round-tripped through the YAML serializer, still pass.
 const base = copyRoot();
-for (const f of ['deploy.yml', 'preview.yml', 'preview-seed.yml', 'backup.yml', 'scorecard.yml'])
+for (const f of [
+  'deploy.yml',
+  'preview.yml',
+  'preview-seed.yml',
+  'backup.yml',
+  'scorecard.yml',
+  'infra-plan.yml',
+])
   rewrite(base, f);
 const baseline = check(base);
 rmSync(base, { recursive: true, force: true });
