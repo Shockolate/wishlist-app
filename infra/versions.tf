@@ -1,0 +1,7 @@
+terraform {
+  # The release scripts/install-tofu.sh installs (infra/.opentofu-version). Bump both together.
+  required_version = "1.13.2"
+
+  # Exact pins (D93). Each provider joins in its import layer.
+  required_providers {}
+}

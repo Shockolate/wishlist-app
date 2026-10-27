@@ -69,6 +69,29 @@ jobs:
       - name: Lint GitHub workflows
         run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 -color
 
+  # OpenTofu checks that need no credentials (spec 2026-10-27 §3.6). Plans run in infra-plan.yml.
+  infra:
+    name: infra
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TF_CLI_CONFIG_FILE: /dev/null
+      TF_IN_AUTOMATION: '1'
+      TF_INPUT: '0'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install OpenTofu
+        run: |
+          scripts/install-tofu.sh "$RUNNER_TEMP/tofu"
+          echo "$RUNNER_TEMP/tofu" >> "$GITHUB_PATH"
+      - run: tofu fmt -check -recursive infra
+      # -lockfile=readonly: providers must match the committed hashes, never be re-resolved here.
+      - run: tofu -chdir=infra init -backend=false -lockfile=readonly
+      - run: tofu -chdir=infra validate
+      - run: scripts/infra-guard.sh
+
   integration:
     name: integration
     runs-on: ubuntu-latest

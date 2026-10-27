@@ -15,5 +15,13 @@ test-results/
 .env.local
 .env.*.local
 
+# OpenTofu (D93, D94): never commit state, plans, variable files or generated import config.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+infra/generated_*.tf
+
 # Mockups and scratch files from the brainstorming skill's visual companion.
 .superpowers/

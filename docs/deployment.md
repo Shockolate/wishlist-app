@@ -661,3 +661,67 @@ Applied once, from the files in this repo:
 | Renovate                          | GitHub App                   | install from https://github.com/apps/renovate for this repo only                                                              |
 
 Required checks: `checks`, `actionlint`, `integration`, `migrations-lint`, `e2e`. `preview` is advisory: a Vercel or Neon outage, or Neon's branch cap, shouldn't block merging code that passed CI.
+
+## Infrastructure as code
+
+`infra/` is an OpenTofu root module ([spec 2026-10-27](superpowers/specs/2026-10-27-infrastructure-as-code-design.md), D93–D101). It describes the Cloudflare, GitHub, Better Stack and Vercel settings listed in the spec's §3.1. Secret values, Neon, Sentry, Resend and Email Routing stay outside it, with their runbooks above.
+
+**The rules:**
+
+- **Apply only from `main`'s tip.** Applying a branch leaves the state ahead of `main`.
+- **Only Ted applies.** CI plans, with read-only tokens where a provider offers them, and never writes state.
+- **Change a managed setting in a PR, not a dashboard.** In an emergency, change the dashboard and codify or revert it afterwards; the monthly drift check catches it otherwise.
+
+### Local setup
+
+Install the pinned release the same way CI does, then put it on your `PATH`:
+
+```bash
+scripts/install-tofu.sh ~/.local/opt/tofu && export PATH="$HOME/.local/opt/tofu:$PATH"
+tofu version   # must match infra/.opentofu-version
+```
+
+Credentials go into a fresh shell's environment, typed or pasted from your password manager at a silent prompt. They never go in a file, your history or argv:
+
+```bash
+export TF_CLI_CONFIG_FILE=/dev/null   # a CLI config's dev_overrides would bypass the lockfile
+read -rs TF_VAR_state_passphrase && export TF_VAR_state_passphrase
+read -rs AWS_ACCESS_KEY_ID && export AWS_ACCESS_KEY_ID           # R2 token for hanker-tofu-state
+read -rs AWS_SECRET_ACCESS_KEY && export AWS_SECRET_ACCESS_KEY
+# Once their providers are in infra/:
+read -rs CLOUDFLARE_API_TOKEN && export CLOUDFLARE_API_TOKEN
+read -rs VERCEL_API_TOKEN && export VERCEL_API_TOKEN
+read -rs BETTERUPTIME_API_TOKEN && export BETTERUPTIME_API_TOKEN
+export GITHUB_TOKEN="$(gh auth token)"
+```
+
+Each `read -rs` waits silently for one value and Enter. Close the shell when you're done.
+
+### One-off setup
+
+State can't describe the bucket that holds it, so the bucket and its first token are made by hand.
+
+1. **Bucket.** Cloudflare → R2 → create `hanker-tofu-state`: automatic location, Standard storage, private, no custom domain, **no lock rule and no lifecycle rule**. State is overwritten on every apply, so a lock would block it.
+2. **Apply token.** R2 → Manage API tokens → **Object Read & Write**, applied to `hanker-tofu-state` only. It's `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` above. It lives only in your password manager.
+3. **Passphrase.** Generate 32 characters or more in your password manager (OpenTofu's minimum is 16). Lose it and the state is unreadable: see Recovery.
+4. **Initialise,** on `main` with the three values exported: `tofu -chdir=infra init`. Expected: `Successfully configured the backend "s3"`. Then `tofu -chdir=infra plan` answers "No changes" until the first provider is imported.
+
+### Changing infrastructure
+
+1. On a branch, edit `infra/` and run `tofu -chdir=infra plan`.
+2. Open the PR. Once `infra-plan.yml` exists, approve its `infra-plan` deployment after reading the diff; it posts the plan as a comment.
+3. Merge through the normal stack flow.
+4. On `main`'s tip, run `tofu -chdir=infra apply`. It plans again; check it matches the PR's plan before typing `yes`.
+
+`terraform.tfstate` exists only in R2, encrypted. Never commit state, a `.tfplan` or a `.tfvars` (`.gitignore` refuses them), and never paste a plan that `tofu show` hasn't redacted.
+
+### Recovery
+
+R2 has no object versioning, so there's no older state to roll back to. Nothing in production depends on the state, though:
+
+- **State lost, corrupted, or its passphrase lost:** delete `infra/terraform.tfstate` from the bucket (with the passphrase lost it's unreadable anyway), set a new passphrase if needed, and re-import every resource with `import` blocks, as when they were first imported (the import layers' history in git has the IDs). The gate is the same: a plan with nothing to add, change or destroy.
+- **A stuck lock** (`use_lockfile` writes `infra/terraform.tfstate.tflock` next to the state): only after confirming no other run is going, `tofu -chdir=infra force-unlock <lock ID>`.
+
+### Upgrading
+
+Renovate opens provider bumps; they wait for review because they run next to secrets. Plan a bump locally before merging it, since Renovate's PRs get no CI plan. OpenTofu itself moves by hand: the Quarterly row in [operations.md](operations.md#recurring).

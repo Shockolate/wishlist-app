@@ -50,6 +50,18 @@
       "dependencyDashboardApproval": true
     },
     {
+      "description": "infra/ is OpenTofu, so providers resolve against OpenTofu's registry, whose hashes .terraform.lock.hcl records (D93). Provider bumps run next to secrets and always wait for review",
+      "matchManagers": ["terraform"],
+      "matchDatasources": ["terraform-provider"],
+      "registryUrls": ["https://registry.opentofu.org"]
+    },
+    {
+      "description": "required_version names OpenTofu, not Terraform, and moves by hand with infra/.opentofu-version and install-tofu.sh's sha256 (quarterly in docs/operations.md)",
+      "matchManagers": ["terraform"],
+      "matchDepTypes": ["required_version"],
+      "enabled": false
+    },
+    {
       "description": "Dev-only tooling that runs in secret-free jobs and never shapes the production build merges itself once the required checks pass (D88). Builds, runtime code, the Vercel CLI, Playwright, Actions, images and majors wait for review. @types/node moves by hand with undici-types",
       "matchDepTypes": ["devDependencies"],
       "matchUpdateTypes": ["minor", "patch"],
