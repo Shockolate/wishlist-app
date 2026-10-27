@@ -92,7 +92,9 @@ Get explicit approval before anything outward-facing or hard to undo:
 - merging, or pushing to `main`;
 - the first `gh stack submit` of a new stack;
 - creating or changing cloud resources or settings (Vercel, Neon, GitHub repository settings and rulesets);
-- setting, rotating or reading secrets and production environment variables.
+- setting, rotating or reading secrets and production environment variables;
+- `tofu apply`, and any `tofu` command that writes state (`import`, `state`, `force-unlock`). Only Ted applies, from `main`'s tip;
+- approving a pending deployment, such as an `infra-plan` run. The approval is what lets PR code run next to the plan credentials (spec 2026-10-27 §3.7), and an agent using Ted's `gh` login could technically give it. This is a rule, not a technical control.
 
 ## Never
 

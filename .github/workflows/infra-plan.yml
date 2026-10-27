@@ -1,0 +1,127 @@
+name: Infra plan
+
+# No `paths:` filter (AGENTS.md): `changes` decides whether a PR touches infra/, and `plan` is
+# skipped when it doesn't.
+#
+# Trust model (spec 2026-10-27 §3.7): `plan` is the second named exception to "secrets never meet
+# PR code". It runs the PR's HCL, and the providers it chooses, with the read-only plan credentials
+# and the state passphrase. The boundary is the infra-plan environment's required approval, which
+# lives in repository settings where a PR can't remove it: Ted reads the diff, then approves. The
+# guard script and the policy tests are defence in depth, since a PR can edit this file. `changes`
+# and `comment` hold no secrets. CI never applies and never writes state (-lock=false, read-only
+# state token).
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: infra-plan-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+
+jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      infra: ${{ steps.diff.outputs.infra }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Does this PR touch the infra?
+        id: diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if git diff --name-only "$BASE_SHA" "$HEAD_SHA" \
+            | grep -qE '^(infra/|\.github/workflows/infra-|scripts/install-tofu\.sh$|scripts/infra-guard\.sh$)'; then
+            echo infra=true >> "$GITHUB_OUTPUT"
+          else
+            echo infra=false >> "$GITHUB_OUTPUT"
+          fi
+
+  plan:
+    name: plan
+    needs: changes
+    # Fork and bot PRs never get the plan credentials, as with previews. Plan a Renovate provider
+    # bump locally before merging it.
+    if: >-
+      needs.changes.outputs.infra == 'true' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: infra-plan
+    env:
+      TF_CLI_CONFIG_FILE: /dev/null
+      TF_IN_AUTOMATION: '1'
+      TF_INPUT: '0'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          persist-credentials: false
+      - name: Install OpenTofu
+        run: |
+          scripts/install-tofu.sh "$RUNNER_TEMP/tofu"
+          echo "$RUNNER_TEMP/tofu" >> "$GITHUB_PATH"
+      - name: Guard the root module
+        run: scripts/infra-guard.sh
+      - name: Initialise
+        run: tofu -chdir=infra init -lockfile=readonly
+        env:
+          TF_VAR_state_passphrase: ${{ secrets.TOFU_STATE_PASSPHRASE }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.TOFU_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TOFU_R2_SECRET_ACCESS_KEY }}
+      - name: Plan
+        run: tofu -chdir=infra plan -lock=false -out=pr.tfplan
+        env:
+          TF_VAR_state_passphrase: ${{ secrets.TOFU_STATE_PASSPHRASE }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.TOFU_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TOFU_R2_SECRET_ACCESS_KEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.TOFU_CLOUDFLARE_API_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.TOFU_GITHUB_TOKEN }}
+          VERCEL_API_TOKEN: ${{ secrets.TOFU_VERCEL_API_TOKEN }}
+          BETTERUPTIME_API_TOKEN: ${{ secrets.TOFU_BETTERSTACK_API_TOKEN }}
+      # The plan file is encrypted like the state, so reading it back needs the passphrase. tofu
+      # show prints sensitive values as (sensitive value).
+      - name: Show the plan
+        run: tofu -chdir=infra show -no-color pr.tfplan > plan.txt
+        env:
+          TF_VAR_state_passphrase: ${{ secrets.TOFU_STATE_PASSPHRASE }}
+      - name: Build the comment
+        run: scripts/infra-plan-comment.sh plan.txt "$HEAD_SHA" > plan-comment.md
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: infra-plan-text
+          path: plan-comment.md
+          retention-days: 7
+
+  comment:
+    name: comment
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: infra-plan-text
+      - name: Comment the plan
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        with:
+          header: infra-plan
+          path: plan-comment.md
