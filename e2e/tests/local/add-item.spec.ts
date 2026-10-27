@@ -107,7 +107,7 @@ test('says why the box can’t take what was typed, and announces it every time'
   await expect(alert('Paste a link or type an idea.')).toBeVisible();
   await expect(alert('Paste a link or type an idea.')).not.toHaveAttribute('data-seen', '');
   await addThroughTheBox(page, 'ftp://files.example/kettle');
-  await expect(alert('Links must start with http:// or https://')).toBeVisible();
+  await expect(alert('Enter a link that starts with http:// or https://')).toBeVisible();
   await addThroughTheBox(page, 'K'.repeat(201));
   await expect(alert('Use 200 characters or fewer.')).toBeVisible();
   await expect(rowsOf(page)).toHaveCount(0);

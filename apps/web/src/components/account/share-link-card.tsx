@@ -79,7 +79,7 @@ export function ShareLinkCard({ shareUrl: initial }: { shareUrl: string }) {
         Share link
       </h2>
       <p className="mt-1.5 text-[15px] text-muted-foreground">
-        Anyone with this link can see your list.
+        Anyone with the link can see your list.
       </p>
       <p className="mt-4 rounded-control border-[1.5px] border-input bg-card px-3.5 py-3 text-[15px] [overflow-wrap:anywhere]">
         {shareUrl}

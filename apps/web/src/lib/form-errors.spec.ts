@@ -36,7 +36,7 @@ describe('formErrorMap (Plan 2b rule 23)', () => {
   it('keeps a refinement’s own message', () => {
     const NameOnly = SignupRequestSchema.pick({ displayName: true });
     expect(messages(NameOnly, { displayName: 'Ada\u202E' })).toEqual({
-      displayName: 'Use visible characters only',
+      displayName: 'Use visible characters only.',
     });
   });
 });

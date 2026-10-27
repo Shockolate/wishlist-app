@@ -38,7 +38,7 @@ test('the login page renders with its nonce CSP (spec §6.9)', async ({ page }) 
   expect(res?.headers()['content-security-policy']).toMatch(
     /script-src 'self' 'nonce-[^']+' 'strict-dynamic'/,
   );
-  await expect(page.getByRole('heading', { name: 'Log in' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
 });
 
 test('an unknown share page is a 404 that search engines skip (spec §6.7)', async ({ page }) => {

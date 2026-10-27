@@ -15,33 +15,33 @@ export const LINK_EXPIRED = 'This link has expired or has already been used.';
 export const WRONG_PASSWORD = 'That password isn’t right.';
 
 /** A form was sent before its Turnstile check produced a token. */
-export const FINISH_CHECK = 'Finish the check above, then try again.';
+export const FINISH_CHECK = 'Finish the security check above, then try again.';
 
 /** Turnstile's script never loaded: a content blocker, or a network that drops it (D38). */
 export const TURNSTILE_BLOCKED =
   'We couldn’t load the security check. If you use a content blocker, allow hanker.dev, or try another browser.';
 
 /** The widget loaded, then failed. */
-export const TURNSTILE_FAILED = 'The check didn’t work. Reload the page to try again.';
+export const TURNSTILE_FAILED = 'The security check didn’t work. Reload the page to try again.';
 
 /** An item's 11th tag: the API's answer, and the tag field's refusal before sending (Plan 7b ruling 7). */
-export const ITEM_TAG_LIMIT = 'An item can have at most 10 tags.';
+export const ITEM_TAG_LIMIT = 'An item can have up to 10 tags.';
 
 /** What a person sees for each error code: the one table (spec §7, Plan 2b rule 23). */
 export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
-  [ErrorCode.INVALID_CREDENTIALS]: "That email and password don't match.",
+  [ErrorCode.INVALID_CREDENTIALS]: 'That email and password don’t match.',
   [ErrorCode.PASSWORD_BREACHED]:
     'That password has appeared in a data breach. Choose a different one.',
-  [ErrorCode.CAPTCHA_FAILED]: "The human check didn't go through. Try it again.",
+  [ErrorCode.CAPTCHA_FAILED]: 'The security check didn’t go through. Try it again.',
   [ErrorCode.CAPTCHA_UNAVAILABLE]:
     'Sign-ups and account emails are paused right now. Try again later.',
   [ErrorCode.INVALID_TOKEN]: LINK_EXPIRED,
   [ErrorCode.RATE_LIMITED]: 'Too many attempts. Wait a few minutes and try again.',
-  [ErrorCode.UNAUTHENTICATED]: "You're signed out. Log in to continue.",
+  [ErrorCode.UNAUTHENTICATED]: 'You’re signed out. Sign in to continue.',
   [ErrorCode.VALIDATION_FAILED]: 'Some details need fixing.',
   [ErrorCode.FORBIDDEN_ORIGIN]: 'This page is out of date. Reload it and try again.',
   [ErrorCode.ORDER_CONFLICT]: 'Your list changed on another device, so we’ve reloaded it.',
-  [ErrorCode.LIST_FULL]: 'Your list is full: 200 items is the most it can hold.',
+  [ErrorCode.LIST_FULL]: 'Your list is full. A list can have up to 200 items.',
   [ErrorCode.EMAIL_NOT_VERIFIED]: 'Confirm your email first, then try again.',
   [ErrorCode.OWNER_CANNOT_CLAIM]: 'You can’t claim from your own list.',
   [ErrorCode.MANAGE_TOKEN_IN_USE]:
@@ -49,7 +49,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   [ErrorCode.SHARE_LINK_NOT_FOUND]: 'This list’s link doesn’t work any more.',
   [ErrorCode.OWN_LIST_CLAIM]: 'Claims on your own list are hidden from you.',
   [ErrorCode.TAG_NAME_TAKEN]: 'You already have a tag called that.',
-  [ErrorCode.TAG_LIMIT_REACHED]: 'Your list has 50 tags, the most it can hold.',
+  [ErrorCode.TAG_LIMIT_REACHED]: 'A list can have up to 50 tags.',
   [ErrorCode.ITEM_TAG_LIMIT_REACHED]: ITEM_TAG_LIMIT,
 };
 
@@ -67,7 +67,7 @@ export function errorMessage(error: unknown): string {
   }
   // fetch rejects with a TypeError when the network is down.
   if (error instanceof TypeError)
-    return "We couldn't reach Hanker. Check your connection and try again.";
+    return 'We couldn’t reach Hanker. Check your connection and try again.';
   return FALLBACK;
 }
 
@@ -110,7 +110,7 @@ export const FINISH_EDITING = 'Save or cancel the item you’re editing first.';
 
 /** The add box (Plan 3b rule 5). */
 export const ADD_BOX_EMPTY = 'Paste a link or type an idea.';
-export const OTHER_SCHEME_LINK = 'Links must start with http:// or https://';
+export const OTHER_SCHEME_LINK = 'Enter a link that starts with http:// or https://';
 export const LINK_TOO_LONG = 'Use 2048 characters or fewer.';
 
 const CANT_REACH = 'We couldn’t reach that page, so fill in the details yourself.';

@@ -82,7 +82,7 @@ export function VerifyEmail({
   ) : (
     <ResendCard
       heading="Check your email"
-      body="We sent a confirmation link when you signed up. It works for 24 hours. Need a new one?"
+      body="We sent a confirmation link when you signed up. It works once, within 24 hours. Need a new one?"
       nonce={nonce}
     />
   );

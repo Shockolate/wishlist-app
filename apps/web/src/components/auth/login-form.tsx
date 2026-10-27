@@ -41,7 +41,7 @@ export function LoginForm({ next }: { next: string }) {
 
   return (
     <Card>
-      <h1 className="font-display text-5xl leading-none">Log in</h1>
+      <h1 className="font-display text-5xl leading-none">Sign in</h1>
       <form onSubmit={onSubmit} noValidate className="mt-7 flex flex-col gap-5">
         <Field id="email" label="Email" error={errors.email?.message}>
           {(control) => (
@@ -60,7 +60,7 @@ export function LoginForm({ next }: { next: string }) {
         </Field>
         {formError ? <Notice tone="error">{formError}</Notice> : null}
         <Button type="submit" disabled={isSubmitting}>
-          Log in
+          Sign in
         </Button>
       </form>
       <p className="mt-5 text-[15px]">

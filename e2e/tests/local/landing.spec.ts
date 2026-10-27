@@ -11,7 +11,7 @@ test('the landing page introduces Hanker and links to sign-up and login', async 
     'href',
     '/signup',
   );
-  await expect(page.getByRole('link', { name: 'Log in' })).toHaveAttribute('href', '/login');
+  await expect(page.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/login');
 });
 
 test('/api/* reaches the API through the same-origin rewrite', async ({ request }) => {

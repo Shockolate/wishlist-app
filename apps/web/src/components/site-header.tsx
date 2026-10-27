@@ -18,12 +18,12 @@ export function SiteHeader({
       </Link>
       {action === 'login' ? (
         <Link href="/login" className={LINK}>
-          Log in
+          Sign in
         </Link>
       ) : null}
       {action === 'signup' ? (
         <Link href="/signup" className={LINK}>
-          Create an account
+          Create your list
         </Link>
       ) : null}
       {action === 'list' ? (

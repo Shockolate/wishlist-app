@@ -10,7 +10,7 @@ const Contact = () => <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>;
 /** `/privacy` (D54). Every claim here was checked against the code and the services (Plan 6). */
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Privacy" updated="2026-10-24">
+    <LegalPage title="Privacy" updated="2026-10-27">
       <p>
         Hanker is a small wishlist site run by Ted Armstrong in Portland, Maine, USA. This page says
         what Hanker keeps about you, who else handles it, and for how long. Questions go to{' '}
@@ -74,10 +74,10 @@ export default function PrivacyPage() {
 
       <h2>Cookies and storage</h2>
       <p>
-        One cookie, which keeps you logged in. Claim links, and the name you last claimed with, stay
-        in your browser’s own storage. Cloudflare’s check on sign-ups and email-link requests keeps
-        a small value in its own part of your browser’s storage. Nothing else, which is why there’s
-        no cookie banner.
+        One cookie, which keeps you signed in. Claim links, and the name you last claimed with, stay
+        in your browser’s own storage. Cloudflare’s security check on sign-ups and email-link
+        requests keeps a small value in its own part of your browser’s storage. Nothing else, which
+        is why there’s no cookie banner.
       </p>
 
       <h2>Who else handles your information</h2>

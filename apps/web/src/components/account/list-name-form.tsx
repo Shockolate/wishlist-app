@@ -78,7 +78,7 @@ export function ListNameForm({ title }: { title: string }) {
       <div role="status">
         {saved && !isDirty ? (
           <Notice tone="success" announce={false} className="mt-4">
-            List name saved
+            List name saved.
           </Notice>
         ) : null}
       </div>

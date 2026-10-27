@@ -51,7 +51,7 @@ test('a new person signs up, confirms, builds and shares a list, a gifter claims
     .toContain('/login?next=');
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(PASSWORD);
-  await page.getByRole('button', { name: 'Log in' }).click();
+  await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('heading', { level: 1, name: "Ada's wishlist" })).toBeVisible();
   await expect(page.getByText('Confirm your email to start your list')).toHaveCount(0);
 
@@ -112,9 +112,11 @@ test('a new person signs up, confirms, builds and shares a list, a gifter claims
   await mainNav.getByRole('link', { name: 'Settings' }).click();
   await page.getByLabel('Display name').fill('Ada Lovelace');
   await page.getByRole('button', { name: 'Save name' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Name saved' })).toHaveText('Name saved');
+  await expect(page.getByRole('status').filter({ hasText: 'Name saved' })).toHaveText(
+    'Name saved.',
+  );
 
-  await page.getByRole('button', { name: 'Log out' }).click();
+  await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page).toHaveURL('/');
   await page.goto('/login');
   await page.getByRole('link', { name: 'Forgot your password?' }).click();
@@ -127,10 +129,10 @@ test('a new person signs up, confirms, builds and shares a list, a gifter claims
   await page.goto(linkPath((await waitForEmail(email, RESET)).text, '/reset-password/confirm'));
   await page.getByLabel('New password').fill(NEW_PASSWORD);
   await page.getByRole('button', { name: 'Save the new password' }).click();
-  await page.getByRole('link', { name: 'Go to login' }).click();
+  await page.getByRole('link', { name: 'Go to sign in' }).click();
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(NEW_PASSWORD);
-  await page.getByRole('button', { name: 'Log in' }).click();
+  await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('heading', { level: 1, name: "Ada's wishlist" })).toBeVisible();
 
   await mainNav.getByRole('link', { name: 'Settings' }).click();

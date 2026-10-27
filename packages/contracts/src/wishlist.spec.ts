@@ -229,8 +229,8 @@ describe('UnfurlRequestSchema and UnfurlResponseSchema (spec §5, §6.8)', () =>
 // Postgres refuses U+0000 in a text column, which turned it into a 500. It is invisible, so the
 // message says what to do rather than what is wrong.
 describe('a NUL character is refused in every owner text field', () => {
-  const NUL_MESSAGE = 'Remove the invisible character';
-  const VISIBLE_MESSAGE = 'Use visible characters only';
+  const NUL_MESSAGE = 'Remove the invisible character.';
+  const VISIBLE_MESSAGE = 'Use visible characters only.';
 
   it.each([
     ['WishlistTitleSchema', WishlistTitleSchema, 'Birth\u0000day', VISIBLE_MESSAGE],
@@ -284,7 +284,7 @@ describe.each([
     const result = schema.safeParse(title);
     expect(result.success).toBe(false);
     expect(result.error?.issues.map((issue) => issue.message)).toEqual([
-      'Use visible characters only',
+      'Use visible characters only.',
     ]);
   });
 
@@ -313,7 +313,7 @@ describe('PriceTextSchema: visible characters only (D36)', () => {
     const result = PriceTextSchema.safeParse(price);
     expect(result.success).toBe(false);
     expect(result.error?.issues.map((issue) => issue.message)).toEqual([
-      'Use visible characters only',
+      'Use visible characters only.',
     ]);
   });
 

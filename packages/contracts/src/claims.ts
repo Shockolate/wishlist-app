@@ -23,7 +23,7 @@ export type CreateClaimRequest = z.infer<typeof CreateClaimRequestSchema>;
 export const UpdateClaimRequestSchema = z
   .object({ claimerName: ClaimerNameSchema.optional(), quantity: QuantitySchema.optional() })
   .refine((body) => body.claimerName !== undefined || body.quantity !== undefined, {
-    message: 'Change the name or the quantity',
+    message: 'Change the name or the quantity.',
   });
 export type UpdateClaimRequest = z.infer<typeof UpdateClaimRequestSchema>;
 

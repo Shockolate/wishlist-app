@@ -103,9 +103,11 @@ function Done() {
       >
         Your password is changed.
       </h1>
-      <p className="mt-4 leading-relaxed">You’re signed out everywhere. Log in with the new one.</p>
+      <p className="mt-4 leading-relaxed">
+        You’re signed out everywhere. Sign in with the new one.
+      </p>
       <Link href="/login" className={cn(buttonVariants(), 'mt-7')}>
-        Go to login
+        Go to sign in
       </Link>
     </Card>
   );

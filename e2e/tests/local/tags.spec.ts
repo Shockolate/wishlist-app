@@ -180,7 +180,7 @@ test('refuses an 11th tag in the field, and Escape closes the suggestions (Plan 
   await expect(page.getByRole('listbox', { name: 'Tag suggestions' })).toHaveCount(0);
   await tagBox(page).fill('Eleventh');
   await tagBox(page).press('Enter');
-  await expect(page.getByText('An item can have at most 10 tags.')).toBeVisible();
+  await expect(page.getByText('An item can have up to 10 tags.')).toBeVisible();
   await expect(tagBox(page)).toHaveAttribute('aria-invalid', 'true');
   await expect(removeButtons(page)).toHaveCount(10);
   await expect(tagBox(page)).toHaveValue('Eleventh');
@@ -188,7 +188,7 @@ test('refuses an 11th tag in the field, and Escape closes the suggestions (Plan 
   // Removing one makes room.
   await page.getByRole('button', { name: 'Remove Tag 9' }).click();
   await tagBox(page).fill('Eleventh');
-  await expect(page.getByText('An item can have at most 10 tags.')).toBeHidden();
+  await expect(page.getByText('An item can have up to 10 tags.')).toBeHidden();
   await tagBox(page).press('Enter');
   await expect(page.getByRole('button', { name: 'Remove Eleventh' })).toBeVisible();
 

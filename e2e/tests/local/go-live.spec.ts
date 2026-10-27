@@ -5,7 +5,7 @@ import { passTurnstile } from '../../support/turnstile.js';
 
 // Cloudflare's script, wherever the page asks for it.
 const TURNSTILE_SCRIPT = '**/turnstile/v0/api.js*';
-const FINISH_CHECK = 'Finish the check above, then try again.';
+const FINISH_CHECK = 'Finish the security check above, then try again.';
 const BLOCKED =
   'We couldn’t load the security check. If you use a content blocker, allow hanker.dev, or try another browser.';
 

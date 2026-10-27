@@ -128,7 +128,7 @@ export function SignupForm({ nonce }: { nonce: string | undefined }) {
       <p className="mt-5 text-[15px]">
         Already have an account?{' '}
         <Link href="/login" className="underline">
-          Log in
+          Sign in
         </Link>
       </p>
     </Card>

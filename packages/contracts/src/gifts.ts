@@ -43,7 +43,7 @@ export const UpdateGiftRequestSchema = z
   .refine(
     (body) =>
       body.claimerName !== undefined || body.quantity !== undefined || body.bought !== undefined,
-    { message: 'Change the name, the quantity or the Bought tick' },
+    { message: 'Change the name, the quantity or the Bought tick.' },
   );
 export type UpdateGiftRequest = z.infer<typeof UpdateGiftRequestSchema>;
 
