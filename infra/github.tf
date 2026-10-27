@@ -46,6 +46,24 @@ resource "github_repository" "wishlist_app" {
 
   lifecycle {
     prevent_destroy = true
+
+    # GitHub returns these as null to a token that can't write repo administration, which the
+    # read-only plan token (TOFU_GITHUB_TOKEN) can't, so every CI plan and drift check would propose
+    # turning them back on. They stay dashboard settings. Squash-only merges on main are enforced,
+    # and drift-checked, by the ruleset below. ignore_vulnerability_alerts_during_read is the
+    # provider's own flag, absent from state under that token too.
+    ignore_changes = [
+      allow_auto_merge,
+      allow_merge_commit,
+      allow_rebase_merge,
+      allow_squash_merge,
+      delete_branch_on_merge,
+      merge_commit_message,
+      merge_commit_title,
+      squash_merge_commit_message,
+      squash_merge_commit_title,
+      ignore_vulnerability_alerts_during_read,
+    ]
   }
 }
 
