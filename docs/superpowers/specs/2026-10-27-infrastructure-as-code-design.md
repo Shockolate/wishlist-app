@@ -43,7 +43,7 @@ Everything in AGENTS.md applies, in particular: exact pins, stacked PRs with Con
 | **Cloudflare** (`cloudflare/cloudflare`) | `hanker.dev`'s DNS records for Vercel (apex, `www`) and Resend (both domains' `send` and `rsend` CNAMEs and DKIM), `_dmarc`, DNSSEC, the `hanker-backups` bucket, the Turnstile widget. The bucket's lifecycle and lock rules are **asserted, not managed** (below) | The zone itself (its ID is a local, not managed), zone settings, Email Routing and the records it creates, every API token |
 | **GitHub** (`integrations/github`) | The repository's settings (auto-merge, secret scanning and push protection, vulnerability alerts), the `main` ruleset, the `production`, `preview`, `infra-plan` and `infra-drift` environments with their reviewers and branch policies, the repo variables | Every secret, CodeQL default setup, the Renovate app |
 | **Better Stack** (`BetterStackHQ/better-uptime`) | The Live, Site and Deep monitors | Both heartbeats (amended 2026-10-27: provider 0.22.4 doesn't mark a heartbeat's `url` sensitive, so a plan would print it), escalation and notification settings |
-| **Vercel** (`vercel/vercel`) | Both projects' settings (root directory, files outside root, framework, Node version, deployment protection, automation bypass), `hanker.dev` and `www.hanker.dev` with the 308 redirect, the API's non-secret production env vars (`APP_ORIGIN`, `EMAIL_TRANSPORT`, `EMAIL_FROM`, `CLOUDFLARE_ACCOUNT_ID`) | Every sensitive env var, deployments, everything `vercel.json` already sets (install command, cron, `git.deploymentEnabled`) |
+| **Vercel** (`vercel/vercel`) | Both projects' settings (root directory, framework, Node version, region, deployment protection), `hanker.dev` and `www.hanker.dev` with the 308 redirect | Every env var (amended 2026-10-27: all of the API's, `APP_ORIGIN` and `EMAIL_*` included, are Vercel type `sensitive`, so unreadable and never drift-checkable), the automation bypass (provider 5.x has no attribute for it), the `*.vercel.app` domains, deployments, everything `vercel.json` already sets (install command, cron, `git.deploymentEnabled`) |
 
 **The backup bucket's rules are asserted (amended 2026-10-27, Ted's choice).** Provider 5.28.1 can't import `r2_bucket_lifecycle` or `r2_bucket_lock`, and creating them would rewrite the rules that protect the backups. Data sources read them, and postconditions require an enabled `daily/` rule that deletes after 30 days and one that locks for 30 days. Every plan, the drift check included, fails if either is loosened. Changing a rule stays a dashboard step, with its assertion updated in the same PR.
 
@@ -86,7 +86,6 @@ Everything in AGENTS.md applies, in particular: exact pins, stacked PRs with Con
 | In state | Unlocks if leaked |
 | --- | --- |
 | The Turnstile widget's secret key | Little: verifying tokens against Hanker's widget |
-| The `wishlist-web` automation bypass secret | Viewing protected previews |
 
 After each import layer is applied, Ted decrypts the state locally and checks that nothing else sensitive is in it (⏸). Anything beyond this table stops the work until the spec is updated.
 

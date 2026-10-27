@@ -16,5 +16,9 @@ terraform {
       source  = "BetterStackHQ/better-uptime"
       version = "0.22.4"
     }
+    vercel = {
+      source  = "vercel/vercel"
+      version = "5.24.1"
+    }
   }
 }

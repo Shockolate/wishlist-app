@@ -727,3 +727,5 @@ R2 has no object versioning, so there's no older state to roll back to. Nothing 
 ### Upgrading
 
 Renovate opens provider bumps; they wait for review because they run next to secrets. Plan a bump locally before merging it, since Renovate's PRs get no CI plan. OpenTofu itself moves by hand: the Quarterly row in [operations.md](operations.md#recurring).
+
+**The Vercel provider isn't signed on OpenTofu's registry** (`tofu init` says signature validation was skipped). Before merging a bump, check its hash by hand: take the signing key from `https://registry.terraform.io/v1/providers/vercel/vercel/<version>/download/linux/amd64` (`signing_keys`), verify the release's `SHA256SUMS.sig` on GitHub with it, and confirm the `linux_amd64` hash is among the lockfile's `zh:` entries. 5.24.1 was checked this way (key `1ADC 8CB0 1C6E 6C19 532E 6EEC 6545 E9CB 7A48 C1FA`).

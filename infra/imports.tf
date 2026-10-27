@@ -95,3 +95,22 @@ import {
   to = betteruptime_monitor.deep
   id = "5098697"
 }
+
+# Vercel. Import IDs are <team_id>/<project_id>[/<domain>]. The *.vercel.app domains are Vercel's
+# own and aren't imported; neither are env vars (every API one is type sensitive, so unreadable).
+import {
+  to = vercel_project.api
+  id = "${local.vercel_team_id}/${local.vercel_project_id_api}"
+}
+import {
+  to = vercel_project.web
+  id = "${local.vercel_team_id}/${local.vercel_project_id_web}"
+}
+import {
+  to = vercel_project_domain.apex
+  id = "${local.vercel_team_id}/${local.vercel_project_id_web}/hanker.dev"
+}
+import {
+  to = vercel_project_domain.www
+  id = "${local.vercel_team_id}/${local.vercel_project_id_web}/www.hanker.dev"
+}

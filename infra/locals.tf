@@ -8,6 +8,11 @@ locals {
   # Cloudflare → hanker.dev → Overview → Zone ID. The zone itself isn't managed (spec §3.1).
   cloudflare_zone_id = "2d4a0a82d238dceecad61db089606518"
 
+  # Vercel team shockolate and its two projects (.vercel/project.json, the domains API).
+  vercel_team_id        = "team_kZIbcFHusXbiHiV3SWBz5UNr"
+  vercel_project_id_api = "prj_DkQ7Rtg40eIk15tVOQCRHkMrpG6j"
+  vercel_project_id_web = "prj_FzYar7oVdpt6hEG2NEZvFvfUgO2P"
+
   # The repo-level Actions variables (docs/deployment.md, GitHub configuration). None is secret:
   # each is public already (an origin, a public site key, the browser's Sentry DSN) or an ID.
   github_repo_variables = {
