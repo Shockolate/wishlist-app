@@ -52,3 +52,31 @@ import {
   # The site key is public: it's the TURNSTILE_SITE_KEY repo variable.
   id = "${local.cloudflare_account_id}/0x4AAAAAAFTQuj5atNoaYNuH"
 }
+
+# GitHub. Import IDs from the REST API (GET only): <repo>, <repo>:<ruleset_id>, <repo>:<env>,
+# <repo>:<env>:<policy_id> and <repo>:<variable>.
+import {
+  to = github_repository.wishlist_app
+  id = "wishlist-app"
+}
+import {
+  to = github_repository_ruleset.main
+  id = "wishlist-app:24731525"
+}
+import {
+  to = github_repository_environment.production
+  id = "wishlist-app:production"
+}
+import {
+  to = github_repository_environment.preview
+  id = "wishlist-app:preview"
+}
+import {
+  to = github_repository_environment_deployment_policy.production_main
+  id = "wishlist-app:production:62387137"
+}
+import {
+  for_each = local.github_repo_variables
+  to       = github_actions_variable.repo[each.key]
+  id       = "wishlist-app:${each.key}"
+}
