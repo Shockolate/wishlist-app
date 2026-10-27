@@ -632,6 +632,36 @@ const mutations = [
       wf.jobs.changes.environment = 'infra-plan';
     },
   ],
+  // Rule 15 (D99): the drift check runs main's code only, and fails on drift.
+  [
+    'a drift check dispatched from a branch (Review Focus 5)',
+    'infra-drift.yml',
+    (wf) => {
+      delete wf.jobs.drift.if;
+    },
+  ],
+  [
+    'a drift check triggered by pull_request',
+    'infra-drift.yml',
+    (wf) => {
+      wf.on.pull_request = null;
+    },
+  ],
+  [
+    'a drift check that passes on drift',
+    'infra-drift.yml',
+    (wf) => {
+      const s = runStep(wf.jobs.drift, /tofu -chdir=infra plan/);
+      s.run = s.run.replace(' -detailed-exitcode', '');
+    },
+  ],
+  [
+    'the plan job using the infra-drift environment',
+    'infra-plan.yml',
+    (wf) => {
+      wf.jobs.plan.environment = 'infra-drift';
+    },
+  ],
 ];
 
 function copyRoot() {
@@ -673,6 +703,7 @@ for (const f of [
   'backup.yml',
   'scorecard.yml',
   'infra-plan.yml',
+  'infra-drift.yml',
 ])
   rewrite(base, f);
 const baseline = check(base);

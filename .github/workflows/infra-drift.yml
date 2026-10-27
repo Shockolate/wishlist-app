@@ -1,0 +1,95 @@
+name: Infra drift
+
+# Monthly: does live infrastructure still match infra/ on main? (spec 2026-10-27 §3.8, D99.) A red
+# run means drift (someone changed a managed setting outside a PR, or an asserted R2 rule was
+# loosened) or a plan that couldn't run (often an expired plan token). The redacted plan is in the
+# run's summary. GitHub emails the author of the commit that last changed the cron line when a
+# scheduled run fails, so that's Ted.
+#
+# Trust model: the read-only plan credentials and the state passphrase, in infra-drift, which only
+# main can use (a custom deployment branch policy) and which has no reviewer, since a schedule can't
+# wait for one. Only main's reviewed code runs here. CI never applies and never writes state.
+#
+# GitHub disables scheduled workflows on a public repo after 60 days without activity. If this stops
+# appearing in Actions, that's the first thing to check (docs/operations.md).
+on:
+  schedule:
+    - cron: '41 7 1 * *'
+  workflow_dispatch:
+
+concurrency:
+  group: infra-drift
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  drift:
+    name: drift
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # A plain environment, so its main-only branch policy applies; it logs one deployment a month.
+    environment: infra-drift
+    env:
+      TF_CLI_CONFIG_FILE: /dev/null
+      TF_IN_AUTOMATION: '1'
+      TF_INPUT: '0'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install OpenTofu
+        run: |
+          scripts/install-tofu.sh "$RUNNER_TEMP/tofu"
+          echo "$RUNNER_TEMP/tofu" >> "$GITHUB_PATH"
+      - name: Guard the root module
+        run: scripts/infra-guard.sh
+      - name: Initialise
+        run: tofu -chdir=infra init -lockfile=readonly
+        env:
+          TF_VAR_state_passphrase: ${{ secrets.TOFU_STATE_PASSPHRASE }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.TOFU_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TOFU_R2_SECRET_ACCESS_KEY }}
+      # -detailed-exitcode: 0 is no changes, 2 is changes (drift), 1 is an error. Both non-zero
+      # codes fail this step; the last step says which it was.
+      - name: Plan
+        id: plan
+        continue-on-error: true
+        run: tofu -chdir=infra plan -lock=false -detailed-exitcode -out=drift.tfplan
+        env:
+          TF_VAR_state_passphrase: ${{ secrets.TOFU_STATE_PASSPHRASE }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.TOFU_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TOFU_R2_SECRET_ACCESS_KEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.TOFU_CLOUDFLARE_API_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.TOFU_GITHUB_TOKEN }}
+          VERCEL_API_TOKEN: ${{ secrets.TOFU_VERCEL_API_TOKEN }}
+          BETTERUPTIME_API_TOKEN: ${{ secrets.TOFU_BETTERSTACK_API_TOKEN }}
+      # Only a plan that ran (exit 0 or 2) writes drift.tfplan, so this succeeding tells drift from
+      # an error. tofu show prints sensitive values as (sensitive value).
+      - name: Summarise the plan
+        id: show
+        if: always() && steps.plan.outcome != 'skipped'
+        run: tofu -chdir=infra show -no-color drift.tfplan >> "$GITHUB_STEP_SUMMARY"
+        env:
+          TF_VAR_state_passphrase: ${{ secrets.TOFU_STATE_PASSPHRASE }}
+      - name: Result
+        if: always()
+        env:
+          PLAN: ${{ steps.plan.outcome }}
+          SHOW: ${{ steps.show.outcome }}
+        run: |
+          if [[ "$PLAN" == success ]]; then
+            echo "No drift: live infrastructure matches infra/ on main."
+          elif [[ "$SHOW" == success ]]; then
+            echo "::error::infrastructure drift: live settings differ from infra/ on main. The plan is in this run's summary."
+            exit 1
+          else
+            echo "::error::drift check could not plan: see the Initialise and Plan steps (often an expired or revoked plan token)."
+            exit 1
+          fi

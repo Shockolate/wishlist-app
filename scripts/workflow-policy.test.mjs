@@ -608,6 +608,32 @@ else {
   }
 }
 
+// Rule 15 (D99): the drift check runs main's reviewed code only, on a schedule or by hand, and
+// fails on drift. infra-drift has no reviewer (a schedule can't wait), so the ref check and the
+// environment's main-only branch policy are its controls.
+const infraDrift = byFile['infra-drift.yml'];
+if (!infraDrift) fail('infra-drift.yml: missing (D99)');
+else {
+  const on = infraDrift.on ?? infraDrift[true] ?? {};
+  const triggers = typeof on === 'string' ? [on] : Array.isArray(on) ? on : Object.keys(on);
+  if (
+    triggers.some((t) => !['schedule', 'workflow_dispatch'].includes(t)) ||
+    !triggers.includes('schedule')
+  )
+    fail('infra-drift.yml: trigger only on schedule and workflow_dispatch');
+  const drift = infraDrift.jobs?.drift;
+  if (!String(drift?.if ?? '').includes("github.ref == 'refs/heads/main'"))
+    fail("infra-drift.yml#drift: must only run on main (if: github.ref == 'refs/heads/main')");
+  if (envName(drift ?? {}) !== 'infra-drift')
+    fail('infra-drift.yml#drift: use environment infra-drift');
+  if (
+    !commandLines(drift ?? {}).some(
+      (l) => TOFU_PLAN.test(l) && /(^|\s)-detailed-exitcode(\s|$)/.test(l),
+    )
+  )
+    fail('infra-drift.yml#drift: plan with -detailed-exitcode, so drift fails the run');
+}
+
 if (failures.length > 0) {
   console.error(`workflow-policy: ${failures.length} violation(s)\n- ${failures.join('\n- ')}`);
   process.exit(1);
