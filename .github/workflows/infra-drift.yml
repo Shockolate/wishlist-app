@@ -1,9 +1,9 @@
 name: Infra drift
 
 # Monthly: does live infrastructure still match infra/ on main? (spec 2026-10-27 §3.8, D99.) A red
-# run means drift (someone changed a managed setting outside a PR, or an asserted R2 rule was
-# loosened) or a plan that couldn't run (often an expired plan token). The redacted plan is in the
-# run's summary. GitHub emails the author of the commit that last changed the cron line when a
+# run says which: `infrastructure drift` (someone changed a managed setting outside a PR), or
+# `could not plan` (often an expired plan token, or a loosened R2 backup rule failing its
+# postcondition). The redacted plan is in the run's summary. GitHub emails the author of the commit that last changed the cron line when a
 # scheduled run fails, so that's Ted.
 #
 # Trust model: the read-only plan credentials and the state passphrase, in infra-drift, which only
@@ -70,26 +70,16 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.TOFU_GITHUB_TOKEN }}
           VERCEL_API_TOKEN: ${{ secrets.TOFU_VERCEL_API_TOKEN }}
           BETTERUPTIME_API_TOKEN: ${{ secrets.TOFU_BETTERSTACK_API_TOKEN }}
-      # Only a plan that ran (exit 0 or 2) writes drift.tfplan, so this succeeding tells drift from
-      # an error. tofu show prints sensitive values as (sensitive value).
-      - name: Summarise the plan
-        id: show
+      # tofu show prints sensitive values as (sensitive value). OpenTofu writes the plan file even when
+      # planning fails, so this runs whatever the plan's exit code; the Result step reads the text.
+      - name: Show the plan
         if: always() && steps.plan.outcome != 'skipped'
-        run: tofu -chdir=infra show -no-color drift.tfplan >> "$GITHUB_STEP_SUMMARY"
+        run: tofu -chdir=infra show -no-color drift.tfplan > drift.txt
         env:
           TF_VAR_state_passphrase: ${{ secrets.TOFU_STATE_PASSPHRASE }}
+      # No secrets: tells drift from a plan that couldn't run, and puts the plan in the summary.
       - name: Result
         if: always()
         env:
           PLAN: ${{ steps.plan.outcome }}
-          SHOW: ${{ steps.show.outcome }}
-        run: |
-          if [[ "$PLAN" == success ]]; then
-            echo "No drift: live infrastructure matches infra/ on main."
-          elif [[ "$SHOW" == success ]]; then
-            echo "::error::infrastructure drift: live settings differ from infra/ on main. The plan is in this run's summary."
-            exit 1
-          else
-            echo "::error::drift check could not plan: see the Initialise and Plan steps (often an expired or revoked plan token)."
-            exit 1
-          fi
+        run: scripts/infra-drift-result.sh "$PLAN" drift.txt "$GITHUB_STEP_SUMMARY"

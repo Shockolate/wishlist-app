@@ -36,7 +36,7 @@ Later plans add: domain and DNS, Resend and Turnstile (Plan 2); Cloudflare R2 ba
 
 ## Vercel projects
 
-**Managed in [`infra/vercel.tf`](../infra/vercel.tf) since 2026-10-27 (D100):** the settings below and both domains. Change them in a PR ([Infrastructure as code](#infrastructure-as-code)), not with these commands. Env vars and the automation bypass stay here: Vercel can't read sensitive values back, and the provider has no bypass attribute.
+**Managed in [`infra/vercel.tf`](../infra/vercel.tf) since 2026-10-27 (D100):** the settings below and both domains. Change them in a PR ([Infrastructure as code](#infrastructure-as-code)), not with these commands. Env vars and the automation bypass stay here: Vercel can't read sensitive values back, and managing the bypass (the provider's separate `vercel_project_protection_bypass` resource) would put its secret in state (D96).
 
 Both projects were created and configured from the CLI, so the setup is reproducible and checkable through the API instead of dashboard clicks:
 
