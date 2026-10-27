@@ -5,7 +5,7 @@ test('the landing page introduces Hanker and links to sign-up and login', async 
   await page.goto('/');
   await expect(page).toHaveTitle('Hanker');
   await expect(
-    page.getByRole('heading', { level: 1, name: 'One list. One link. No doubled-up gifts.' }),
+    page.getByRole('heading', { level: 1, name: 'For when someone asks what you’d like.' }),
   ).toBeVisible();
   await expect(page.getByRole('link', { name: 'Create your list' })).toHaveAttribute(
     'href',

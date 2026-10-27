@@ -3,6 +3,7 @@ import { AuthPage } from '@/components/auth-page';
 import { SignupForm } from '@/components/auth/signup-form';
 import { Collage } from '@/components/collage';
 import { cspNonce } from '@/lib/nonce';
+import { TAGLINE } from '@/lib/site';
 
 export const metadata: Metadata = { title: 'Create your account' };
 
@@ -14,7 +15,7 @@ export default async function SignupPage() {
         <Collage />
         <div className="min-w-0 max-w-[460px] flex-[1_1_340px]">
           <h1 className="font-display text-[clamp(2.75rem,6vw,4rem)] leading-[0.98] tracking-[-0.01em]">
-            One list. One link. No doubled-up gifts.
+            {TAGLINE}
           </h1>
           <p className="mt-5 text-lg leading-relaxed text-muted-foreground">
             Add the things you’d love, then share your link with family and friends. They claim

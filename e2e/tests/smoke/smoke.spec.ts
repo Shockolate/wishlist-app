@@ -29,7 +29,7 @@ test('an unknown share link answers 404 SHARE_LINK_NOT_FOUND (spec §8)', async 
 test('landing page renders', async ({ page }) => {
   await page.goto('/');
   await expect(
-    page.getByRole('heading', { level: 1, name: 'One list. One link. No doubled-up gifts.' }),
+    page.getByRole('heading', { level: 1, name: 'For when someone asks what you’d like.' }),
   ).toBeVisible();
 });
 
