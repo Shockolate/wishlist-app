@@ -29,7 +29,7 @@ Two properties are required, and the workflow policy test enforces both:
 ### Decisions
 
 - **Seed data starts empty.** `preview-seed` is the migrated schema with **no rows**, and each later plan adds fake data for what it builds through `db:seed`.
-- **Project settings are pulled, not committed.** A token-holding `settings` job runs `vercel pull` with only the pinned CLI and passes `project.json` to the build jobs. (Rejected: committing settings to the repo, which could drift from the live projects without anyone noticing.)
+- **Project settings are pulled, not committed.** A token-holding `settings` job runs `vercel pull` with only the pinned CLI and passes `project.json` to the build jobs. (Rejected: committing settings to the repo, which could drift from the live projects without anyone noticing.) **Amended 2026-10-27 (D100):** the settings are now code in `infra/vercel.tf`, and the monthly drift check is what notices; builds still pull.
 
 ## 2. Trust model
 
