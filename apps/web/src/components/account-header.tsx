@@ -47,7 +47,12 @@ export function AccountHeader({ current }: { current: 'list' | 'gifts' | 'settin
         >
           Hanker
         </Link>
-        <nav aria-label="Main" className="flex flex-1 gap-1.5 text-[15px] font-medium">
+        {/* Too narrow for one row on a phone: the nav takes a row of its own under the wordmark
+            and Sign out. Only the visual order changes, so focus still reaches the nav first. */}
+        <nav
+          aria-label="Main"
+          className="flex flex-1 gap-1.5 text-[15px] font-medium max-sm:order-1 max-sm:basis-full"
+        >
           <NavLink href="/list" current={current === 'list'}>
             Your list
           </NavLink>
@@ -58,16 +63,22 @@ export function AccountHeader({ current }: { current: 'list' | 'gifts' | 'settin
             Settings
           </NavLink>
         </nav>
-        <Button variant="secondary" size="compact" onClick={logOut} disabled={busy}>
+        <Button
+          variant="secondary"
+          size="compact"
+          className="ml-auto"
+          onClick={logOut}
+          disabled={busy}
+        >
           Sign out
         </Button>
         {error ? (
-          <Notice tone="error" className="basis-full">
+          <Notice tone="error" className="order-last basis-full">
             {error}
           </Notice>
         ) : null}
         {current === 'settings' && listFailed ? (
-          <Notice tone="error" className="basis-full">
+          <Notice tone="error" className="order-last basis-full">
             {LIST_CHANGE_NOT_SAVED}{' '}
             <Link href="/list" className="underline">
               Check your list
@@ -94,7 +105,7 @@ function NavLink({
       href={href}
       aria-current={current ? 'page' : undefined}
       className={cn(
-        'inline-flex min-h-11 items-center rounded-full px-4 no-underline',
+        'inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-3 no-underline sm:px-4',
         current ? 'bg-foreground text-background' : 'text-muted-foreground',
       )}
     >
