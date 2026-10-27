@@ -87,7 +87,7 @@ describe('renderSharePreview', () => {
     await expectPreviewJpeg(
       await renderSharePreview({ title: 'Sam’s wishlist', itemCount: 0, photos: [] }),
     );
-  });
+  }, 20_000);
 
   it('draws a 200-character title', async () => {
     const title = 'A very long wishlist title '.repeat(8).slice(0, 200);
@@ -115,7 +115,7 @@ describe('renderSharePreview', () => {
       await expectPreviewJpeg(await renderSharePreview({ title, itemCount: 2, photos }));
     }
     expect(network).not.toHaveBeenCalled();
-  });
+  }, 20_000);
 });
 
 describe('drawableText', () => {

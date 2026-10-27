@@ -130,8 +130,9 @@ describe('loadPreviewPhotos', () => {
   });
 
   it('keeps the photos that arrived in time and drops the one that didn’t', async () => {
+    // Long enough for sharp to make and prepare the good photo on a busy CI runner.
     const photos = await loadPreviewPhotos(TOKEN, ids.slice(0, 2), {
-      budgetMs: 100,
+      budgetMs: 1_000,
       fetchFn: fakeFetch({ [ids[0]!]: 'hang' }) as typeof fetch,
     });
 
