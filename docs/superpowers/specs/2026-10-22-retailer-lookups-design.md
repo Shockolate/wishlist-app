@@ -178,7 +178,7 @@ The alternatives were refreshing Etsy items every 6 hours, which means a schema 
 
 A new failure code, `LOOKUP_UNAVAILABLE`, joins `UNFURL_FAILURE_REASONS` in `packages/contracts`.
 
-- **Copy:** "We couldn't get the details from Amazon right now, so fill them in yourself." The shop name is filled in: "from Amazon" or "from Etsy". *(Ted's wording, condensed by Claude.)*
+- **Copy:** "We couldn't get the details from Amazon right now, so fill them in yourself." The shop name is filled in: "from Amazon" or "from Etsy". *(Ted's wording, condensed by Claude.)* *(Reworded 2026-10-27 to "We couldn’t get the details from Amazon just now. Add them below.", with the other prefill messages.)*
 - **Why a new code:** `BLOCKED_BY_SITE`'s "That shop didn't let us read the page" would be untrue when the cause is our credits or a service outage.
 - **Reporting** *(Claude's call)*:
   - A `401` or `403` from either service, or Bright Data's `404` for an unknown `dataset_id`, means our configuration is wrong. These are reported through `ERROR_REPORTER` once per occurrence, with no URL and no key.

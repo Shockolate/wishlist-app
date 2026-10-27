@@ -111,12 +111,12 @@ describe('letGoText (Plan 10b copy table)', () => {
 
 describe('signed-in claim copy (Plan 10b copy table)', () => {
   it('says what the table says, with curly apostrophes', () => {
-    expect(SHEET_GIFTS_HINT).toBe('This goes on Your gifts.');
+    expect(SHEET_GIFTS_HINT).toBe('You’ll also find this on Your gifts.');
     expect(SEE_GIFTS).toBe('See Your gifts');
-    expect(TAKEN_OFF_GIFTS).toBe('Taken off Your gifts.');
-    expect(ON_YOUR_GIFTS).toBe('On Your gifts.');
+    expect(TAKEN_OFF_GIFTS).toBe('This claim is no longer on Your gifts.');
+    expect(ON_YOUR_GIFTS).toBe('This claim is on Your gifts.');
     expect(ON_SOMEONE_ELSES_GIFTS).toBe(
-      'This claim is on someone else’s gifts in Hanker, so it won’t appear on yours. You can still change or cancel it here.',
+      'Another Hanker account is already keeping track of this claim. You can still change or cancel it here.',
     );
   });
 });

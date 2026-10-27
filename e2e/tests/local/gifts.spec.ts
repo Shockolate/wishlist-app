@@ -155,7 +155,7 @@ test('Change opens the card in place, saves a new name and quantity, and a 409 r
   const name = blanketCard.getByLabel('Your name, as other gifters see it');
   await expect(name).toBeFocused();
   await expect(name).toHaveValue('Gina');
-  await expect(blanketCard.getByText('Up to 4: 3 more are free')).toBeVisible();
+  await expect(blanketCard.getByText('Up to 4, with 3 still unclaimed')).toBeVisible();
   const howMany = blanketCard.getByRole('group', { name: 'How many' }).locator('output');
   await expectAccessible(gifter);
   await gifter.setViewportSize(PHONE);
@@ -295,7 +295,7 @@ test('says what Your gifts is for until there is something on it', async ({ brow
   await gifter.goto('/gifts');
   await expect(
     gifter.getByText(
-      'Nothing here yet. Claims you make while signed in appear here, and so does a claim whose link you open while signed in.',
+      'Nothing here yet. Claim something while you’re signed in, or open a claim link you saved, and it shows up here.',
     ),
   ).toBeVisible();
   await expectAccessible(gifter);

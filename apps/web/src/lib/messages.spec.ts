@@ -124,17 +124,17 @@ describe('prefillMessage (Plan 3b rule 6)', () => {
   it('names Amazon when its lookup couldn’t answer (retailer lookups §5.4)', () => {
     const response = { failureReason: 'LOOKUP_UNAVAILABLE' } as const;
     expect(prefillMessage({ response }, 'https://www.amazon.com/dp/B08FK7B2SC')).toBe(
-      'We couldn’t get the details from Amazon right now, so fill them in yourself.',
+      'We couldn’t get the details from Amazon just now. Add them below.',
     );
     expect(prefillMessage({ response }, 'https://shop.example/x')).toBe(
-      'We couldn’t get the details right now, so fill them in yourself.',
+      'We couldn’t get the details just now. Add them below.',
     );
   });
 
   it('names Etsy when its lookup couldn’t answer (retailer lookups §5.4)', () => {
     const response = { failureReason: 'LOOKUP_UNAVAILABLE' } as const;
     expect(prefillMessage({ response }, 'https://www.etsy.com/listing/1234567890')).toBe(
-      'We couldn’t get the details from Etsy right now, so fill them in yourself.',
+      'We couldn’t get the details from Etsy just now. Add them below.',
     );
   });
 

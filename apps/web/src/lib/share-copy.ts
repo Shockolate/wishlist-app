@@ -96,7 +96,7 @@ export function yourClaimLine(quantity: number, wanted: number, owner: string): 
 /** Under the manage page's stepper: what's left plus what the claim holds (spec §2). */
 export function manageHint(remaining: number, current: number): string {
   const most = `Up to ${remaining + current}`;
-  return remaining > 0 ? `${most}: ${remaining} more ${isAre(remaining)} free` : most;
+  return remaining > 0 ? `${most}, with ${remaining} still unclaimed` : most;
 }
 
 /** A tag chip's accessible name: "Garden, 1 item", "Kitchen gadgets, 4 items". */

@@ -113,14 +113,14 @@ export const ADD_BOX_EMPTY = 'Paste a link or type an idea.';
 export const OTHER_SCHEME_LINK = 'Enter a link that starts with http:// or https://';
 export const LINK_TOO_LONG = 'Use 2048 characters or fewer.';
 
-const CANT_REACH = 'We couldn’t reach that page, so fill in the details yourself.';
-const NO_DETAILS = 'We couldn’t find the details on that page, so fill them in yourself.';
+const CANT_REACH = 'We couldn’t reach that page. Add the details below.';
+const NO_DETAILS = 'We couldn’t find the details on that page. Add them below.';
 const NOT_PUBLIC = 'That link doesn’t go to a public web page.';
 
 /** Why a prefill came back empty: one sentence per reason, so a new reason needs its own (rule 6). */
 export const UNFURL_MESSAGES: Readonly<Record<UnfurlFailureReason, string>> = {
-  BLOCKED_BY_SITE: 'That shop didn’t let us read the page, so fill in the details yourself.',
-  DNS_FAILED: 'We couldn’t find that site. Check the link, or fill in the details yourself.',
+  BLOCKED_BY_SITE: 'That shop doesn’t let us read its pages. Add the details below.',
+  DNS_FAILED: 'We couldn’t find that site. Check the link, or add the details below.',
   TIMEOUT: CANT_REACH,
   UNREACHABLE: CANT_REACH,
   NOT_HTML: NO_DETAILS,
@@ -129,13 +129,13 @@ export const UNFURL_MESSAGES: Readonly<Record<UnfurlFailureReason, string>> = {
   TOO_MANY_REDIRECTS: NO_DETAILS,
   INVALID_URL: NOT_PUBLIC,
   DISALLOWED_ADDRESS: NOT_PUBLIC,
-  LOOKUP_UNAVAILABLE: 'We couldn’t get the details right now, so fill them in yourself.',
+  LOOKUP_UNAVAILABLE: 'We couldn’t get the details just now. Add them below.',
 };
 /** LOOKUP_UNAVAILABLE for a retailer's link names the shop (retailer lookups §5.4). */
 const RETAILER_NAMES: Record<Retailer, string> = { amazon: 'Amazon', etsy: 'Etsy' };
 export const UNFURL_RATE_LIMITED =
-  'You’ve added a lot of links this hour, so fill in the details yourself.';
-export const UNFURL_FAILED = 'We couldn’t read that page, so fill in the details yourself.';
+  'You’ve added a lot of links this hour. Add the details below for now.';
+export const UNFURL_FAILED = 'We couldn’t read that page. Add the details below.';
 
 /** The add box's waiting panel for an Amazon link (retailer lookups §5.5): the status line. */
 export const AMAZON_WAIT = 'Getting the details from Amazon…';
@@ -159,7 +159,7 @@ export function prefillMessage(
   const { failureReason } = outcome.response;
   const retailer = retailerOf(url);
   if (failureReason === 'LOOKUP_UNAVAILABLE' && retailer) {
-    return `We couldn’t get the details from ${RETAILER_NAMES[retailer]} right now, so fill them in yourself.`;
+    return `We couldn’t get the details from ${RETAILER_NAMES[retailer]} just now. Add them below.`;
   }
   if (failureReason) return UNFURL_MESSAGES[failureReason];
   return `Filled in from ${shopName(url) ?? 'the page'}. Check it, then add it.`;

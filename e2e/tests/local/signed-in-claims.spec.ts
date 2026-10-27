@@ -57,7 +57,7 @@ interface Storage {
 
 const KETTLE = 'Enamel kettle';
 const SOMEONE_ELSE =
-  'This claim is on someone else’s gifts in Hanker, so it won’t appear on yours. You can still change or cancel it here.';
+  'Another Hanker account is already keeping track of this claim. You can still change or cancel it here.';
 
 test('signed in, the sheet prefills my display name, says where the claim goes, and links to Your gifts after', async ({
   browser,
@@ -82,7 +82,9 @@ test('signed in, the sheet prefills my display name, says where the claim goes, 
     .click();
   const sheet = gina.getByRole('dialog', { name: KETTLE });
   await expect(sheet.getByLabel('Your name')).toHaveValue('Gina');
-  await expect(sheet.getByText('This goes on Your gifts.', { exact: true })).toBeVisible();
+  await expect(
+    sheet.getByText('You’ll also find this on Your gifts.', { exact: true }),
+  ).toBeVisible();
   await gina.setViewportSize(PHONE);
   await expectNoSidewaysScroll(gina);
   await expectAccessible(gina);
@@ -142,7 +144,9 @@ test('opening my manage link signed in adds the claim, and Not mine takes it off
   expect(await titles(mum)).toEqual([KETTLE]);
 
   await added.getByRole('button', { name: 'Not mine' }).click();
-  const taken = mum.getByRole('status').filter({ hasText: 'Taken off Your gifts.' });
+  const taken = mum
+    .getByRole('status')
+    .filter({ hasText: 'This claim is no longer on Your gifts.' });
   await expect(taken).toBeVisible();
   await expect(mum.getByRole('button', { name: 'Not mine' })).toHaveCount(0);
   await expectAccessible(mum);
@@ -207,7 +211,7 @@ test('a manage link already on someone else’s gifts says so, and still changes
   const firstRequests = linkRequests(first);
   await first.goto(`/c/${manageToken}`);
   await expect(first.getByRole('heading', { level: 1, name: 'Your claim' })).toBeVisible();
-  const onGifts = first.getByRole('status').filter({ hasText: 'On Your gifts.' });
+  const onGifts = first.getByRole('status').filter({ hasText: 'This claim is on Your gifts.' });
   await expect(onGifts).toBeVisible();
   await expect(onGifts.getByRole('link', { name: 'Your gifts' })).toHaveAttribute('href', '/gifts');
   await expect(first.getByText('Added to Your gifts.')).toHaveCount(0);
@@ -218,7 +222,7 @@ test('a manage link already on someone else’s gifts says so, and still changes
 
   await onGifts.getByRole('button', { name: 'Not mine' }).click();
   await expect(
-    first.getByRole('status').filter({ hasText: 'Taken off Your gifts.' }),
+    first.getByRole('status').filter({ hasText: 'This claim is no longer on Your gifts.' }),
   ).toBeVisible();
   await expect(first.getByRole('button', { name: 'Not mine' })).toHaveCount(0);
   await expectAccessible(first);
@@ -245,7 +249,7 @@ test('a manage link already on someone else’s gifts says so, and still changes
   expect(firstRequests).toEqual([expect.stringMatching(/^DELETE .*\/link$/)]);
   expect(await titles(first)).toEqual([]);
   await expect(
-    first.getByRole('status').filter({ hasText: 'Taken off Your gifts.' }),
+    first.getByRole('status').filter({ hasText: 'This claim is no longer on Your gifts.' }),
   ).toBeVisible();
   await expect(first.getByText('Added to Your gifts.')).toHaveCount(0);
 });

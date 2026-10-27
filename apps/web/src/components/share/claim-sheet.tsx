@@ -218,7 +218,7 @@ export function ClaimSheet({
           wants: `${ownerName} wants`,
           quantity: item.quantity,
           ...(item.claims ? { claims: item.claims } : {}),
-        }) ?? 'Claim it, so nobody else buys it too.');
+        }) ?? 'Claiming marks it as taken for everyone else.');
 
   return (
     <Sheet open onOpenChange={(open) => (open ? undefined : onClose())}>
@@ -267,7 +267,7 @@ export function ClaimSheet({
             <Field
               id="claimerName"
               label="Your name"
-              hint="Other gifters see it, so nobody doubles up."
+              hint="Other gifters see it next to the item."
               error={errors.claimerName?.message}
             >
               {(control) => (

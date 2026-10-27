@@ -47,7 +47,7 @@ test('shows the claim, and saves a new name and quantity (spec §2)', async ({
   await expect(gifter.getByRole('heading', { level: 1, name: 'Your claim' })).toBeVisible();
   await expect(gifter.getByRole('link', { name: "Ada's wishlist" })).toBeVisible();
   await expect(gifter.getByText('You’re getting 1 of the 3 Ada wants')).toBeVisible();
-  await expect(gifter.getByText('Up to 3: 2 more are free')).toBeVisible();
+  await expect(gifter.getByText('Up to 3, with 2 still unclaimed')).toBeVisible();
   await expect(
     gifter.getByText('Ada can’t see who’s getting what, so the surprise is safe.'),
   ).toBeVisible();
