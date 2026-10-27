@@ -98,7 +98,7 @@ function PageLink({ manageToken }: { manageToken: string }) {
   return (
     <section aria-labelledby="page-link-heading" className="mt-6">
       <h2 id="page-link-heading" className="text-[15px] font-semibold">
-        This page’s link
+        Your claim link
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">
         It’s the only way back to your claim from another phone or computer.

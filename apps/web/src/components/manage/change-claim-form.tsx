@@ -105,7 +105,7 @@ export function ChangeClaimForm({
         <Field
           id="claimerName"
           label="Your name"
-          hint="Other gifters see it, so nobody doubles up."
+          hint="Other gifters see it next to the item."
           error={errors.claimerName?.message}
         >
           {(control) => <Input {...control} {...register('claimerName')} autoComplete="name" />}

@@ -178,7 +178,7 @@ CREATE INDEX ON claim_links (user_id);
 | Method & path | Result |
 |---|---|
 | `POST /shared/:shareToken/items/:itemId/claims` | Unchanged for guests. With a verified, non-owner session, the claim is linked in the same transaction, and the `201` adds `onYourGifts: true` |
-| `GET /shared/:shareToken` | Adds `viewer: {displayName}` when a verified, non-owner session is present, so the sheet can prefill and say "This goes on Your gifts". Nothing about other claims' links |
+| `GET /shared/:shareToken` | Adds `viewer: {displayName}` when a verified, non-owner session is present, so the sheet can prefill and say "You’ll also find this on Your gifts". Nothing about other claims' links |
 | `GET /claims/:manageToken` | Resolves the session through the never-refusing guard. **When the session owns the claim's list** (verified or not, as on `/shared`), answers `403 OWN_LIST_CLAIM` with no claim data (Part 1, §5.2). For a verified session that doesn't own the list, adds `link: 'none' \| 'yours' \| 'someone-else'`. Absent for guests |
 | `PATCH` and `DELETE /claims/:manageToken` | With a session that owns the claim's list, `403 OWN_LIST_CLAIM`, checked after the claim is found by its token's hash and before anything is changed or returned, since a `PATCH` answer carries the name and a `409` carries `remaining` (D43's reasoning) |
 | `POST /claims/:manageToken/link` | Links the claim to the session if unlinked: `200 {link: 'yours'}`, or `{link: 'someone-else'}`. `403 OWNER_CANNOT_CLAIM` for the list's owner; `403 EMAIL_NOT_VERIFIED` |

@@ -62,7 +62,7 @@ export function SharePage({
         <OwnerNote ownerSeesClaims={list.ownerSeesClaims} />
       ) : (
         <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
-          Claim what you’ll give, so nobody else buys it too.{' '}
+          Tap “I’ll get this” on anything you’re buying.{' '}
           {ownerSeesLine(owner, list.ownerSeesClaims)}
         </p>
       )}

@@ -196,7 +196,7 @@ test('an Amazon lookup that can’t answer names Amazon (retailer lookups §5.4)
   await page.goto('/list');
   await addThroughTheBox(page, AMAZON);
   await expect(
-    status(page, 'We couldn’t get the details from Amazon right now, so fill them in yourself.'),
+    status(page, 'We couldn’t get the details from Amazon just now. Add them below.'),
   ).toBeVisible();
   await expect(page.getByLabel('Link', { exact: true })).toHaveValue(AMAZON);
 });
@@ -221,7 +221,7 @@ test('an Etsy link reads like any shop, and an unavailable lookup names Etsy (re
   await expect(status(page, 'Reading the page…')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Skip, I’ll type them' })).toHaveCount(0);
   await expect(
-    status(page, 'We couldn’t get the details from Etsy right now, so fill them in yourself.'),
+    status(page, 'We couldn’t get the details from Etsy just now. Add them below.'),
   ).toBeVisible();
   await expect(page.getByLabel('Link', { exact: true })).toHaveValue(ETSY);
 });

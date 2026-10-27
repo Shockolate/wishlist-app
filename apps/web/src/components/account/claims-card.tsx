@@ -80,8 +80,8 @@ export function ClaimsCard({ showClaimsToOwner }: { showClaimsToOwner: boolean }
       </h2>
       <p className="mt-1.5 text-[15px] text-muted-foreground">
         {on
-          ? 'You can see how many of each item are claimed, on your list and on your share page, but never who claimed them. Gifters are told you can see the counts.'
-          : 'Gifters claim items so nobody buys the same thing twice. You can’t see their claims, so your gifts stay a surprise.'}
+          ? 'You can see how many of each item are claimed, on your list and on your share page, but never who claimed them. Gifters see a note saying so.'
+          : 'Gifters mark what they’re getting, and you never see it. Your gifts stay a surprise.'}
       </p>
       <div className="mt-4 flex min-h-11 items-center gap-3">
         <span id="claims-switch-label" className="flex-1 text-[15px] font-semibold">

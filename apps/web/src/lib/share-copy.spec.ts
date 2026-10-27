@@ -124,9 +124,9 @@ describe('manage page copy', () => {
     expect(yourClaimLine(1, 1, 'Ada')).toBe('You’re getting this');
   });
 
-  it('says how high the claim can go, and how many more are free (spec §2)', () => {
-    expect(manageHint(1, 1)).toBe('Up to 2: 1 more is free');
-    expect(manageHint(2, 1)).toBe('Up to 3: 2 more are free');
+  it('says how high the claim can go, and how many are still unclaimed (spec §2)', () => {
+    expect(manageHint(1, 1)).toBe('Up to 2, with 1 still unclaimed');
+    expect(manageHint(2, 1)).toBe('Up to 3, with 2 still unclaimed');
     expect(manageHint(0, 2)).toBe('Up to 2');
   });
 });
