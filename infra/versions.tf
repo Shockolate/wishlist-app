@@ -3,5 +3,10 @@ terraform {
   required_version = "1.13.2"
 
   # Exact pins (D93). Each provider joins in its import layer.
-  required_providers {}
+  required_providers {
+    cloudflare = {
+      source  = "cloudflare/cloudflare"
+      version = "5.28.1"
+    }
+  }
 }
