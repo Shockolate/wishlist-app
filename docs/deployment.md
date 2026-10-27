@@ -681,23 +681,54 @@ scripts/install-tofu.sh ~/.local/opt/tofu && export PATH="$HOME/.local/opt/tofu:
 tofu version   # must match infra/.opentofu-version
 ```
 
-Credentials go into a fresh shell's environment, typed or pasted from your password manager at a silent prompt. They never go in a file, your history or argv. Run this in a real terminal, and run `tofu` in that same terminal: a Claude Code `!` command gets a new, non-interactive shell each time, so `read` has nothing to read and nothing exported survives to the next command.
+**Credentials, the recommended way: 1Password's `op run`.** Each value is injected into one `tofu` process's environment and nothing else: not your shell, your history or argv, and `op run` masks any that reach the output. A file of references, never values, says which items to use. It lives **outside the repo**; the guard refuses any `.env` file under `infra/`, and `.gitignore` refuses them too.
+
+1. In the 1Password app, open each item, use the field's menu → **Copy Secret Reference**, and paste it into `~/.config/hanker/tofu.env`, one line per variable:
+
+   ```
+   TF_VAR_state_passphrase=op://<vault>/<passphrase item>/password
+   AWS_ACCESS_KEY_ID=op://<vault>/<R2 token item>/<Access Key ID field>
+   AWS_SECRET_ACCESS_KEY=op://<vault>/<R2 token item>/<Secret Access Key field>
+   CLOUDFLARE_API_TOKEN=op://<vault>/<Cloudflare apply token>/credential
+   VERCEL_API_TOKEN=op://<vault>/<Vercel tofu-apply>/credential
+   BETTERUPTIME_API_TOKEN=op://<vault>/<Better Stack token>/credential
+   ```
+
+   The R2 values are the token's **Access Key ID** and **Secret Access Key**, not its Token value.
+
+2. Check every reference resolves, printing lengths only (the single quotes matter: the lengths are worked out inside `op run`'s process). Expect `pass` ≥ 32, `id=32`, `secret=64`, and the rest non-zero:
+
+   ```bash
+   op run --env-file="$HOME/.config/hanker/tofu.env" -- sh -c \
+     'echo "pass=${#TF_VAR_state_passphrase} id=${#AWS_ACCESS_KEY_ID} secret=${#AWS_SECRET_ACCESS_KEY} cf=${#CLOUDFLARE_API_TOKEN} vercel=${#VERCEL_API_TOKEN} bs=${#BETTERUPTIME_API_TOKEN}"'
+   ```
+
+3. Add a shell function (for example to `~/.zshrc`) and run it from the repo root, as `tofu-hanker plan`:
+
+   ```bash
+   # OpenTofu for Hanker: secrets come from 1Password for this one command only.
+   tofu-hanker() {
+     GITHUB_TOKEN="$(gh auth token)" TF_CLI_CONFIG_FILE=/dev/null \
+       op run --env-file="$HOME/.config/hanker/tofu.env" -- tofu -chdir=infra "$@"
+   }
+   ```
+
+   `TF_CLI_CONFIG_FILE=/dev/null` keeps a CLI config's `dev_overrides` from bypassing the lockfile. `op run` passes `apply`'s `yes` prompt through.
+
+**Without 1Password:** type or paste each value at a silent prompt in a real terminal, then run `tofu` in that same terminal. (A Claude Code `!` command gets a new, non-interactive shell each time, so `read` has nothing to read and nothing exported survives to the next command.) Close the shell when you're done.
 
 ```bash
-export TF_CLI_CONFIG_FILE=/dev/null   # a CLI config's dev_overrides would bypass the lockfile
+export TF_CLI_CONFIG_FILE=/dev/null
 read -rs TF_VAR_state_passphrase && export TF_VAR_state_passphrase
 read -rs AWS_ACCESS_KEY_ID && export AWS_ACCESS_KEY_ID           # the R2 token's Access Key ID
 read -rs AWS_SECRET_ACCESS_KEY && export AWS_SECRET_ACCESS_KEY   # …and its Secret Access Key
-# Once their providers are in infra/:
 read -rs CLOUDFLARE_API_TOKEN && export CLOUDFLARE_API_TOKEN
 read -rs VERCEL_API_TOKEN && export VERCEL_API_TOKEN
 read -rs BETTERUPTIME_API_TOKEN && export BETTERUPTIME_API_TOKEN
 export GITHUB_TOKEN="$(gh auth token)"
 ```
 
-Each `read -rs` waits silently for one value and Enter. Close the shell when you're done. To check what's set without printing it: `echo "id=${#AWS_ACCESS_KEY_ID} secret=${#AWS_SECRET_ACCESS_KEY} pass=${#TF_VAR_state_passphrase}"`. R2's keys are 32 and 64 characters.
-
-With the 1Password CLI, `export NAME="$(op read 'op://<vault>/<item>/<field>')"` does the same without a prompt; the command line holds only the reference.
+The same length check works here without the `op run` wrapper. Below, `tofu-hanker <command>` means `tofu -chdir=infra <command>` with this fallback.
 
 ### One-off setup
 
@@ -706,14 +737,14 @@ State can't describe the bucket that holds it, so the bucket and its first token
 1. **Bucket.** Cloudflare → R2 → create `hanker-tofu-state`: automatic location, Standard storage, private, no custom domain, **no lock rule and no lifecycle rule**. State is overwritten on every apply, so a lock would block it.
 2. **Apply token.** R2 → Manage API tokens → **Object Read & Write**, applied to `hanker-tofu-state` only. Cloudflare shows three values: the S3 backend uses the **Access Key ID** (`AWS_ACCESS_KEY_ID`) and the **Secret Access Key** (`AWS_SECRET_ACCESS_KEY`), not the Token value. The secret is shown once. It lives only in your password manager.
 3. **Passphrase.** Generate 32 characters or more in your password manager (OpenTofu's minimum is 16). Lose it and the state is unreadable: see Recovery.
-4. **Initialise,** on `main`, in a terminal where you've done [Local setup](#local-setup): `tofu -chdir=infra init`. Expected: `Successfully configured the backend "s3"`. Then `tofu -chdir=infra plan` answers "No changes" until the first provider is imported.
+4. **Initialise,** on `main`, in a terminal where you've done [Local setup](#local-setup): `tofu-hanker init`. Expected: `Successfully configured the backend "s3"`. Then `tofu-hanker plan` answers "No changes" until the first provider is imported.
 
 ### Changing infrastructure
 
-1. On a branch, edit `infra/` and run `tofu -chdir=infra plan`.
+1. On a branch, edit `infra/` and run `tofu-hanker plan`.
 2. Open the PR. Once `infra-plan.yml` exists, approve its `infra-plan` deployment after reading the diff; it posts the plan as a comment.
 3. Merge through the normal stack flow.
-4. On `main`'s tip, run `tofu -chdir=infra apply`. It plans again; check it matches the PR's plan before typing `yes`.
+4. On `main`'s tip, run `tofu-hanker apply`. It plans again; check it matches the PR's plan before typing `yes`.
 
 `terraform.tfstate` exists only in R2, encrypted. Never commit state, a `.tfplan` or a `.tfvars` (`.gitignore` refuses them), and never paste a plan that `tofu show` hasn't redacted.
 
@@ -722,7 +753,7 @@ State can't describe the bucket that holds it, so the bucket and its first token
 R2 has no object versioning, so there's no older state to roll back to. Nothing in production depends on the state, though:
 
 - **State lost, corrupted, or its passphrase lost:** delete `infra/terraform.tfstate` from the bucket (with the passphrase lost it's unreadable anyway), set a new passphrase if needed, and re-import every resource with `import` blocks, as when they were first imported (the import layers' history in git has the IDs). The gate is the same: a plan with nothing to add, change or destroy.
-- **A stuck lock** (`use_lockfile` writes `infra/terraform.tfstate.tflock` next to the state): only after confirming no other run is going, `tofu -chdir=infra force-unlock <lock ID>`.
+- **A stuck lock** (`use_lockfile` writes `infra/terraform.tfstate.tflock` next to the state): only after confirming no other run is going, `tofu-hanker force-unlock <lock ID>`.
 
 ### Upgrading
 

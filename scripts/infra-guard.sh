@@ -42,6 +42,7 @@ while IFS= read -r f; do
     *.tf.json | *.tofu.json) refuse "JSON config isn't used here, so it isn't scanned: $f" ;;
     generated_*.tf) refuse "generated config file (fold it into a reviewed .tf, then delete it): $f" ;;
     .tofurc | .terraformrc | terraform.rc) refuse "CLI config (its dev_overrides would bypass the lockfile): $f" ;;
+    *.env | .env | .env.*) refuse "env file (credentials live in a password manager; references in ~/.config/hanker/tofu.env): $f" ;;
   esac
 done < <(files)
 
