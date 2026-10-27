@@ -22,6 +22,8 @@ test-results/
 *.tfplan
 *.tfvars
 infra/generated_*.tf
+infra/*.env
+infra/.env*
 
 # Mockups and scratch files from the brainstorming skill's visual companion.
 .superpowers/

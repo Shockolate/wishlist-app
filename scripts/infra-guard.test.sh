@@ -101,6 +101,13 @@ expect_refused repo/infra 'CLI config'
 d=$(clean generated) && printf 'locals {}\n' > "$d/generated_vercel.tf"
 expect_refused generated 'generated config file'
 
+# Credentials belong in a password manager. Even a file of op:// references stays outside the repo.
+d=$(clean env-file) && printf 'AWS_ACCESS_KEY_ID=op://Private/x/y\n' > "$d/tofu.env"
+expect_refused env-file 'env file'
+
+d=$(clean dotenv) && printf 'X=1\n' > "$d/.env"
+expect_refused dotenv 'env file'
+
 d=$(clean json) && printf '{}\n' > "$d/extra.tf.json"
 expect_refused json 'JSON config'
 
