@@ -129,7 +129,7 @@ Option C from the mockups: **a terracotta gift tag with a dark-ink outline and a
 
 ### 4.5 Link previews
 
-- **The image** is option C from the mockups, type only. On the cream background, a small gift tag (§4.4) sits beside the "Hanker" wordmark, with the tagline "One list. One link. No doubled-up gifts." large below it in Instrument Serif, in dark ink. It is 1200×630 and has no photos.
+- **The image** is option C from the mockups, type only. On the cream background, a small gift tag (§4.4) sits beside the "Hanker" wordmark, with the tagline "For when someone asks what you’d like." (2026-10-27; it was "One list. One link. No doubled-up gifts.") large below it in Instrument Serif, in dark ink. It is 1200×630 and has no photos.
 - **Every page** gets Open Graph and Twitter-card metadata with that image (`summary_large_image`). The default title is "Hanker" and the default description is the existing tagline.
 - **Share pages (`/s/[shareToken]`):**
   - The title is the list's own title, as today.
