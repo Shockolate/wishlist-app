@@ -429,7 +429,7 @@ FROM pg_roles WHERE rolname = 'hanker_stats';   -- all f
 SELECT rolconfig FROM pg_roles WHERE rolname = 'hanker_stats';   -- {statement_timeout=15s}
 ```
 
-**2. Lock the Neon plugin to it.** In Claude Code, run `/mcp`, choose `plugin:neon:neon` and sign in again with **Full access** unchecked (read-only), **only the `wishlist` project**, and **Postgres role** `hanker_stats`. While it's locked, the plugin can't reach `wishlist-preview`; signing in again without the role unlocks it.
+**2. Lock the Neon plugin to it.** In Claude Code, run `/mcp`, choose `plugin:neon:neon` and sign in again with **Full access** unchecked (read-only), **only the `wishlist` project**, and **Postgres role** `hanker_stats`. While it's locked, the plugin can't reach `wishlist-preview`; signing in again without the role unlocks it. Give the project by its **ID**, `steep-dew-42117248`, not its name: a lock on the name `wishlist` signs in fine, but then every call fails with `HTTP 404 … could not be authorized` (seen 2026-10-28).
 
 **3. Acceptance.** Claude runs these through the locked plugin:
 
