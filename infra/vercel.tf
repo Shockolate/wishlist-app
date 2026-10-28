@@ -139,8 +139,8 @@ resource "vercel_firewall_config" "web" {
           window = 60
           keys   = ["ip"]
           algo   = "fixed_window"
-          # Log only, to see real traffic against the limit before anything is refused.
-          action = "log"
+          # 429, after a log-only spell showed real traffic stays well under the limit.
+          action = "rate_limit"
         }
       }
     }
