@@ -193,6 +193,40 @@ describe('stats_reader (D102)', () => {
     }
   });
 
+  // A sweep, not a list, so a table or function a later migration opens up is caught too.
+  it('can read no relation outside stats', async () => {
+    const { rows } = await probe.query<{ relation: string }>(
+      `select c.oid::regclass::text as relation from pg_class c
+       join pg_namespace n on n.oid = c.relnamespace
+       where n.nspname not in ('stats', 'pg_catalog', 'information_schema')
+         and n.nspname !~ '^pg_toast'
+         and (has_table_privilege(c.oid, 'SELECT') or has_any_column_privilege(c.oid, 'SELECT'))`,
+    );
+    expect(rows).toEqual([]);
+  });
+
+  it('can run no SECURITY DEFINER function', async () => {
+    const { rows } = await probe.query<{ fn: string }>(
+      `select p.oid::regprocedure::text as fn from pg_proc p
+       join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname not in ('pg_catalog', 'information_schema')
+         and p.prosecdef and has_function_privilege(p.oid, 'EXECUTE')`,
+    );
+    expect(rows).toEqual([]);
+  });
+
+  it('gets no table a later migration creates in stats', async () => {
+    await db.pool.query('create table stats.later_table (id int)');
+    try {
+      const { rows } = await db.pool.query<{ granted: boolean }>(
+        "select has_table_privilege('stats_reader', 'stats.later_table', 'SELECT') as granted",
+      );
+      expect(rows).toEqual([{ granted: false }]);
+    } finally {
+      await db.pool.query('drop table stats.later_table');
+    }
+  });
+
   it("stats holds only views that run with their owner's rights", async () => {
     const { rows } = await db.pool.query<{
       relname: string;

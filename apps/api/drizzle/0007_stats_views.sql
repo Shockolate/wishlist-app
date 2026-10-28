@@ -68,6 +68,5 @@ COMMENT ON VIEW stats.overview IS 'Aggregates only (D102). Deleted accounts, ite
 COMMENT ON VIEW stats.accounts_weekly IS 'Aggregates only (D102). Counts what still exists: deleted accounts leave no trace, and unverified accounts are purged after 7 days, so past weeks count only verified sign-ups.';--> statement-breakpoint
 COMMENT ON VIEW stats.claims_weekly IS 'Aggregates only (D102). Counts claims that still exist, in the week each was made; a later quantity change stays in that week.';--> statement-breakpoint
 GRANT USAGE ON SCHEMA stats TO stats_reader;--> statement-breakpoint
-GRANT SELECT ON ALL TABLES IN SCHEMA stats TO stats_reader;--> statement-breakpoint
--- The migrating role is the same everywhere, so a view a later migration adds is granted on creation.
-ALTER DEFAULT PRIVILEGES IN SCHEMA stats GRANT SELECT ON TABLES TO stats_reader;
+-- Explicit, never by default privileges: a view a later migration adds is granted there, by name.
+GRANT SELECT ON ALL TABLES IN SCHEMA stats TO stats_reader;
