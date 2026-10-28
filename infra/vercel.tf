@@ -139,7 +139,7 @@ resource "vercel_firewall_config" "web" {
           window = 60
           keys   = ["ip"]
           algo   = "fixed_window"
-          # 429, after a log-only spell showed real traffic stays well under the limit.
+          # 429. #307 shipped it log-only first, to check the rule matched only these pages.
           action = "rate_limit"
         }
       }
