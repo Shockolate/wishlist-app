@@ -99,6 +99,7 @@ test('suggests tags for a link, and adds the ones tapped (design §5.1)', async 
   // A new tag first: it joins the tag box, leaves the row, and focus moves to the next chip.
   await coffee.click();
   await expect(page.getByRole('button', { name: 'Remove Coffee' })).toBeVisible();
+  await expect(status(page, 'Added tag “Coffee”.')).toBeAttached();
   await expect(coffee).toHaveCount(0);
   await expect(kitchen).toBeFocused();
   // The last chip: the row goes, and focus is in the tag input.
