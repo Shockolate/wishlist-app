@@ -400,6 +400,47 @@ A backup job that passes proves only that bytes reached R2. The drill proves the
 
 5. Remove the container: `docker rm -fv <container>`.
 
+## Production stats (D102)
+
+Claude reads production only as `hanker_stats`, a role that can read the aggregate views in schema `stats` and nothing else ([design 2026-10-28](superpowers/specs/2026-10-28-production-stats-access-design.md)). Migration `0007_stats_views` creates the views and a `NOLOGIN` role, `stats_reader`, that may read them. The login role is made by hand, once, after that migration has deployed (`/api/health` reports `migrationsApplied: 8` or more).
+
+**1. The role.** Create it in SQL, never in the Neon console: console roles join `neon_superuser`, which reads and writes every table. Connect to the production branch as the owner, as for the backup role ([Backups](#backups), step 2):
+
+```bash
+psql 'postgresql://neondb_owner@<direct-host>/neondb?sslmode=require'   # psql prompts for the password
+```
+
+```sql
+CREATE ROLE hanker_stats WITH LOGIN;
+\password hanker_stats
+GRANT stats_reader TO hanker_stats;
+ALTER ROLE hanker_stats SET statement_timeout = '15s';
+```
+
+The timeout stops a runaway query from keeping production's compute awake against Neon's free quota. Generate the password and discard it: nothing uses it. The Neon MCP logs in as the role through Neon's own path, so the role's grants, not its password, are what limit it.
+
+Prove it, still as the owner:
+
+```sql
+SELECT rolsuper, rolcreaterole, rolcreatedb, rolbypassrls,
+       pg_has_role('hanker_stats', 'neon_superuser', 'member'),
+       pg_has_role('hanker_stats', 'pg_read_all_data', 'member')
+FROM pg_roles WHERE rolname = 'hanker_stats';   -- all f
+SELECT rolconfig FROM pg_roles WHERE rolname = 'hanker_stats';   -- {statement_timeout=15s}
+```
+
+**2. Lock the Neon plugin to it.** In Claude Code, run `/mcp`, choose `plugin:neon:neon` and sign in again with **Full access** unchecked (read-only), **only the `wishlist` project**, and **Postgres role** `hanker_stats`. While it's locked, the plugin can't reach `wishlist-preview`; signing in again without the role unlocks it.
+
+**3. Acceptance.** Claude runs these through the locked plugin:
+
+- `SELECT current_user` answers `hanker_stats`;
+- `stats.overview`, `stats.accounts_weekly` and `stats.claims_weekly` answer;
+- `SELECT count(*) FROM users` and `SELECT * FROM drizzle.__drizzle_migrations` are refused;
+- `list_projects` is hidden;
+- `run_sql` with `role_name: neondb_owner` is refused.
+
+The last check depends on Neon, not on this repo. If it isn't refused, the lock isn't real: sign the plugin out, and keep production closed to it until that's resolved.
+
 ## Monitoring
 
 Better Stack's free plan watches the site and the backup, and emails you (D47). **The three monitors are managed in [`infra/betterstack.tf`](../infra/betterstack.tf)** (2026-10-27); change them in a PR. The two heartbeats stay in the dashboard: the provider doesn't mark a heartbeat's URL sensitive, so a plan would print it. They were created in Better Stack → Uptime, with email alerts to you:
