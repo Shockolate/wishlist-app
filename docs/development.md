@@ -5,7 +5,7 @@
 | Tool              | Version                            | Install                                 |
 | ----------------- | ---------------------------------- | --------------------------------------- |
 | Node              | 24 (see `.nvmrc`)                  | `nvm install`                           |
-| pnpm              | 12.14.0 (pinned in `package.json`) | `npm i -g pnpm@12.14.0`                 |
+| pnpm              | 12.15.0 (pinned in `package.json`) | `npm i -g pnpm@12.15.0`                 |
 | Docker            | with Compose v2                    | Docker Desktop or Engine                |
 | gh + gh-stack     | latest                             | `gh extension install github/gh-stack`  |
 | jq, python3, curl | any recent                         | OS package manager (used by `scripts/`) |
