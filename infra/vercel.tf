@@ -109,3 +109,40 @@ resource "vercel_project_domain" "www" {
     prevent_destroy = true
   }
 }
+
+# One per-IP edge limit on the share and manage pages (D103), so a flood is turned away before it
+# renders a page and wakes Neon. On the web project because only its edge sees the visitor: the
+# pages' Server Components call the API from Vercel's own addresses. This resource owns the web
+# project's whole firewall config (it has no other rules); Attack Challenge Mode is a separate
+# resource and stays in the dashboard. Hobby allows one rate-limit rule per project.
+resource "vercel_firewall_config" "web" {
+  enabled    = true
+  project_id = local.vercel_project_id_web
+  team_id    = local.vercel_team_id
+
+  rules {
+    rule {
+      name        = "Share and manage pages per IP"
+      description = "120 requests a minute per IP on /s/ and /c/ (D103)"
+      condition_group = [{
+        conditions = [{
+          type  = "path"
+          op    = "re"
+          value = "^/(s|c)/"
+        }]
+      }]
+
+      action = {
+        action = "rate_limit"
+        rate_limit = {
+          limit  = 120
+          window = 60
+          keys   = ["ip"]
+          algo   = "fixed_window"
+          # Log only, to see real traffic against the limit before anything is refused.
+          action = "log"
+        }
+      }
+    }
+  }
+}
