@@ -66,7 +66,7 @@ scripts/e2e.sh --config playwright.screenshots.config.ts
 
 ## Trying the auth API
 
-The API sends email to Mailpit, so every link lands in the inbox at http://localhost:8025. Turnstile's test secret accepts any token. State-changing requests must carry the web origin and a JSON body; the CSRF guard rejects anything else.
+The API sends email to Mailpit, so every link lands in the inbox at http://localhost:8025. Turnstile's test secret accepts any token, so the API passes it without asking Cloudflare (local, E2E and previews). `test/turnstile-siteverify.int-spec.ts` is the one check that calls the real siteverify, with the always-fail test secret. State-changing requests must carry the web origin and a JSON body; the CSRF guard rejects anything else.
 
 ```bash
 API=http://localhost:3001/api; ORIGIN=http://localhost:3000

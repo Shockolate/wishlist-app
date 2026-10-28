@@ -62,6 +62,23 @@ describe('TurnstileVerifier', () => {
     expect(calls).toHaveLength(0);
   });
 
+  // Cloudflare would pass any token, so the call could only add a network blip (E2E, previews).
+  it('passes with Cloudflare’s always-pass test secret, and then never calls Cloudflare', async () => {
+    const { fn, calls } = fakeFetch(() => json({}, 500));
+    const verifier = new TurnstileVerifier('1x0000000000000000000000000000000AA', fn);
+    expect(await verifier.verify('token', '203.0.113.7')).toBe('passed');
+    expect(calls).toHaveLength(0);
+  });
+
+  it('still asks Cloudflare with its other test secrets', async () => {
+    const { fn, calls } = fakeFetch(() =>
+      json({ success: false, 'error-codes': ['invalid-input-response'] }),
+    );
+    const verifier = new TurnstileVerifier('2x0000000000000000000000000000000AA', fn);
+    expect(await verifier.verify('token', '203.0.113.7')).toBe('failed');
+    expect(calls).toHaveLength(1);
+  });
+
   it.each([
     ['an HTTP error', () => json({}, 500)],
     ['a body that is not siteverify JSON', () => new Response('<html>', { status: 200 })],
