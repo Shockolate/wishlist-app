@@ -50,6 +50,13 @@
       "when": 1792851293851,
       "tag": "0006_claim_links",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793208175551,
+      "tag": "0007_stats_views",
+      "breakpoints": true
     }
   ]
 }
