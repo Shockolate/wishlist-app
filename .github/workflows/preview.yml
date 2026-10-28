@@ -160,6 +160,8 @@ jobs:
           api_key: ${{ secrets.NEON_API_KEY }}
           branch_name: pr-${{ github.event.pull_request.number }}
           parent_branch: preview-seed
+          # pg reads both strings: verify-full, not the default require (docs/deployment.md, TLS).
+          ssl: verify-full
 
       - name: Mask database credentials
         env:
