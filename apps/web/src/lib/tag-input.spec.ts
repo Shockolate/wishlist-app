@@ -9,6 +9,7 @@ import {
   openSuggestions,
   shownTags,
   suggestTags,
+  tagChangeText,
 } from './tag-input';
 
 let next = 0;
@@ -215,5 +216,33 @@ describe('openSuggestions (Plan 9 ruling 5)', () => {
   it('shows none once the item holds the most tags', () => {
     const ten = Array.from({ length: 10 }, (_, i) => ({ name: `Tag ${String(i)}` }));
     expect(openSuggestions([{ name: 'Coffee' }], ten, all)).toEqual([]);
+  });
+});
+
+describe('tagChangeText (the tag field’s live region)', () => {
+  const kitchen = { ref: { id: tag('Kitchen').id }, name: 'Kitchen' };
+  const books = { ref: { name: 'Books' }, name: 'Books' };
+  const coffee = { ref: { name: 'Coffee' }, name: 'Coffee' };
+
+  it('says which tag was added or removed', () => {
+    expect(tagChangeText([kitchen], [kitchen, books])).toBe('Added tag “Books”.');
+    expect(tagChangeText([kitchen, books], [books])).toBe('Removed tag “Kitchen”.');
+  });
+
+  it('names every tag added at once, as pasted text adds them', () => {
+    expect(tagChangeText([], [kitchen, books])).toBe('Added tags “Kitchen” and “Books”.');
+    expect(tagChangeText([], [kitchen, books, coffee])).toBe(
+      'Added tags “Kitchen”, “Books” and “Coffee”.',
+    );
+  });
+
+  it('matches tags by ref, not by object, and says nothing when none changed', () => {
+    expect(tagChangeText([kitchen, books], [{ ...books, ref: { name: 'Books' } }, kitchen])).toBe(
+      undefined,
+    );
+  });
+
+  it('says both when tags were added and removed', () => {
+    expect(tagChangeText([kitchen], [books])).toBe('Added tag “Books”. Removed tag “Kitchen”.');
   });
 });

@@ -91,8 +91,10 @@ test('tags a new item in the add form (design §4)', async ({ page, browser, bas
 
   await tagBox(page).fill('Kitchen');
   await tagBox(page).press('Enter');
+  await expect(status(page, 'Added tag “Kitchen”.')).toBeAttached();
   await tagBox(page).fill('Christmas');
   await tagBox(page).press('Enter');
+  await expect(status(page, 'Added tag “Christmas”.')).toBeAttached();
   // Enter added a tag each time; it didn't submit the form.
   await expect(page.getByRole('button', { name: 'Add to list' })).toBeVisible();
   await expect(tagBox(page)).toHaveValue('');
@@ -153,6 +155,7 @@ test('picks a suggestion with the keyboard and removes a tag in the edit form (R
 
   await page.getByRole('button', { name: 'Remove Christmas' }).click();
   await expect(removeButtons(page)).toHaveCount(1);
+  await expect(status(page, 'Removed tag “Christmas”.')).toBeAttached();
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(status(page, 'Saved “Kettle”.')).toBeVisible();
 

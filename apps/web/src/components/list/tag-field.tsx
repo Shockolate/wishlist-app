@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { ItemTagRef, Tag, WishlistResponse } from '@wishlist/contracts';
 import {
   useCallback,
+  useEffect,
   useImperativeHandle,
   useRef,
   useState,
@@ -14,7 +15,14 @@ import {
 import { Controller } from 'react-hook-form';
 import { Field, type FieldControlProps } from '@/components/ui/field';
 import { WISHLIST_KEY } from '@/lib/list-cache';
-import { addPendingTags, addTypedTag, liveTags, shownTags, suggestTags } from '@/lib/tag-input';
+import {
+  addPendingTags,
+  addTypedTag,
+  liveTags,
+  shownTags,
+  suggestTags,
+  tagChangeText,
+} from '@/lib/tag-input';
 import { cn } from '@/lib/utils';
 import { CloseIcon } from './icons';
 import type { ItemForm } from './item-fields';
@@ -99,6 +107,7 @@ function TagCombobox({
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const [error, setError] = useState<string>();
+  const [change, setChange] = useState<{ text: string; id: number } | null>(null);
   const input = useRef<HTMLInputElement | null>(null);
   const chipRow = useRef<HTMLDivElement | null>(null);
 
@@ -111,6 +120,18 @@ function TagCombobox({
   const highlighted = active < suggestions.length ? active : -1;
   const listId = `${id}-suggestions`;
   const optionId = (index: number) => `${id}-option-${String(index)}`;
+
+  // Announces each change to the chips, whatever made it: this box, a chip's remove button, or a
+  // suggested tag's tap. It compares with the last render's chips, so a tag deleted meanwhile in
+  // the Tags sheet isn't announced as removed when the next change comes.
+  const last = useRef<{ value: readonly ItemTagRef[]; chips: typeof chips } | null>(null);
+  useEffect(() => {
+    const before = last.current;
+    last.current = { value, chips };
+    if (before === null || before.value === value) return;
+    const text = tagChangeText(before.chips, chips);
+    if (text !== undefined) setChange((was) => ({ text, id: (was?.id ?? 0) + 1 }));
+  });
 
   const close = () => {
     setOpen(false);
@@ -305,6 +326,9 @@ function TagCombobox({
               ))}
             </ul>
           ) : null}
+          <div role="status" className="sr-only">
+            {change ? <span key={change.id}>{change.text}</span> : null}
+          </div>
         </div>
       )}
     </Field>

@@ -149,6 +149,34 @@ export function shownTags(
     .sort(byName);
 }
 
+const quoted = (names: readonly string[]) => {
+  const each = names.map((name) => `“${name}”`);
+  const last = each.pop() ?? '';
+  return each.length > 0 ? `${each.join(', ')} and ${last}` : last;
+};
+
+const refKey = (ref: ItemTagRef) => ('id' in ref ? ref.id : `new:${ref.name}`);
+
+/**
+ * What the tag field announces when its chips change, so adding or removing a tag isn't silent:
+ * the tags added, then those removed, or undefined when the chips are the same tags.
+ */
+export function tagChangeText(
+  before: readonly { ref: ItemTagRef; name: string }[],
+  after: readonly { ref: ItemTagRef; name: string }[],
+): string | undefined {
+  const notIn = (chips: typeof before) => {
+    const keys = new Set(chips.map((chip) => refKey(chip.ref)));
+    return (chip: (typeof before)[number]) => !keys.has(refKey(chip.ref));
+  };
+  const added = after.filter(notIn(before)).map((chip) => chip.name);
+  const removed = before.filter(notIn(after)).map((chip) => chip.name);
+  const say = (verb: string, names: string[]) =>
+    names.length === 0 ? [] : [`${verb} ${names.length === 1 ? 'tag' : 'tags'} ${quoted(names)}.`];
+  const text = [...say('Added', added), ...say('Removed', removed)].join(' ');
+  return text === '' ? undefined : text;
+}
+
 /**
  * An item write's body, with `tags` only when they changed (Plan 7b ruling 5). Leaving them out keeps the
  * item's tags as the API has them, so a tick made elsewhere while the form was open survives.
