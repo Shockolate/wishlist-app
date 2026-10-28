@@ -15,6 +15,12 @@ export const CAPTCHA_VERIFIER = Symbol('CAPTCHA_VERIFIER');
 const SITEVERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 
 /**
+ * Cloudflare's published test secret that passes every token. Local runs, E2E and previews use it,
+ * so asking Cloudflare could only add a network blip. A real secret is never this value.
+ */
+const ALWAYS_PASS_TEST_SECRET = '1x0000000000000000000000000000000AA';
+
+/**
  * Siteverify errors that mean our request is wrong, not the visitor's: an operator must act
  * (Plan 2b rule 16).
  */
@@ -49,6 +55,7 @@ export class TurnstileVerifier implements CaptchaVerifier {
 
   async verify(token: string, remoteIp: string): Promise<CaptchaVerdict> {
     if (!this.secret) return 'unavailable';
+    if (this.secret === ALWAYS_PASS_TEST_SECRET) return 'passed';
     let res: Response;
     try {
       res = await this.fetchFn(SITEVERIFY_URL, {
