@@ -97,6 +97,7 @@ test('signed in, the sheet prefills my display name, says where the claim goes, 
   await expect(done.getByText('Save this link to change or cancel your claim.')).toBeVisible();
   const seeGifts = done.getByRole('link', { name: 'See Your gifts' });
   await expect(seeGifts).toHaveAttribute('href', '/gifts');
+  await expect(done.getByText(/Have a Hanker account/)).toHaveCount(0);
   await expectAccessible(gina);
   // The sheet still writes the name and the claim record first (D42, D45).
   const stored = await gina.evaluate(() => {
@@ -254,7 +255,10 @@ test('a manage link already on someone else’s gifts says so, and still changes
   await expect(first.getByText('Added to Your gifts.')).toHaveCount(0);
 });
 
-test('a guest’s sheet and /c are unchanged', async ({ browser, baseURL }) => {
+test('a guest’s sheet and /c are unchanged but for one line after the claim', async ({
+  browser,
+  baseURL,
+}) => {
   const base = baseURL ?? '';
   const { shareToken, mom } = await listWithItem(browser, base, 'sic-guest-mom');
   const visitor = await (await guest(browser, base)).newPage();
@@ -275,8 +279,11 @@ test('a guest’s sheet and /c are unchanged', async ({ browser, baseURL }) => {
   await sheet.getByRole('button', { name: 'Claim it' }).click();
   const done = visitor.getByRole('dialog', { name: `You’re getting ${KETTLE}` });
   await expect(done.getByText('Save this link to change or cancel your claim.')).toBeVisible();
-  await expect(done.getByText(/Your gifts/)).toHaveCount(0);
-  await expect(done.getByRole('link', { name: 'See Your gifts' })).toHaveCount(0);
+  // Only the line saying how Your gifts works, with no link to it or to sign in (D76).
+  await expect(done.getByText(/Your gifts/)).toHaveText(
+    'Have a Hanker account? Open the link while you’re signed in, and the claim is kept on Your gifts on any device.',
+  );
+  await expect(done.getByRole('link')).toHaveCount(0);
   const manageUrl = (await done.getByText(/\/c\/[\w-]{22}$/).textContent()) ?? '';
 
   await visitor.goto(new URL(manageUrl).pathname);
