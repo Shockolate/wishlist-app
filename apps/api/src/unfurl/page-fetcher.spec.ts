@@ -396,28 +396,32 @@ describe('PageFetcher (spec §6.8)', () => {
     },
   );
 
-  it('gives up on a server that accepts the connection but never completes the TLS handshake', async () => {
-    const sockets = new Set<Socket>();
-    const silent = createNetServer((socket) => {
-      sockets.add(socket);
-      socket.on('error', () => undefined);
-    });
-    await new Promise<void>((resolve) => silent.listen(0, '127.0.0.1', resolve));
-    const silentPort = (silent.address() as AddressInfo).port;
-    try {
-      const started = Date.now();
-      const page = await new PageFetcher({
-        timeoutMs: 200,
-        policy: { allows: (address, p) => address === '127.0.0.1' && p === silentPort },
-        resolve: hosts({ 'slow-tls.test': ['127.0.0.1'] }),
-      }).fetch(`https://slow-tls.test:${silentPort}/`);
-      expect(page).toMatchObject({ ok: false, reason: 'TIMEOUT' });
-      expect(Date.now() - started).toBeLessThan(450);
-    } finally {
-      for (const socket of sockets) socket.destroy();
-      await new Promise((resolve) => silent.close(resolve));
-    }
-  });
+  // A handshake the deadline doesn't cut off hangs, and the test's own 2 s timeout fails it. No
+  // tighter wall-clock bound: one of 450 ms flaked on a slow CI runner (531 ms for a 200 ms deadline).
+  it(
+    'gives up on a server that accepts the connection but never completes the TLS handshake',
+    { timeout: 2_000 },
+    async () => {
+      const sockets = new Set<Socket>();
+      const silent = createNetServer((socket) => {
+        sockets.add(socket);
+        socket.on('error', () => undefined);
+      });
+      await new Promise<void>((resolve) => silent.listen(0, '127.0.0.1', resolve));
+      const silentPort = (silent.address() as AddressInfo).port;
+      try {
+        const page = await new PageFetcher({
+          timeoutMs: 200,
+          policy: { allows: (address, p) => address === '127.0.0.1' && p === silentPort },
+          resolve: hosts({ 'slow-tls.test': ['127.0.0.1'] }),
+        }).fetch(`https://slow-tls.test:${silentPort}/`);
+        expect(page).toMatchObject({ ok: false, reason: 'TIMEOUT' });
+      } finally {
+        for (const socket of sockets) socket.destroy();
+        await new Promise((resolve) => silent.close(resolve));
+      }
+    },
+  );
 
   it.each(['/zstd', '/double-encoding'])(
     'refuses an unknown or repeated Content-Encoding as NOT_HTML, without crashing (%s, Plan 3a rule 7)',
