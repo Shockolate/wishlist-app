@@ -50,6 +50,14 @@ export const NOTHING_YET =
 /** The claim sheet's hint when a verified gifter is signed in: where the claim will go. */
 export const SHEET_GIFTS_HINT = 'You’ll also find this on Your gifts.';
 
+/**
+ * After a guest's claim, under "only the link works on another phone or computer": how to keep it
+ * on any device. It says how Your gifts works and offers no sign-up, since a gifter needs no
+ * account (D76).
+ */
+export const GUEST_GIFTS_HINT =
+  'Have a Hanker account? Open the link while you’re signed in, and the claim is kept on Your gifts on any device.';
+
 /** The claim sheet's way to Your gifts, once a claim has landed there. */
 export const SEE_GIFTS = 'See Your gifts';
 

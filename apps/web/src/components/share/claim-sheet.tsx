@@ -249,7 +249,12 @@ export function ClaimSheet({
         <SheetDescription>{description}</SheetDescription>
 
         {phase.kind === 'done' ? (
-          <ClaimDone claim={phase.claim} itemTitle={item.title} ownerName={ownerName} />
+          <ClaimDone
+            claim={phase.claim}
+            itemTitle={item.title}
+            ownerName={ownerName}
+            guest={viewer === undefined}
+          />
         ) : phase.kind === 'ended' ? (
           <>
             <Notice tone="error" className="mt-4">

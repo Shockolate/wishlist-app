@@ -7,7 +7,7 @@ import { CopyIcon, ShareIcon } from '@/components/list/icons';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
 import { SheetClose } from '@/components/ui/sheet';
-import { SEE_GIFTS } from '@/lib/gifts-copy';
+import { GUEST_GIFTS_HINT, SEE_GIFTS } from '@/lib/gifts-copy';
 import { useCanShare } from '@/lib/use-can-share';
 
 /** After a claim (spec §7 step 2): the manage link, to copy or share, and the way back. */
@@ -15,10 +15,13 @@ export function ClaimDone({
   claim,
   itemTitle,
   ownerName,
+  guest,
 }: {
   claim: CreateClaimResponse;
   itemTitle: string;
   ownerName: string;
+  /** No signed-in, verified gifter: the claim isn't on Your gifts and can't be. */
+  guest: boolean;
 }) {
   const canShare = useCanShare();
   const [message, setMessage] = useState<{ text: string; id: number } | null>(null);
@@ -77,6 +80,9 @@ export function ClaimDone({
         This browser remembers your claim too, but only the link works on another phone or computer.
         Send it to yourself, or keep it with your notes.
       </p>
+      {guest ? (
+        <p className="mt-2 text-sm leading-snug text-muted-foreground">{GUEST_GIFTS_HINT}</p>
+      ) : null}
       <SheetClose asChild>
         <Button variant="secondary" className="mt-6 w-full">
           Back to {ownerName}’s list
