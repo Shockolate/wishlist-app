@@ -49,8 +49,9 @@ export class ClaimsService {
 
   /**
    * Claims some of an item on the list behind `shareToken` (spec §5). The checks run in the
-   * spec's order: malformed IDs, the IP's limit, the list, the owner (D43), the list's limit, and
-   * only then the transaction, so the owner never sees a 409's `remaining` or a 429's hint.
+   * spec's order: malformed IDs, the IP's limit, the list, the owner (D43), the item (D104), the
+   * list's limit, and only then the transaction, so the owner never sees a 409's `remaining` or a
+   * 429's hint.
    *
    * A request that sends the manage token of a claim already on this item gets that claim back
    * (D42): the claim sheet replays its token when an answer was lost.
@@ -79,6 +80,13 @@ export class ClaimsService {
     if (!list) throw shareLinkNotFound();
     // Before the list's limit (D43): a 429 there would tell the owner gifters have been claiming.
     if (viewer?.id === list.ownerId) throw ownerCannotClaim();
+    // Before the list's limit (D104): a made-up item ID mustn't use up claims for every gifter.
+    // The transaction checks again under the lock, in case the item is deleted meanwhile.
+    const [onList] = await this.db
+      .select({ id: items.id })
+      .from(items)
+      .where(and(eq(items.id, itemId), eq(items.wishlistId, list.id)));
+    if (!onList) throw itemNotFound();
     await this.limiter.enforce(claimsListKey(list.id), CLAIMS_PER_LIST);
 
     const manageToken = input.manageToken ?? newToken(16);

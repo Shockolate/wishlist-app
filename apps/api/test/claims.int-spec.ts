@@ -239,6 +239,20 @@ describe('POST /shared/:shareToken/items/:itemId/claims (spec §5)', () => {
     expect([res.status, codeOf(res)]).toEqual([429, ErrorCode.RATE_LIMITED]);
   });
 
+  // Otherwise anyone with the link could use up the list's claims with made-up item IDs, and
+  // every gifter would get a 429 until the window ends.
+  it('does not count a claim on an item that is not on the list against the list (D104)', async () => {
+    const { token, kettle } = await adasKettle(99);
+    await signUpVerified(t, BOB);
+    const bobsItem = await seedItem(db, BOB.email, 'Bike', 1);
+    await fillBucket(db, claimsListKey(await wishlistIdOf(db, ADA.email)), 29);
+    for (const itemId of [UNKNOWN_ID, bobsItem]) {
+      const res = await claim(token, itemId, { claimerName: 'Sue' });
+      expect([res.status, codeOf(res)]).toEqual([404, ErrorCode.NOT_FOUND]);
+    }
+    expect((await claim(token, kettle, { claimerName: 'Sue' })).status).toBe(201);
+  });
+
   it('a claim racing the owner deleting the account leaves no claim behind (Review Focus 3)', async () => {
     const { token, kettle } = await adasKettle(5);
     const cookie = await logIn(t);
