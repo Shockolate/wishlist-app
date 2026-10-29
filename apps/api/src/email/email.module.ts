@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ENV, type Env } from '../core/env.js';
+import { ERROR_REPORTER, type ErrorReporter } from '../observability/error-reporter.js';
 import { EMAIL_SENDER, type EmailSender } from './email-sender.js';
 import { LogEmailSender } from './log-email-sender.js';
 import { Mailer } from './mailer.js';
@@ -7,12 +8,12 @@ import { MailpitEmailSender } from './mailpit-email-sender.js';
 import { ResendEmailSender } from './resend-email-sender.js';
 
 /** The adapter EMAIL_TRANSPORT names (spec §10 Environments: Mailpit locally, log in previews). */
-export function emailSenderFor(env: Env): EmailSender {
+export function emailSenderFor(env: Env, reporter: ErrorReporter): EmailSender {
   switch (env.EMAIL_TRANSPORT) {
     case 'resend':
       if (!env.RESEND_API_KEY)
         throw new Error('RESEND_API_KEY is required for EMAIL_TRANSPORT=resend');
-      return new ResendEmailSender(env.RESEND_API_KEY, env.EMAIL_FROM);
+      return new ResendEmailSender(env.RESEND_API_KEY, env.EMAIL_FROM, reporter);
     case 'mailpit':
       return new MailpitEmailSender(env.MAILPIT_URL, env.EMAIL_FROM);
     case 'log':
@@ -21,7 +22,10 @@ export function emailSenderFor(env: Env): EmailSender {
 }
 
 @Module({
-  providers: [{ provide: EMAIL_SENDER, inject: [ENV], useFactory: emailSenderFor }, Mailer],
+  providers: [
+    { provide: EMAIL_SENDER, inject: [ENV, ERROR_REPORTER], useFactory: emailSenderFor },
+    Mailer,
+  ],
   exports: [Mailer],
 })
 export class EmailModule {}
