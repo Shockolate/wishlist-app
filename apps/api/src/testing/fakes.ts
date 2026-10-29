@@ -3,6 +3,7 @@ import type { Clock } from '../core/clock.js';
 import type { EmailMessage, EmailSender } from '../email/email-sender.js';
 import type { ErrorContext, ErrorReporter } from '../observability/error-reporter.js';
 import type { CronHeartbeat } from '../ops/cron-heartbeat.js';
+import type { QuotaCheck } from '../ops/neon-quota.js';
 import type { BreachedPasswordChecker } from '../security/breached-passwords.js';
 import type { CaptchaVerdict, CaptchaVerifier } from '../security/captcha.js';
 import type { SuggestInput, SuggestResult, TagSuggester } from '../tag-suggest/tag-suggester.js';
@@ -141,6 +142,16 @@ export class FakeCronHeartbeat implements CronHeartbeat {
 
   failed(): Promise<void> {
     this.pings.push('failed');
+    return Promise.resolve();
+  }
+}
+
+/** The Neon quota check's stand-in (D105). Counts its runs. */
+export class FakeQuotaCheck implements QuotaCheck {
+  runs = 0;
+
+  run(): Promise<void> {
+    this.runs += 1;
     return Promise.resolve();
   }
 }

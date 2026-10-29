@@ -49,6 +49,15 @@ const EnvSchema = z
     CLOUDFLARE_AI_TOKEN: z.string().min(1).optional(),
     /** The daily cron's Better Stack heartbeat, a secret (D86). Unset means no ping. https only. */
     CRON_HEARTBEAT_URL: z.url({ protocol: /^https$/ }).optional(),
+    /** Production's Neon project, for the quota check (D105). Not a secret. */
+    NEON_PROJECT_ID: z
+      .string()
+      .regex(/^[a-z0-9-]{1,60}$/)
+      .optional(),
+    /** A Neon API key scoped to production's project, a secret (D105). */
+    NEON_USAGE_API_KEY: z.string().min(1).optional(),
+    /** The Neon quota heartbeat's Better Stack URL, a secret (D105). https only. */
+    NEON_QUOTA_HEARTBEAT_URL: z.url({ protocol: /^https$/ }).optional(),
   })
   .superRefine((env, ctx) => {
     // One without the other would ship tag suggestions silently off, with no sign of why.
@@ -57,6 +66,15 @@ const EnvSchema = z
         code: 'custom',
         path: [env.CLOUDFLARE_ACCOUNT_ID ? 'CLOUDFLARE_AI_TOKEN' : 'CLOUDFLARE_ACCOUNT_ID'],
         message: 'set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AI_TOKEN together',
+      });
+    }
+    // A partial set would ship the quota check silently off (D105).
+    const quota = [env.NEON_PROJECT_ID, env.NEON_USAGE_API_KEY, env.NEON_QUOTA_HEARTBEAT_URL];
+    if (quota.some(Boolean) && !quota.every(Boolean)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['NEON_USAGE_API_KEY'],
+        message: 'set NEON_PROJECT_ID, NEON_USAGE_API_KEY and NEON_QUOTA_HEARTBEAT_URL together',
       });
     }
     if (env.EMAIL_TRANSPORT === 'resend' && !env.RESEND_API_KEY) {

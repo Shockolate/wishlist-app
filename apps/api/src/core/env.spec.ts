@@ -66,6 +66,36 @@ describe('parseEnv', () => {
     });
   });
 
+  describe('the Neon quota check (D105)', () => {
+    const all = {
+      NEON_PROJECT_ID: 'steep-dew-42117248',
+      NEON_USAGE_API_KEY: 'napi_key',
+      NEON_QUOTA_HEARTBEAT_URL: 'https://uptime.betterstack.com/api/v1/heartbeat/TOKEN',
+    };
+
+    it('is optional, and read when all three are set', () => {
+      expect(parseEnv(base).NEON_USAGE_API_KEY).toBeUndefined();
+      expect(parseEnv({ ...base, ...all })).toMatchObject(all);
+    });
+
+    it('refuses a partial set, which would ship the check silently off', () => {
+      for (const name of Object.keys(all)) {
+        expect(() => parseEnv({ ...base, ...all, [name]: undefined })).toThrow(
+          /set NEON_PROJECT_ID, NEON_USAGE_API_KEY and NEON_QUOTA_HEARTBEAT_URL together/,
+        );
+      }
+    });
+
+    it('refuses an http heartbeat URL and a project ID that could change the path', () => {
+      expect(() =>
+        parseEnv({ ...base, ...all, NEON_QUOTA_HEARTBEAT_URL: 'http://example.com/hb' }),
+      ).toThrow(/NEON_QUOTA_HEARTBEAT_URL/);
+      expect(() => parseEnv({ ...base, ...all, NEON_PROJECT_ID: '../projects' })).toThrow(
+        /NEON_PROJECT_ID/,
+      );
+    });
+  });
+
   describe('CRON_HEARTBEAT_URL (D86)', () => {
     const url = 'https://uptime.betterstack.com/api/v1/heartbeat/SECRETTOKEN';
 

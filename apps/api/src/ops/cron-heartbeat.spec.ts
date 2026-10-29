@@ -40,6 +40,13 @@ describe('BetterStackCronHeartbeat (D86)', () => {
     expect(JSON.stringify(reporter.warnings)).not.toContain('SECRETTOKEN');
   });
 
+  it('names another heartbeat in its warning (D105)', async () => {
+    const reporter = new FakeErrorReporter();
+    const fetch = fakeFetch(() => new Response('', { status: 503 }));
+    await new BetterStackCronHeartbeat(URL, reporter, fetch.fn, 'neon quota heartbeat').failed();
+    expect(reporter.warnings).toEqual([{ message: 'neon quota heartbeat failed status=503' }]);
+  });
+
   it('does not leak the URL when fetch rejects with it in the message', async () => {
     const reporter = new FakeErrorReporter();
     const fetch = fakeFetch(() => {

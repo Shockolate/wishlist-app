@@ -3,6 +3,7 @@ import { CLOCK } from '../../src/core/clock.js';
 import type { Env } from '../../src/core/env.js';
 import { EMAIL_SENDER } from '../../src/email/email-sender.js';
 import { CRON_HEARTBEAT } from '../../src/ops/cron-heartbeat.js';
+import { QUOTA_CHECK } from '../../src/ops/neon-quota.js';
 import { BREACHED_PASSWORD_CHECKER } from '../../src/security/breached-passwords.js';
 import { CAPTCHA_VERIFIER } from '../../src/security/captcha.js';
 import {
@@ -13,6 +14,7 @@ import {
   FakeEmailSender,
   FakeMetadataFetcher,
   FakePhotoFetcher,
+  FakeQuotaCheck,
   FakeTagSuggester,
 } from '../../src/testing/fakes.js';
 import { TAG_SUGGESTER } from '../../src/tag-suggest/tag-suggester.js';
@@ -32,6 +34,7 @@ export interface AuthTestApp {
   photos: FakePhotoFetcher;
   suggester: FakeTagSuggester;
   heartbeat: FakeCronHeartbeat;
+  quota: FakeQuotaCheck;
   /** Rewinds the clock and clears every fake. Call it in beforeEach. */
   reset(): void;
 }
@@ -49,6 +52,7 @@ export async function createAuthTestApp(
   const photos = new FakePhotoFetcher();
   const suggester = new FakeTagSuggester();
   const heartbeat = new FakeCronHeartbeat();
+  const quota = new FakeQuotaCheck();
   const app = await createTestApp({
     databaseUrl,
     env,
@@ -69,7 +73,9 @@ export async function createAuthTestApp(
         .overrideProvider(TAG_SUGGESTER)
         .useValue(suggester)
         .overrideProvider(CRON_HEARTBEAT)
-        .useValue(heartbeat),
+        .useValue(heartbeat)
+        .overrideProvider(QUOTA_CHECK)
+        .useValue(quota),
   });
   return {
     app,
@@ -81,6 +87,7 @@ export async function createAuthTestApp(
     photos,
     suggester,
     heartbeat,
+    quota,
     reset() {
       clock.set(TEST_START);
       emails.sent.length = 0;
@@ -96,6 +103,7 @@ export async function createAuthTestApp(
       suggester.next = { ok: true, names: [] };
       suggester.inputs.length = 0;
       heartbeat.pings.length = 0;
+      quota.runs = 0;
     },
   };
 }

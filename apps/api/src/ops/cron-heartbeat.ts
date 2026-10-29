@@ -29,6 +29,8 @@ export class BetterStackCronHeartbeat implements CronHeartbeat {
     private readonly url: string,
     private readonly reporter: ErrorReporter,
     private readonly fetchFn: typeof fetch = fetch,
+    /** Names the heartbeat in a failed ping's warning: the quota check has its own (D105). */
+    private readonly name = 'cron heartbeat',
   ) {}
 
   succeeded(): Promise<void> {
@@ -53,6 +55,6 @@ export class BetterStackCronHeartbeat implements CronHeartbeat {
     } finally {
       clearTimeout(timer);
     }
-    this.reporter.captureWarning(`cron heartbeat failed status=${status}`);
+    this.reporter.captureWarning(`${this.name} failed status=${status}`);
   }
 }
