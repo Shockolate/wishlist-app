@@ -6,6 +6,7 @@ import { ENV, type Env } from '../core/env.js';
 import { unauthenticated } from '../http/errors.js';
 import { CleanupService } from './cleanup.service.js';
 import { CRON_HEARTBEAT, type CronHeartbeat } from './cron-heartbeat.js';
+import { QUOTA_CHECK, type QuotaCheck } from './neon-quota.js';
 
 const digest = (value: string): Buffer => createHash('sha256').update(value).digest();
 
@@ -15,12 +16,14 @@ export class CronController {
     @Inject(ENV) private readonly env: Env,
     @Inject(CleanupService) private readonly cleanup: CleanupService,
     @Inject(CRON_HEARTBEAT) private readonly heartbeat: CronHeartbeat,
+    @Inject(QUOTA_CHECK) private readonly quota: QuotaCheck,
   ) {}
 
   /**
    * Vercel Cron calls this daily (apps/api/vercel.json) with `Authorization: Bearer $CRON_SECRET`.
    * Each authorized run pings the heartbeat, `failed` when the cleanup throws, so a cron that stops
-   * running or keeps failing alerts someone (D86). A ping never changes the answer.
+   * running or keeps failing alerts someone (D86). Then, whatever the cleanup did, the Neon quota
+   * check runs (D105). Neither ever changes the answer.
    */
   @Get('daily')
   @Header('Cache-Control', 'no-store')
@@ -31,9 +34,11 @@ export class CronController {
       result = await this.cleanup.runDaily();
     } catch (error) {
       await this.heartbeat.failed();
+      await this.quota.run();
       throw error;
     }
     await this.heartbeat.succeeded();
+    await this.quota.run();
     return result;
   }
 

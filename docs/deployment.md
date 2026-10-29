@@ -208,6 +208,7 @@ The privacy page says Sentry's error reports have IP addresses removed. [Sentry 
 | Vercel `wishlist-api` → Production | `CLOUDFLARE_ACCOUNT_ID`                                                                                                       | Cloudflare account ID, from the account's overview page. Set together with the token or not at all. Unset means no tag suggestions. See "Turning on tag suggestions"                                                             |
 | Vercel `wishlist-api` → Production | `CLOUDFLARE_AI_TOKEN` (sensitive)                                                                                             | API token with Account → Workers AI → Read and Edit, on that account only. Unset means no tag suggestions. See "Turning on tag suggestions"                                                                                      |
 | Vercel `wishlist-api` → Production | `CRON_HEARTBEAT_URL` (sensitive)                                                                                              | The daily cron's Better Stack heartbeat URL, `https:` only (D86). It carries the heartbeat's token, so treat it as a secret. Unset means no ping. See "Daily cron"                                                               |
+| Vercel `wishlist-api` → Production | `NEON_PROJECT_ID`, `NEON_USAGE_API_KEY` (sensitive), `NEON_QUOTA_HEARTBEAT_URL` (sensitive)                                   | The Neon quota check (D105): production's project ID, a Neon API key scoped to that project, and the "Neon quota" heartbeat's URL, `https:` only. Set all three or none. See "Daily cron"                                        |
 | Vercel `wishlist-api` → Production | `EMAIL_TRANSPORT=resend`, `EMAIL_FROM=Hanker <no-reply@mail.hanker.dev>`, `RESEND_API_KEY` (sensitive)                        | Set in Plan 2b. The API refuses to boot in production with Turnstile set and `EMAIL_TRANSPORT=log`                                                                                                                               |
 | Set per preview by CI              | `DATABASE_URL`, `APP_ORIGIN`, `EMAIL_TRANSPORT=log`, `TURNSTILE_SECRET_KEY` (Cloudflare's always-pass test secret), `GIT_SHA` | See `.github/workflows/preview.yml`                                                                                                                                                                                              |
 | Set per deploy by CI               | `GIT_SHA`                                                                                                                     | The commit being deployed                                                                                                                                                                                                        |
@@ -241,6 +242,16 @@ The response lists the counts.
   read -rs URL && printf %s "$URL" | pnpm vercel env add CRON_HEARTBEAT_URL production --sensitive --project wishlist-api --scope shockolate; unset URL
   ```
   Redeploy, press **Run** under Cron Jobs, and check the heartbeat turns Up.
+- **The Neon quota check (D105, [design](superpowers/specs/2026-10-29-neon-quota-check-design.md)):** after the cleanup, each authorized run reads production's project from Neon's API (a control-plane read that doesn't wake the database) and logs `<n> CU-hours used, projected <n>`. It pings the "Neon quota" heartbeat, or its `/fail` URL past 60 CU-hours used or 90 projected (the projection starts on the period's fourth day). When Neon can't be read it pings nothing and sends a Sentry warning, `neon quota check failed status=<n|invalid|none>`, so the heartbeat goes quiet and alerts. To set it up:
+  1. In Better Stack → Uptime → Heartbeats, create "Neon quota" with a period of 1 day and 2 hours of grace, on the same escalation policy as the cron's.
+  2. In the Neon console, switch to the organization, then Settings → API keys → Create new → **Project-scoped**, for the `wishlist` project. Name it `wishlist-api-quota`. It can change anything inside production's project (design §4), so it goes only into Vercel.
+  3. Store the three values, the secrets from a hidden prompt:
+     ```bash
+     printf %s steep-dew-42117248 | pnpm vercel env add NEON_PROJECT_ID production --project wishlist-api --scope shockolate
+     read -rs KEY && printf %s "$KEY" | pnpm vercel env add NEON_USAGE_API_KEY production --sensitive --project wishlist-api --scope shockolate; unset KEY
+     read -rs URL && printf %s "$URL" | pnpm vercel env add NEON_QUOTA_HEARTBEAT_URL production --sensitive --project wishlist-api --scope shockolate; unset URL
+     ```
+  4. Redeploy, press **Run** under Cron Jobs, and check the run's log has the CU-hours line and the heartbeat turns Up.
 - **It refuses** any request without `Authorization: Bearer $CRON_SECRET` with a `401`.
 
 ## Backups

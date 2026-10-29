@@ -81,6 +81,30 @@ describe('GET /api/internal/cron/daily (spec §10)', () => {
     });
   });
 
+  describe('the Neon quota check (D105)', () => {
+    it('runs once after an authorized run', async () => {
+      expect((await runCron(t.app, `Bearer ${SECRET}`)).status).toBe(200);
+      expect(t.quota.runs).toBe(1);
+    });
+
+    it('does not run when unauthorized', async () => {
+      expect((await runCron(t.app, 'Bearer wrong')).status).toBe(401);
+      expect(t.quota.runs).toBe(0);
+    });
+
+    it('still runs when the cleanup throws, and the run still fails', async () => {
+      const cleanup = t.app.get(CleanupService);
+      const spy = vi.spyOn(cleanup, 'runDaily').mockRejectedValueOnce(new Error('cleanup broke'));
+      try {
+        expect((await runCron(t.app, `Bearer ${SECRET}`)).status).toBe(500);
+        expect(t.quota.runs).toBe(1);
+        expect(t.heartbeat.pings).toEqual(['failed']);
+      } finally {
+        spy.mockRestore();
+      }
+    });
+  });
+
   it('refuses everyone when CRON_SECRET is unset', async () => {
     for (const authorization of ['Bearer undefined', `Bearer ${SECRET}`]) {
       expect((await runCron(unconfigured.app, authorization)).status).toBe(401);
