@@ -12,6 +12,7 @@ A wishlist app for family and friends, running at **https://hanker.dev**. You ke
   <img src="docs/images/share.png" alt="A shared list on a phone, with a row of tag filters. One item reads 'Taken care of: Aunt Sue is getting this'; the others have an 'I'll get this' button" height="440">
   <img src="docs/images/claim.png" alt="The claim sheet on a phone: a name field, a quantity stepper, and a note that the owner can't see who is getting what" height="440">
   <img src="docs/images/suggestions.png" alt="The add form on a phone: a kettle's title and price, and under Tags, a 'Suggested:' row with Kitchen and a new Coffee tag" height="440">
+  <img src="docs/images/gifts.png" alt="Your gifts on a phone: '3 things for 2 people · 1 bought', grouped under Sam and Ada, each item with a Bought checkbox and a Change button, and a Shop button on the linen apron, which is ticked" height="440">
 </p>
 
 Sample data. The people and the list are made up.

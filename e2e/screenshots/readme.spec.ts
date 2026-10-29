@@ -4,7 +4,7 @@ import { addItemViaApi, verifiedOwner } from '../support/owner.js';
 import { claimViaApi, shareTokenOf } from '../support/share.js';
 
 /**
- * The README's four screenshots (docs/images). Not part of CI: run with
+ * The README's five screenshots (docs/images). Not part of CI: run with
  * `scripts/e2e.sh --config playwright.screenshots.config.ts`. The list is made up. Nothing here
  * calls Cloudflare, a shop or Etsy: the suggestions and the link preview are stubbed.
  *
@@ -31,7 +31,7 @@ async function seedList(page: Page, base: string) {
     note: 'The matte black one, not the steel.',
     tags: [{ name: 'Kitchen' }],
   });
-  await add({
+  const apron = await add({
     title: 'Linen apron',
     url: `${SHOP}/apron`,
     priceText: '$28',
@@ -44,7 +44,7 @@ async function seedList(page: Page, base: string) {
     note: 'Any size is fine.',
     tags: [{ name: 'Garden' }],
   });
-  await add({
+  const socks = await add({
     title: 'Wool socks',
     url: `${SHOP}/socks`,
     priceText: '$18',
@@ -56,7 +56,7 @@ async function seedList(page: Page, base: string) {
     note: 'I would love to try the wheel.',
     tags: [{ name: 'Experiences' }],
   });
-  return { kettle, token: await shareTokenOf(page.request) };
+  return { kettle, apron, socks, token: await shareTokenOf(page.request) };
 }
 
 /** A gifter's browser: no session, and the same size and pixel density as the project's phone. */
@@ -116,6 +116,35 @@ test.describe('phone', () => {
     await gifter.waitForTimeout(600);
     await gifter.screenshot({ path: imagePath('claim.png') });
     await gifter.context().close();
+  });
+
+  test('gifts.png: Your gifts, for a signed-in gifter', async ({ page, baseURL }, info) => {
+    test.skip(info.project.name !== 'phone', 'a phone picture');
+    const base = baseURL ?? '';
+    const { apron, socks, token } = await seedList(page, base);
+    // A second, made-up list, so the page shows its groups.
+    const sam = await gifterPage(page, info, base);
+    await verifiedOwner(sam, base, 'readme-sam', 'Sam');
+    const chalkBag = await addItemViaApi(sam.request, base, { title: 'Chalk bag' });
+    const samToken = await shareTokenOf(sam.request);
+    // Ben has a confirmed email and is signed in when he claims, so his claims join his page.
+    const ben = await gifterPage(page, info, base);
+    await verifiedOwner(ben, base, 'readme-ben', 'Ben');
+    await claimViaApi(ben.request, base, samToken, chalkBag.id, { claimerName: 'Ben' });
+    await claimViaApi(ben.request, base, token, apron.id, { claimerName: 'Ben' });
+    await claimViaApi(ben.request, base, token, socks.id, { claimerName: 'Ben', quantity: 2 });
+    await ben.goto('/gifts');
+    await expect(ben.getByRole('heading', { level: 1, name: 'Your gifts' })).toBeVisible();
+    await ben
+      .getByRole('listitem')
+      .filter({ has: ben.getByRole('heading', { name: 'Linen apron' }) })
+      .getByRole('checkbox', { name: 'Bought' })
+      .check();
+    await expect(ben.getByText('3 things for 2 people · 1 bought', { exact: true })).toBeVisible();
+    await ben.waitForTimeout(300);
+    await ben.screenshot({ path: imagePath('gifts.png') });
+    await ben.context().close();
+    await sam.context().close();
   });
 
   test('suggestions.png: the add form with suggested tags', async ({ page, baseURL }, info) => {
