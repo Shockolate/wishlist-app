@@ -108,6 +108,103 @@ test('after a new link, Back to Settings shows and copies the new one (final rev
   expect(copied).toBe(fresh);
 });
 
+test('Share opens the share sheet with the list’s current name and link', async ({
+  page,
+  baseURL,
+}) => {
+  await page.addInitScript(() => {
+    const browser = globalThis as unknown as {
+      shared: unknown[];
+      navigator: { share(data: unknown): Promise<void> };
+    };
+    browser.shared = [];
+    browser.navigator.share = (data) => {
+      browser.shared.push(data);
+      return Promise.resolve();
+    };
+  });
+  await verifiedOwner(page, baseURL ?? '', 'settings-share');
+  await expectFitsPhone(page, '/settings');
+  const share = page.getByRole('button', { name: 'Share', exact: true });
+  const lastShared = () =>
+    page.evaluate(() => (globalThis as unknown as { shared: unknown[] }).shared.at(-1));
+
+  await page.getByLabel('List name').fill('Birthday, 2027');
+  await page.getByRole('button', { name: 'Save list name' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'List name saved' })).toBeVisible();
+  // The new name reaches the card with the router refresh, just after the notice.
+  await expect(async () => {
+    await share.click();
+    expect(await lastShared()).toEqual({
+      title: 'Birthday, 2027',
+      url: await shareUrlOf(page),
+    });
+  }).toPass();
+
+  await page.getByRole('button', { name: 'Get a new link' }).click();
+  await page
+    .getByRole('alertdialog', { name: 'Get a new share link?' })
+    .getByRole('button', { name: 'Get a new link' })
+    .click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'New link ready. The old one no longer works.' }),
+  ).toBeVisible();
+  await share.click();
+  expect(await lastShared()).toEqual({ title: 'Birthday, 2027', url: await shareUrlOf(page) });
+});
+
+test('closing the share sheet says nothing, and a share that fails copies the link', async ({
+  page,
+  baseURL,
+  context,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.addInitScript(() => {
+    const failures = ['AbortError', 'NotAllowedError'];
+    const browser = globalThis as unknown as {
+      shareAttempts: number;
+      navigator: { share(): Promise<void> };
+    };
+    browser.shareAttempts = 0;
+    browser.navigator.share = () => {
+      const name = failures[browser.shareAttempts] ?? 'AbortError';
+      browser.shareAttempts += 1;
+      return Promise.reject(new DOMException('stubbed', name));
+    };
+  });
+  await verifiedOwner(page, baseURL ?? '', 'settings-share-fail');
+  await page.goto('/settings');
+  const share = page.getByRole('button', { name: 'Share', exact: true });
+
+  await share.click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => (globalThis as unknown as { shareAttempts: number }).shareAttempts),
+    )
+    .toBe(1);
+  await expect(page.getByText('Link copied.')).toHaveCount(0);
+
+  await share.click();
+  await expect(page.getByRole('status').filter({ hasText: 'Link copied.' })).toBeVisible();
+  const copied = await page.evaluate(() =>
+    (
+      globalThis as unknown as { navigator: { clipboard: { readText(): Promise<string> } } }
+    ).navigator.clipboard.readText(),
+  );
+  expect(copied).toBe(await shareUrlOf(page));
+});
+
+test('a browser without a share sheet gets no Share button', async ({ page, baseURL }) => {
+  await page.addInitScript(() => {
+    const browser = globalThis as unknown as { Navigator: { prototype: { share?: unknown } } };
+    delete browser.Navigator.prototype.share;
+  });
+  await verifiedOwner(page, baseURL ?? '', 'settings-no-share');
+  await page.goto('/settings');
+  await expect(page.getByRole('button', { name: 'Copy link' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Share', exact: true })).toHaveCount(0);
+});
+
 test('deletes the account only from its dialog, with the right password (D38)', async ({
   page,
   baseURL,
