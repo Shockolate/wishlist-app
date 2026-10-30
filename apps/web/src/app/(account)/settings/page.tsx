@@ -27,7 +27,7 @@ export default async function SettingsPage() {
           {list ? (
             <>
               <ListNameForm title={list.title} />
-              <ShareLinkCard shareUrl={list.shareUrl} />
+              <ShareLinkCard title={list.title} shareUrl={list.shareUrl} />
               <ClaimsCard showClaimsToOwner={list.showClaimsToOwner === true} />
               <SuggestTagsCard suggestTags={list.suggestTags !== false} />
             </>

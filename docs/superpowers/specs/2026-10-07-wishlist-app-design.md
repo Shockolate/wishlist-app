@@ -586,7 +586,7 @@ These are the initial values. They're configurable, and every limited endpoint r
 | `/privacy`, `/terms` | Server, static | Plain-language legal pages (Plan 6, D54). Indexable |
 | `/signup`, `/login`, `/verify-email`, `/reset-password`, `/reset-password/confirm` | Client forms | Call `/api/auth/*` directly, so the `Set-Cookie` lands from the API response |
 | `/list` | Server-rendered first load + client editor (TanStack Query) | Reorder, delete and tag ticks show at once; a failed change refetches the list (D37) |
-| `/settings` | Client | Display name; list name; share link (copy, and rotate after a confirmation); change password; delete account (confirmation dialog). The spoiler toggle, with its confirmation, arrives in Plan 4b (D33, D39) |
+| `/settings` | Client | Display name; list name; share link (copy, Share where the Web Share API exists, and rotate after a confirmation); change password; delete account (confirmation dialog). The spoiler toggle, with its confirmation, arrives in Plan 4b (D33, D39) |
 | `/s/[shareToken]` | Server Component | Readable before JavaScript loads. Claim controls and the filter row hydrate afterwards |
 | `/s/[shareToken]/preview.jpg` | Route handler | The share link's preview picture, a 1200×630 JPEG drawn as a guest from the API (Plan 12, D92). `404` for a dead link or any query string; `s-maxage=600`; the share page's `Referrer-Policy` and `X-Robots-Tag`. See [share link previews](2026-10-26-share-link-previews-design.md) §5.2–§5.5 |
 | `/c/[manageToken]` | Server Component + client form | Manage one claim. Signed in, it also links the claim to Your gifts once loaded (Plan 10b) |

@@ -3,7 +3,7 @@
 import { ErrorCode, RotateShareTokenResponseSchema } from '@wishlist/contracts';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { CopyIcon } from '@/components/list/icons';
+import { CopyIcon, ShareIcon } from '@/components/list/icons';
 import { updateCachedList } from '@/components/query-provider';
 import {
   AlertDialog,
@@ -20,11 +20,16 @@ import { Card } from '@/components/ui/card';
 import { Notice } from '@/components/ui/notice';
 import { browserApi } from '@/lib/browser-api';
 import { errorMessage, hasCode } from '@/lib/messages';
+import { useCanShare } from '@/lib/use-can-share';
 import { LOGIN_AGAIN } from './name-form';
 
-/** The share link: copy it, or replace it after a confirmation (spec §2, Plan 3b rule 13). */
-export function ShareLinkCard({ shareUrl: initial }: { shareUrl: string }) {
+/**
+ * The share link: copy it, share it where the Web Share API exists, or replace it after a
+ * confirmation (spec §2, Plan 3b rule 13).
+ */
+export function ShareLinkCard({ title, shareUrl: initial }: { title: string; shareUrl: string }) {
   const router = useRouter();
+  const canShare = useCanShare();
   const [shareUrl, setShareUrl] = useState(initial);
   const [message, setMessage] = useState<{
     text: string;
@@ -44,6 +49,16 @@ export function ShareLinkCard({ shareUrl: initial }: { shareUrl: string }) {
       say('Link copied.');
     } catch {
       say(`Copy this link: ${shareUrl}`, 'info');
+    }
+  }
+
+  async function share() {
+    try {
+      await navigator.share({ title, url: shareUrl });
+    } catch (error) {
+      // Closing the share sheet rejects with AbortError: the person chose not to share.
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      await copy();
     }
   }
 
@@ -89,6 +104,12 @@ export function ShareLinkCard({ shareUrl: initial }: { shareUrl: string }) {
           <CopyIcon />
           Copy link
         </Button>
+        {canShare ? (
+          <Button variant="secondary" size="compact" onClick={() => void share()}>
+            <ShareIcon />
+            Share
+          </Button>
+        ) : null}
         <AlertDialog>
           <AlertDialogTrigger asChild>
             {/* Not disabled while rotating: the dialog hands focus back to this button as it closes. */}
