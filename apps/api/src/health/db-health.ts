@@ -16,9 +16,6 @@ export const DB_HEALTH = Symbol('DB_HEALTH');
  */
 const CHECK_TIMEOUT_MS = 5_000;
 
-/** undefined_table / invalid_schema_name: reachable, but drizzle's journal doesn't exist yet. */
-const NOT_MIGRATED_CODES = new Set(['42P01', '3F000']);
-
 @Injectable()
 export class PostgresDbHealth implements DbHealth {
   constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
@@ -31,22 +28,14 @@ export class PostgresDbHealth implements DbHealth {
     }
   }
 
+  /** A database with no migrations can't serve the API, so it's down: its query throws or finds none. */
   private async countMigrations(): Promise<DbHealthResult> {
-    try {
-      const { rows } = await this.pool.query<{ n: number }>(
-        'select count(*)::int as n from drizzle.__drizzle_migrations',
-      );
-      return { ok: true, migrationsApplied: rows[0]?.n ?? 0 };
-    } catch (error) {
-      if (hasPgCode(error, NOT_MIGRATED_CODES)) return { ok: true, migrationsApplied: 0 };
-      throw error;
-    }
+    const { rows } = await this.pool.query<{ n: number }>(
+      'select count(*)::int as n from drizzle.__drizzle_migrations',
+    );
+    const migrationsApplied = rows[0]?.n ?? 0;
+    return migrationsApplied > 0 ? { ok: true, migrationsApplied } : { ok: false };
   }
-}
-
-function hasPgCode(error: unknown, codes: ReadonlySet<string>): boolean {
-  if (typeof error !== 'object' || error === null || !('code' in error)) return false;
-  return typeof error.code === 'string' && codes.has(error.code);
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {

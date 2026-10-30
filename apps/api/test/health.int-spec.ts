@@ -36,6 +36,23 @@ describe('GET /api/health (real database)', () => {
     expect(Date.now() - started).toBeLessThan(6_000);
   });
 
+  it('answers 503 degraded when the database was never migrated', async () => {
+    const admin = openTestDatabase();
+    const name = `unmigrated_${Date.now()}`;
+    await admin.pool.query(`create database "${name}"`);
+    await admin.close();
+    const url = new URL(admin.url);
+    url.pathname = `/${name}`;
+
+    app = await createTestApp({ databaseUrl: url.toString() });
+    const res = await http(app).get('/api/health');
+    expect(res.status).toBe(503);
+    expect(HealthResponseSchema.parse(res.body)).toMatchObject({
+      status: 'degraded',
+      db: { ok: false, migrationsApplied: null },
+    });
+  });
+
   it('answers live at once while the database is unreachable', async () => {
     app = await createTestApp({
       databaseUrl: 'postgres://nobody:nothing@127.0.0.1:1/none',

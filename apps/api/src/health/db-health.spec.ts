@@ -15,9 +15,14 @@ describe('PostgresDbHealth', () => {
     await expect(health.check()).resolves.toEqual({ ok: true, migrationsApplied: 3 });
   });
 
-  it('treats a reachable but never-migrated database as zero migrations', async () => {
+  it('reports down when the database was never migrated', async () => {
     const health = new PostgresDbHealth(poolWith(async () => Promise.reject(pgError('42P01'))));
-    await expect(health.check()).resolves.toEqual({ ok: true, migrationsApplied: 0 });
+    await expect(health.check()).resolves.toEqual({ ok: false });
+  });
+
+  it('reports down when the migrations table is empty', async () => {
+    const health = new PostgresDbHealth(poolWith(() => Promise.resolve({ rows: [{ n: 0 }] })));
+    await expect(health.check()).resolves.toEqual({ ok: false });
   });
 
   it('reports down when the query fails for any other reason', async () => {
