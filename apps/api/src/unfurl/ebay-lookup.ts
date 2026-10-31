@@ -218,3 +218,12 @@ function notForSale(item: JsonObject): boolean {
   const availability = availabilities[0];
   return isObject(availability) && availability.estimatedAvailabilityStatus === 'OUT_OF_STOCK';
 }
+
+/** eBay is on only when both keys are set (eBay lookups §5.6); either one alone leaves it off. */
+export function ebayLookupFrom(env: {
+  EBAY_CLIENT_ID?: string | undefined;
+  EBAY_CLIENT_SECRET?: string | undefined;
+}): EbayLookup | null {
+  const { EBAY_CLIENT_ID: id, EBAY_CLIENT_SECRET: secret } = env;
+  return id && secret ? new EbayBrowseLookup(id, secret) : null;
+}

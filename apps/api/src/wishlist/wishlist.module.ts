@@ -4,6 +4,7 @@ import { RateLimitModule } from '../rate-limit/rate-limit.module.js';
 import { ENV, type Env } from '../core/env.js';
 import { ERROR_REPORTER, type ErrorReporter } from '../observability/error-reporter.js';
 import { BrightDataAmazonLookup } from '../unfurl/amazon-lookup.js';
+import { ebayLookupFrom } from '../unfurl/ebay-lookup.js';
 import { EtsyOpenApiLookup } from '../unfurl/etsy-lookup.js';
 import { HttpMetadataFetcher, METADATA_FETCHER } from '../unfurl/metadata-fetcher.js';
 import { PageFetcher } from '../unfurl/page-fetcher.js';
@@ -28,8 +29,8 @@ import { WishlistService } from './wishlist.service.js';
     {
       provide: METADATA_FETCHER,
       inject: [ENV, ERROR_REPORTER],
-      // Amazon links go to Bright Data, and Etsy links to Etsy's Open API, only when that
-      // retailer's key is set (retailer lookups §5.6).
+      // Amazon links go to Bright Data, Etsy links to Etsy's Open API and eBay links to eBay's
+      // Browse API, only when that retailer's key is set (both keys, for eBay; lookups §5.6).
       useFactory: (env: Env, reporter: ErrorReporter) => {
         const pages = new PageFetcher();
         const { BRIGHT_DATA_API_KEY: amazonKey, ETSY_API_KEY: etsyKey } = env;
@@ -39,6 +40,7 @@ import { WishlistService } from './wishlist.service.js';
           {
             amazon: amazonKey ? new BrightDataAmazonLookup(amazonKey) : null,
             etsy: etsyKey ? new EtsyOpenApiLookup(etsyKey) : null,
+            ebay: ebayLookupFrom(env),
           },
           reporter,
         );

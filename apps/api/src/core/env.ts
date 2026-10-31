@@ -43,6 +43,10 @@ const EnvSchema = z
     BRIGHT_DATA_API_KEY: z.string().min(1).optional(),
     /** Etsy's `keystring:shared_secret`. Unset means Etsy links take the page fetch (§5.6). */
     ETSY_API_KEY: z.string().min(1).optional(),
+    /** eBay's production App ID. Unset means eBay links take the page fetch (eBay lookups §5.6). Set with EBAY_CLIENT_SECRET. */
+    EBAY_CLIENT_ID: z.string().min(1).optional(),
+    /** eBay's production Cert ID, a secret. Unset means eBay links take the page fetch. Set with EBAY_CLIENT_ID. */
+    EBAY_CLIENT_SECRET: z.string().min(1).optional(),
     /** Unset means no tag suggestions (tag suggestions design §5.5). Set with CLOUDFLARE_AI_TOKEN. */
     CLOUDFLARE_ACCOUNT_ID: z.string().min(1).optional(),
     /** Unset means no tag suggestions (tag suggestions design §5.5). Set with CLOUDFLARE_ACCOUNT_ID. */

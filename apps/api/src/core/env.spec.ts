@@ -35,6 +35,17 @@ describe('parseEnv', () => {
     expect(() => parseEnv({ ...base, ETSY_API_KEY: '' })).toThrow(/ETSY_API_KEY/);
   });
 
+  it('reads EBAY_CLIENT_ID and EBAY_CLIENT_SECRET, which are optional (eBay lookups §5.6)', () => {
+    const env = parseEnv(base);
+    expect(env.EBAY_CLIENT_ID).toBeUndefined();
+    expect(env.EBAY_CLIENT_SECRET).toBeUndefined();
+    const set = parseEnv({ ...base, EBAY_CLIENT_ID: 'app', EBAY_CLIENT_SECRET: 'cert' });
+    expect(set.EBAY_CLIENT_ID).toBe('app');
+    expect(set.EBAY_CLIENT_SECRET).toBe('cert');
+    expect(() => parseEnv({ ...base, EBAY_CLIENT_ID: '' })).toThrow(/EBAY_CLIENT_ID/);
+    expect(() => parseEnv({ ...base, EBAY_CLIENT_SECRET: '' })).toThrow(/EBAY_CLIENT_SECRET/);
+  });
+
   describe('CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AI_TOKEN (tag suggestions §5.5)', () => {
     const both = { CLOUDFLARE_ACCOUNT_ID: 'acct', CLOUDFLARE_AI_TOKEN: 'tok' };
 

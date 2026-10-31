@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EbayBrowseLookup, ebayRef, parseEbayRef } from './ebay-lookup.js';
+import { EbayBrowseLookup, ebayLookupFrom, ebayRef, parseEbayRef } from './ebay-lookup.js';
 
 const CLIENT_ID = 'app-id';
 const CLIENT_SECRET = 'cert-id';
@@ -356,5 +356,21 @@ describe('EbayBrowseLookup (eBay lookups §5.2)', () => {
         expect((await pending).result).toEqual({ ok: false, reason: 'TIMEOUT' });
       }
     });
+  });
+});
+
+describe('ebayLookupFrom (eBay lookups §5.6, Review Focus 5)', () => {
+  it('is on only when both keys are set', () => {
+    expect(ebayLookupFrom({ EBAY_CLIENT_ID: 'app', EBAY_CLIENT_SECRET: 'cert' })).toBeInstanceOf(
+      EbayBrowseLookup,
+    );
+  });
+
+  it.each([
+    ['neither key', {}],
+    ['only the App ID', { EBAY_CLIENT_ID: 'app' }],
+    ['only the Cert ID', { EBAY_CLIENT_SECRET: 'cert' }],
+  ])('is off with %s', (_name, env) => {
+    expect(ebayLookupFrom(env)).toBeNull();
   });
 });
