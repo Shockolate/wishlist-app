@@ -38,6 +38,10 @@ test('/privacy matches what the code keeps, where and for how long (final review
   await expect(main).toContainText('sends only the product’s ID');
   // routing-metadata-fetcher.ts sends Etsy listing links to Etsy's Open API, as the listing ID only.
   await expect(main).toContainText('Etsy looks up Etsy listing links');
+  // routing-metadata-fetcher.ts sends eBay item links to eBay's Browse API, as the item number (and the option's) only.
+  await expect(main).toContainText('For Amazon, Etsy and eBay product links');
+  await expect(main).toContainText('eBay looks up eBay item links');
+  await expect(main).toContainText('and the option’s when the link names one');
 });
 
 test('/terms carries Etsy’s trademark statement, verbatim (retailer lookups §5.7)', async ({

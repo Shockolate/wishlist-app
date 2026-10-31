@@ -37,7 +37,7 @@ Hanker can't fix this by fetching the page harder. D34 forbids impersonating a b
 - Refreshing prices or availability after an item is saved. D9's "no price refresh" stands.
 - Paying for lookups. No money is kept on deposit with Bright Data.
 - Affiliate links. Saved links are the ones the owner pasted.
-- Any other retailer.
+- Any other retailer. *(eBay was added on 2026-10-31; see [eBay lookups](2026-10-31-ebay-lookups-design.md).)*
 
 ### Anti-goals
 
@@ -111,6 +111,8 @@ One classifier, `retailerOf(url)`, lives in `packages/contracts` so the web and 
 | anything else, including other Amazon or Etsy pages | none | today's page fetch, unchanged |
 
 An ASIN is 10 characters, `[A-Z0-9]`.
+
+*eBay joined on 2026-10-31: `retailerOf()` also returns `ebay`, for `ebay.com` item links. See the [eBay design](2026-10-31-ebay-lookups-design.md) §5.1.*
 
 **Short links:** these are followed under §6.8's existing hop rules (scheme, port, vetted addresses, at most 3 hops). Only the `Location` headers are read, and the final page is never fetched.
 - If the last hop lands on a recognized product link, it's looked up.

@@ -33,7 +33,7 @@ flowchart LR
   B[Browser] -->|hanker.dev| W["Next.js<br/>apps/web"]
   W -->|"rewrite /api/*"| A["NestJS on Express<br/>apps/api, one Vercel Function"]
   A -->|pg, pooled| D[("Postgres 17<br/>Neon")]
-  A -.->|ports| X["Resend · Turnstile · Have I Been Pwned<br/>Bright Data · Etsy · Workers AI"]
+  A -.->|ports| X["Resend · Turnstile · Have I Been Pwned<br/>Bright Data · Etsy · eBay · Workers AI"]
   W & A -.->|scrubbed errors| S[Sentry]
   C[Vercel Cron, daily] --> A
   A -.->|heartbeat| U[Better Stack]
@@ -42,18 +42,18 @@ flowchart LR
   G -->|"nightly encrypted dump"| R[("Cloudflare R2")]
 ```
 
-| Service               | Used for                                                    | If it's down or unset                                     |
-| --------------------- | ----------------------------------------------------------- | --------------------------------------------------------- |
-| Vercel (Hobby)        | Both apps, and the daily cleanup cron                       | The site is down; roll back or wait                       |
-| Neon (Free)           | Postgres, plus a separate project for preview databases     | Pages that read data fail; Live and Site monitors stay up |
-| Resend                | Account email                                               | Sign-up and password reset can't send                     |
-| Cloudflare Turnstile  | CAPTCHA on sign-up and email requests                       | Those requests answer `503`; everything else works        |
-| Have I Been Pwned     | Breached-password check (k-anonymity: only a hash prefix)   | The check is skipped                                      |
-| Bright Data, Etsy API | Title and price for Amazon and Etsy links                   | The owner types the details in                            |
-| Workers AI            | Tag suggestions                                             | No suggestions; nothing else changes                      |
-| Sentry                | Error reports, scrubbed of tokens and emails before sending | Errors go unreported; the app is unaffected               |
-| Better Stack          | Uptime monitors and heartbeats, alerting by email           | Nobody is alerted                                         |
-| Cloudflare R2         | Nightly `age`-encrypted backups, kept 30 days               | That night's backup fails, and its heartbeat raises it    |
+| Service                         | Used for                                                    | If it's down or unset                                     |
+| ------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------- |
+| Vercel (Hobby)                  | Both apps, and the daily cleanup cron                       | The site is down; roll back or wait                       |
+| Neon (Free)                     | Postgres, plus a separate project for preview databases     | Pages that read data fail; Live and Site monitors stay up |
+| Resend                          | Account email                                               | Sign-up and password reset can't send                     |
+| Cloudflare Turnstile            | CAPTCHA on sign-up and email requests                       | Those requests answer `503`; everything else works        |
+| Have I Been Pwned               | Breached-password check (k-anonymity: only a hash prefix)   | The check is skipped                                      |
+| Bright Data, Etsy API, eBay API | Title and price for Amazon, Etsy and eBay links             | The owner types the details in                            |
+| Workers AI                      | Tag suggestions                                             | No suggestions; nothing else changes                      |
+| Sentry                          | Error reports, scrubbed of tokens and emails before sending | Errors go unreported; the app is unaffected               |
+| Better Stack                    | Uptime monitors and heartbeats, alerting by email           | Nobody is alerted                                         |
+| Cloudflare R2                   | Nightly `age`-encrypted backups, kept 30 days               | That night's backup fails, and its heartbeat raises it    |
 
 | Path                 | What                                                                                                                                                                                                             |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -1,7 +1,7 @@
 # eBay Lookups — Design
 
 - **Date:** 2026-10-31
-- **Status:** Draft, awaiting Ted's approval. Nothing is built.
+- **Status:** Approved by Ted, 2026-10-31. Plan 15 implements it. Still open before release: EB3 (Ted reads eBay's API licence) and how an ended listing is answered (§5.4).
 - **Author:** Ted Armstrong (with Claude)
 - **Amends:** [`2026-10-22-retailer-lookups-design.md`](2026-10-22-retailer-lookups-design.md) (§2's "Any other retailer" non-goal, §5.1's classifier, §5.4's copy and §5.6's secrets gain eBay) and [`2026-10-07-wishlist-app-design.md`](2026-10-07-wishlist-app-design.md) §6.8. The plan assigns decision numbers from D107.
 - **Origin:** Ted asked which other big shops need unfurl to work. A probe on 2026-10-30 and a spike on 2026-10-31 found that eBay, Best Buy, Home Depot and Lowe's refuse Hanker's page fetch, and that eBay's own API answers fast and free. Ted decided everything marked *(Ted's decision)* below in conversation on 2026-10-31.
@@ -85,7 +85,7 @@ A new port `EbayLookup`, shaped like `EtsyLookup`: `lookUp(item, signal): Promis
 **The calls**, all inside one 5-second deadline for the whole lookup *(Claude's call; the worst path measured was about 1.6 s)*:
 1. `POST https://api.ebay.com/identity/v1/oauth2/token`, `Authorization: Basic <base64(id:secret)>`, body `grant_type=client_credentials&scope=https://api.ebay.com/oauth/api_scope`. The token is fetched for each lookup and **not cached** *(Claude's call: about 0.5 s buys no shared state across serverless instances)*.
 2. `GET https://api.ebay.com/buy/browse/v1/item/get_item_by_legacy_id?legacy_item_id=<n>[&legacy_variation_id=<v>]`, `Authorization: Bearer <token>`, `X-EBAY-C-MARKETPLACE-ID: EBAY_US`.
-3. Only when step 2 is `400` with error `11006` and the link had no `?var=`: `GET …/item/get_items_by_item_group?item_group_id=<n>` with the same headers.
+3. When step 2 is `400` with error `11006` and the link had no `?var=`, or `400` or `404` and the link had one (the option number came from the owner's link and may be stale, Plan 15 ruling 2): `GET …/item/get_items_by_item_group?item_group_id=<n>` with the same headers.
 
 **Mapping** (through today's `productMetadata()` helpers, so the same cleaning, 200-character title cut, https-only image check and `formatPrice()`):
 
@@ -117,7 +117,7 @@ The API's `price` is not always the asking price, so the adapter decides from `b
 | `200` with a usable title, photo or price | the prefill |
 | `404` with error `11003`, or a listing that is not for sale (ended or removed) | `NO_METADATA` |
 | `200` for a group with no items, or items with none of the three fields | `NO_METADATA` |
-| `401` or `403` (token or item), or `400` for any reason but `11006` | `LOOKUP_UNAVAILABLE`, reported to `ERROR_REPORTER` as a warning with no URL, no number and no key |
+| `401` or `403` (token or item), or `400` for any reason that doesn't lead to the group lookup (§5.2 step 3). The group call's own `400`, `401` or `403` is reported too | `LOOKUP_UNAVAILABLE`, reported to `ERROR_REPORTER` as a warning with no URL, no number and no key |
 | `429`, `5xx`, a network failure, or a body that can't be read | `LOOKUP_UNAVAILABLE`, logged only |
 | no answer within 5 s | `TIMEOUT` |
 
