@@ -226,6 +226,31 @@ test('an Etsy link reads like any shop, and an unavailable lookup names Etsy (re
   await expect(page.getByLabel('Link', { exact: true })).toHaveValue(ETSY);
 });
 
+const EBAY = 'https://www.ebay.com/itm/Valve-Steam-Deck-OLED/960110182451?_skw=steam+deck';
+
+test('an eBay link reads like any shop, and an unavailable lookup names eBay (eBay lookups §5.4, §5.5)', async ({
+  page,
+  baseURL,
+}) => {
+  await verifiedOwner(page, baseURL ?? '', 'ebay-down');
+  await page.route('**/api/wishlist/unfurl', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ failureReason: 'LOOKUP_UNAVAILABLE' }),
+    });
+  });
+  await page.goto('/list');
+  await addThroughTheBox(page, EBAY);
+  await expect(status(page, 'Reading the page…')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Skip, I’ll type them' })).toHaveCount(0);
+  await expect(
+    status(page, 'We couldn’t get the details from eBay just now. Add them below.'),
+  ).toBeVisible();
+  await expect(page.getByLabel('Link', { exact: true })).toHaveValue(EBAY);
+});
+
 test('the quantity stepper hands focus on when a button reaches its limit', async ({
   page,
   baseURL,

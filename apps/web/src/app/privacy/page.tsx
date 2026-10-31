@@ -22,11 +22,12 @@ export default function PrivacyPage() {
         Hanker keeps your email address, your display name, your password as a one-way hash (never
         the password itself), and your list: its title, items, links, prices, photo addresses, notes
         and tags. When you paste a shop link, Hanker’s server visits that page to fill in the title,
-        price and photo, so the shop sees a visit from Hanker, not from you. For Amazon and Etsy
-        product links, Hanker asks Bright Data (Amazon) or Etsy for the details instead, and sends
-        only the product’s ID. Unless you turn it off in Settings, Hanker sends an item’s title,
-        note, the shop’s web address (not the full link) and the shop’s product description, with
-        your list’s tag names, to Cloudflare’s AI to suggest tags for it.
+        price and photo, so the shop sees a visit from Hanker, not from you. For Amazon, Etsy and
+        eBay product links, Hanker asks Bright Data (Amazon), Etsy or eBay for the details instead,
+        and sends only the product’s ID (and, for eBay, the option’s ID when the link names one).
+        Unless you turn it off in Settings, Hanker sends an item’s title, note, the shop’s web
+        address (not the full link) and the shop’s product description, with your list’s tag names,
+        to Cloudflare’s AI to suggest tags for it.
       </p>
       <p>
         When you share your list’s link, Hanker’s server fetches photos of up to eight of your items
@@ -107,6 +108,10 @@ export default function PrivacyPage() {
         <li>
           Etsy looks up Etsy listing links. It sees the listing’s ID, and nothing about who pasted
           it.
+        </li>
+        <li>
+          eBay looks up eBay item links. It sees the item’s ID, and the option’s when the link names
+          one, and nothing about who pasted it.
         </li>
         <li>
           GitHub runs the nightly backup, which is encrypted before it leaves GitHub’s machine.
