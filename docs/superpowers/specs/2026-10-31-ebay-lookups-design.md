@@ -1,7 +1,7 @@
 # eBay Lookups — Design
 
 - **Date:** 2026-10-31
-- **Status:** Draft, awaiting Ted's approval. Nothing is built.
+- **Status:** Approved by Ted, 2026-10-31. Plan 15 implements it. Still open before release: EB3 (Ted reads eBay's API licence) and how an ended listing is answered (§5.4).
 - **Author:** Ted Armstrong (with Claude)
 - **Amends:** [`2026-10-22-retailer-lookups-design.md`](2026-10-22-retailer-lookups-design.md) (§2's "Any other retailer" non-goal, §5.1's classifier, §5.4's copy and §5.6's secrets gain eBay) and [`2026-10-07-wishlist-app-design.md`](2026-10-07-wishlist-app-design.md) §6.8. The plan assigns decision numbers from D107.
 - **Origin:** Ted asked which other big shops need unfurl to work. A probe on 2026-10-30 and a spike on 2026-10-31 found that eBay, Best Buy, Home Depot and Lowe's refuse Hanker's page fetch, and that eBay's own API answers fast and free. Ted decided everything marked *(Ted's decision)* below in conversation on 2026-10-31.

@@ -205,6 +205,8 @@ The privacy page says Sentry's error reports have IP addresses removed. [Sentry 
 | Vercel `wishlist-api` → Production | `TURNSTILE_SECRET_KEY` (sensitive)                                                                                            | **Unset until the end of Plan 4 (D31).** While unset, sign-up, resend-verification and reset-request answer `503 CAPTCHA_UNAVAILABLE`, and the web app says sign-ups are paused. Setting it opens sign-up: see "Opening sign-up" |
 | Vercel `wishlist-api` → Production | `BRIGHT_DATA_API_KEY` (sensitive)                                                                                             | Bright Data API key, free tier with no deposit (D68). Unset means Amazon links take the page fetch. See "Turning on Amazon lookups"                                                                                              |
 | Vercel `wishlist-api` → Production | `ETSY_API_KEY` (sensitive)                                                                                                    | Etsy Open API key, as `keystring:shared_secret`. Unset means Etsy links take the page fetch. See "Turning on Etsy lookups"                                                                                                       |
+| Vercel `wishlist-api` → Production | `EBAY_CLIENT_ID` (sensitive)                                                                                                  | eBay production App ID. Set together with `EBAY_CLIENT_SECRET` or not at all. Unset means eBay links take the page fetch. See "Turning on eBay lookups"                                                                          |
+| Vercel `wishlist-api` → Production | `EBAY_CLIENT_SECRET` (sensitive)                                                                                              | eBay production Cert ID. Set together with `EBAY_CLIENT_ID` or not at all. Unset means eBay links take the page fetch. See "Turning on eBay lookups"                                                                             |
 | Vercel `wishlist-api` → Production | `CLOUDFLARE_ACCOUNT_ID`                                                                                                       | Cloudflare account ID, from the account's overview page. Set together with the token or not at all. Unset means no tag suggestions. See "Turning on tag suggestions"                                                             |
 | Vercel `wishlist-api` → Production | `CLOUDFLARE_AI_TOKEN` (sensitive)                                                                                             | API token with Account → Workers AI → Read and Edit, on that account only. Unset means no tag suggestions. See "Turning on tag suggestions"                                                                                      |
 | Vercel `wishlist-api` → Production | `CRON_HEARTBEAT_URL` (sensitive)                                                                                              | The daily cron's Better Stack heartbeat URL, `https:` only (D86). It carries the heartbeat's token, so treat it as a secret. Unset means no ping. See "Daily cron"                                                               |
@@ -576,6 +578,35 @@ Etsy listing links are looked up through Etsy's Open API (D65), only while `ETSY
 **To turn it off,** remove the variable (`pnpm vercel env rm ETSY_API_KEY production --project wishlist-api --scope shockolate`) and redeploy. Etsy links go back to the page fetch, which Etsy refuses. Then remove Etsy from `/privacy`, and its statement from `/terms`.
 
 **To rotate the key,** reset the shared secret under "Apps You've Made", `env rm` then step 2, and redeploy.
+
+## Turning on eBay lookups
+
+eBay item links are looked up through eBay's Browse API (D107), only while both `EBAY_CLIENT_ID` and `EBAY_CLIENT_SECRET` are set on the API. `/privacy` names eBay, so set both **before** merging the release that carries that page (Plan 15). The answer only prefills the add form, and is never stored beyond what the owner saves or refreshed from eBay (D69).
+
+1. **Keys (once).** At https://developer.ebay.com, under "Application Keys", copy the **Production** App ID (the client ID) and Cert ID (the client secret). Sandbox keys won't work: the API calls `api.ebay.com`. If the console shows a notice about marketplace account deletion, note what it says before going on.
+2. **Store them.** One silent prompt each:
+   ```bash
+   read -rs ID && printf '%s' "$ID" \
+     | pnpm vercel env add EBAY_CLIENT_ID production --sensitive --project wishlist-api --scope shockolate
+   unset ID
+   read -rs SECRET && printf '%s' "$SECRET" \
+     | pnpm vercel env add EBAY_CLIENT_SECRET production --sensitive --project wishlist-api --scope shockolate
+   unset SECRET
+   ```
+3. **Deploy.** A runtime variable applies to the next deployment: merge, or `gh workflow run deploy.yml --ref main`, and wait for every job to pass.
+4. **Check it (V1).** On your own list in production, paste each of these into the add box, expecting the plain "Reading the page…" line each time:
+   - a fixed-price item with a slug and tracking parameters: a prefilled title, photo and price;
+   - a live auction: title and photo, **no price**;
+   - a listing with options, copied after choosing one (the link ends `?var=…`): that option's photo and price;
+   - the same listing without `?var=`: title and photo, and a price only if every option costs the same;
+   - an ended listing: "We couldn’t find the details on that page…", with the link kept;
+   - if you can find one, an auction that also offers Buy It Now: no price in this release (D108).
+
+   Within the hour, the API's runtime logs should have no `LOOKUP_UNAVAILABLE … provider=ebay` line, and Sentry no eBay warning.
+
+**To turn it off,** remove both variables (`pnpm vercel env rm EBAY_CLIENT_ID production --project wishlist-api --scope shockolate`, and the same for `EBAY_CLIENT_SECRET`) and redeploy. eBay links go back to the page fetch, which eBay refuses. Then remove eBay from `/privacy`.
+
+**To rotate the keys,** create a new keyset in the eBay developer console, `env rm` then step 2, redeploy, then retire the old keyset.
 
 ## Turning on tag suggestions
 
