@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   amazonProductOf,
   amazonProductUrl,
+  ebayItemOf,
   etsyListingOf,
   isAmazonShortLink,
   isEtsyShortLink,
@@ -119,6 +120,58 @@ describe('etsyListingOf (retailer lookups §5.1)', () => {
     expect(retailerOf('https://www.etsy.com/listing/1234567890')).toBe('etsy');
     expect(retailerOf('https://etsy.me/3AbCdEf')).toBe('etsy');
     expect(retailerOf('https://www.etsy.com/shop/Maker')).toBeNull();
+    expect(retailerOf('https://www.amazon.com/dp/B08FK7B2SC')).toBe('amazon');
+  });
+});
+
+describe('ebayItemOf (eBay lookups §5.1)', () => {
+  it.each([
+    ['https://www.ebay.com/itm/366025273219', '366025273219'],
+    [
+      'https://ebay.com/itm/366025273219?_skw=steam+deck&hash=item34b9597609%3Ag%3AuOMAAOSwLjtninPj',
+      '366025273219',
+    ],
+    ['https://www.ebay.com/itm/Valve-Steam-Deck-OLED/960110182451?mkcid=1', '960110182451'],
+    ['https://WWW.EBAY.COM/itm/366025273219', '366025273219'],
+  ])('reads the item number of %s (Review Focus 2)', (url, itemId) => {
+    expect(ebayItemOf(url)).toEqual({ itemId });
+  });
+
+  it('reads the option number from ?var=', () => {
+    expect(
+      ebayItemOf('https://www.ebay.com/itm/226447947273?var=525635725002&itmmeta=01M69CBD2C7T'),
+    ).toEqual({ itemId: '226447947273', variationId: '525635725002' });
+  });
+
+  it.each([
+    'https://www.ebay.com/itm/226447947273?var=abc',
+    'https://www.ebay.com/itm/226447947273?var=12345', // 5 digits
+    'https://www.ebay.com/itm/226447947273?var=0123456',
+    'https://www.ebay.com/itm/226447947273?var=525635725002&var=525635725003',
+    'https://www.ebay.com/itm/226447947273?var=',
+  ])('ignores a ?var= that is not exactly one option number, keeping the item: %s', (url) => {
+    expect(ebayItemOf(url)).toEqual({ itemId: '226447947273' });
+  });
+
+  it.each([
+    'https://ebay.com.evil.test/itm/366025273219',
+    'https://www.ebay.co.uk/itm/366025273219',
+    'https://www.ebay.com/sch/i.html?_nkw=itm/366025273219',
+    'https://www.ebay.com/itm/0366025273219',
+    'https://www.ebay.com/itm/3660252732190123', // 16 digits
+    'https://www.ebay.com/itm/12345678', // 8 digits
+    'https://www.ebay.com/usr/seller/itm/366025273219',
+    'https://m.ebay.com/itm/366025273219',
+    'https://ebay.us/abc123',
+    'not a url',
+  ])('is not an eBay item: %s (Review Focus 1)', (url) => {
+    expect(ebayItemOf(url)).toBeNull();
+    expect(retailerOf(url)).toBeNull();
+  });
+
+  it('routes eBay items to ebay, and leaves the other shops alone', () => {
+    expect(retailerOf('https://www.ebay.com/itm/366025273219')).toBe('ebay');
+    expect(retailerOf('https://www.etsy.com/listing/1234567890')).toBe('etsy');
     expect(retailerOf('https://www.amazon.com/dp/B08FK7B2SC')).toBe('amazon');
   });
 });

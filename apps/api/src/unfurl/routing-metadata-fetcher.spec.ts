@@ -2,16 +2,19 @@ import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import {
   FakeAmazonLookup,
+  FakeEbayLookup,
   FakeErrorReporter,
   FakeEtsyLookup,
   FakeMetadataFetcher,
 } from '../testing/fakes.js';
 import type { AmazonLookup } from './amazon-lookup.js';
+import type { EbayLookup } from './ebay-lookup.js';
 import type { EtsyLookup } from './etsy-lookup.js';
 import type { LookupResult } from './lookup-result.js';
 import type { ResolvedLink } from './page-fetcher.js';
 import {
   AMAZON_DEADLINE_MS,
+  EBAY_DEADLINE_MS,
   ETSY_DEADLINE_MS,
   RoutingMetadataFetcher,
 } from './routing-metadata-fetcher.js';
@@ -20,6 +23,9 @@ const PRODUCT = 'https://www.amazon.com/Cephalofair-Games-Frosthaven/dp/B08FK7B2
 const SHORT = 'https://amzn.to/3xYz';
 const LISTING = 'https://www.etsy.com/uk/listing/1234567890/hand-thrown-mug?ref=hp_rv';
 const ETSY_SHORT = 'https://etsy.me/3AbCdEf';
+const EBAY_ITEM =
+  'https://www.ebay.com/itm/Valve-Steam-Deck-OLED/960110182451?_skw=steam+deck&hash=item34b9597609%3Ag%3AuOMAAOSwLjtninPj&itmprp=enc%3AAQALAAAA';
+const EBAY_OPTION = 'https://www.ebay.com/itm/226447947273?var=525635725002&itmmeta=01M69CBD2C7T';
 
 /** A stand-in for PageFetcher.resolve: answers `next`, records what it was asked. */
 class FakeLinks {
@@ -40,6 +46,7 @@ let pages: FakeMetadataFetcher;
 let links: FakeLinks;
 let amazon: FakeAmazonLookup;
 let etsy: FakeEtsyLookup;
+let ebay: FakeEbayLookup;
 let reporter: FakeErrorReporter;
 let log: MockInstance;
 
@@ -49,6 +56,7 @@ beforeEach(() => {
   links = new FakeLinks();
   amazon = new FakeAmazonLookup();
   etsy = new FakeEtsyLookup();
+  ebay = new FakeEbayLookup();
   reporter = new FakeErrorReporter();
   log = vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
 });
@@ -57,12 +65,17 @@ afterEach(() => {
 });
 
 const router = (
-  lookups: { amazon?: AmazonLookup | null; etsy?: EtsyLookup | null } = {},
-  deadlines: { amazon?: number; etsy?: number } = {},
+  lookups: {
+    amazon?: AmazonLookup | null;
+    etsy?: EtsyLookup | null;
+    ebay?: EbayLookup | null;
+  } = {},
+  deadlines: { amazon?: number; etsy?: number; ebay?: number } = {},
 ) =>
-  new RoutingMetadataFetcher(pages, links, { amazon, etsy, ...lookups }, reporter, {
+  new RoutingMetadataFetcher(pages, links, { amazon, etsy, ebay, ...lookups }, reporter, {
     amazon: AMAZON_DEADLINE_MS,
     etsy: ETSY_DEADLINE_MS,
+    ebay: EBAY_DEADLINE_MS,
     ...deadlines,
   });
 const found: LookupResult = { ok: true, metadata: { title: 'Cephalofair Games: Frosthaven' } };
@@ -242,6 +255,102 @@ describe('RoutingMetadataFetcher (retailer lookups §5.1–§5.4)', () => {
 
     it('allows Etsy 5 seconds', () => {
       expect(ETSY_DEADLINE_MS).toBe(5_000);
+    });
+  });
+
+  describe('eBay (eBay lookups §5.2)', () => {
+    it('sends eBay links to the page fetch while the keys are unset (dark)', async () => {
+      expect(await router({ ebay: null }).fetch(EBAY_ITEM)).toEqual({ title: 'From the page' });
+      expect(pages.urls).toEqual([EBAY_ITEM]);
+    });
+
+    it('looks up an eBay item by its number alone, not the rest of the link', async () => {
+      ebay.next = found;
+      expect(await router().fetch(EBAY_ITEM)).toEqual({ title: 'Cephalofair Games: Frosthaven' });
+      expect(ebay.refs).toEqual(['960110182451']);
+      expect(pages.urls).toEqual([]);
+    });
+
+    it('sends the option number too when the link names one (Review Focus 2)', async () => {
+      ebay.next = found;
+      await router().fetch(EBAY_OPTION);
+      expect(ebay.refs).toEqual(['226447947273:525635725002']);
+    });
+
+    it.each([
+      'https://www.ebay.com/sch/i.html?_nkw=steam+deck',
+      'https://www.ebay.co.uk/itm/960110182451',
+      'https://ebay.us/abc123',
+      'https://www.ebay.com/itm/0960110182451',
+    ])('sends %s to the page fetch, and follows nothing', async (url) => {
+      expect(await router().fetch(url)).toEqual({ title: 'From the page' });
+      expect(pages.urls).toEqual([url]);
+      expect(ebay.refs).toEqual([]);
+      expect(links.urls).toEqual([]);
+    });
+
+    it('reports a refused eBay lookup without the link, the item number or a key', async () => {
+      ebay.next = { ok: false, reason: 'LOOKUP_UNAVAILABLE', status: 403, misconfigured: true };
+      expect(await router().fetch(EBAY_ITEM)).toEqual({ failureReason: 'LOOKUP_UNAVAILABLE' });
+      expect(reporter.warnings.map((w) => w.message)).toEqual([
+        'eBay refused a lookup with status 403',
+      ]);
+      const logged = log.mock.calls.flat().join(' ');
+      expect(logged).not.toContain('960110182451');
+      expect(logged).not.toContain('Valve-Steam-Deck');
+    });
+
+    it('only logs an eBay outage, with provider=ebay', async () => {
+      ebay.next = { ok: false, reason: 'LOOKUP_UNAVAILABLE', status: 429, misconfigured: false };
+      expect(await router().fetch(EBAY_ITEM)).toEqual({ failureReason: 'LOOKUP_UNAVAILABLE' });
+      expect(reporter.warnings).toEqual([]);
+      expect(log).toHaveBeenCalledWith(
+        'unfurl LOOKUP_UNAVAILABLE host=www.ebay.com provider=ebay status=429',
+      );
+    });
+
+    it('gives an eBay lookup its own deadline', async () => {
+      const hanging: EbayLookup = {
+        lookUp: (_ref, signal) =>
+          new Promise((resolve) =>
+            signal.addEventListener('abort', () => resolve({ ok: false, reason: 'TIMEOUT' })),
+          ),
+      };
+      const started = Date.now();
+      const fetching = router({ ebay: hanging }, { amazon: 30_000, ebay: 20 }).fetch(EBAY_ITEM);
+      expect(await fetching).toEqual({ failureReason: 'TIMEOUT' });
+      expect(Date.now() - started).toBeLessThan(1000);
+    });
+
+    it('allows eBay 5 seconds', () => {
+      expect(EBAY_DEADLINE_MS).toBe(5_000);
+    });
+  });
+
+  describe('never returns a description from eBay (tag suggestions D74, eBay lookups D111)', () => {
+    const page = { title: 'From the page', description: 'eBay page description' };
+
+    it.each([
+      ['an item while the keys are unset', EBAY_ITEM, { ebay: null }],
+      ['a search page', 'https://www.ebay.com/sch/i.html?_nkw=steam+deck', {}],
+      ['a category page', 'https://www.ebay.com/b/Board-Games/180349', {}],
+    ] as const)('drops it from the page fetch of %s', async (_name, url, lookups) => {
+      pages.next = page;
+      expect(await router(lookups).fetch(url)).toEqual({ title: 'From the page' });
+      expect(pages.urls).toEqual([url]);
+    });
+
+    it('drops it even if the eBay lookup returned one', async () => {
+      ebay.next = { ok: true, metadata: { title: 'Steam Deck', description: 'Seller text.' } };
+      expect(await router().fetch(EBAY_ITEM)).toEqual({ title: 'Steam Deck' });
+    });
+
+    it.each([
+      'https://notebay.com/itm/960110182451',
+      'https://www.ebay.com.evil.test/itm/960110182451',
+    ])('keeps it for a lookalike host, %s', async (url) => {
+      pages.next = page;
+      expect(await router().fetch(url)).toEqual(page);
     });
   });
 

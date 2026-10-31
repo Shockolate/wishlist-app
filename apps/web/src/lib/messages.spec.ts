@@ -138,6 +138,13 @@ describe('prefillMessage (Plan 3b rule 6)', () => {
     );
   });
 
+  it('names eBay when its lookup couldn’t answer (eBay lookups §5.5)', () => {
+    const response = { failureReason: 'LOOKUP_UNAVAILABLE' } as const;
+    expect(prefillMessage({ response }, 'https://www.ebay.com/itm/366025273219')).toBe(
+      'We couldn’t get the details from eBay just now. Add them below.',
+    );
+  });
+
   it('says why when unfurl itself failed', () => {
     const limited = apiError(ErrorCode.RATE_LIMITED, { status: 429 });
     expect(prefillMessage({ error: limited }, 'https://x.example/')).toBe(UNFURL_RATE_LIMITED);

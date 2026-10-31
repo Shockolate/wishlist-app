@@ -8,6 +8,7 @@ import type { BreachedPasswordChecker } from '../security/breached-passwords.js'
 import type { CaptchaVerdict, CaptchaVerifier } from '../security/captcha.js';
 import type { SuggestInput, SuggestResult, TagSuggester } from '../tag-suggest/tag-suggester.js';
 import type { AmazonLookup } from '../unfurl/amazon-lookup.js';
+import type { EbayLookup } from '../unfurl/ebay-lookup.js';
 import type { EtsyLookup } from '../unfurl/etsy-lookup.js';
 import type { LookupResult } from '../unfurl/lookup-result.js';
 import type { MetadataFetcher } from '../unfurl/metadata-fetcher.js';
@@ -116,6 +117,17 @@ export class FakeEtsyLookup implements EtsyLookup {
 
   lookUp(listingId: string): Promise<LookupResult> {
     this.listingIds.push(listingId);
+    return Promise.resolve(this.next);
+  }
+}
+
+/** eBay lookup stand-in: answers `next`, records the references (`<item>[:<option>]`) it was asked for. */
+export class FakeEbayLookup implements EbayLookup {
+  next: LookupResult = { ok: false, reason: 'NO_METADATA' };
+  readonly refs: string[] = [];
+
+  lookUp(ref: string): Promise<LookupResult> {
+    this.refs.push(ref);
     return Promise.resolve(this.next);
   }
 }

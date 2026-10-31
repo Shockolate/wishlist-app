@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import {
   amazonProductOf,
+  ebayItemOf,
   etsyListingOf,
   isAmazonShortLink,
   isEtsyShortLink,
@@ -11,6 +12,7 @@ import {
 } from '@wishlist/contracts';
 import type { ErrorReporter } from '../observability/error-reporter.js';
 import type { AmazonLookup } from './amazon-lookup.js';
+import { ebayRef, type EbayLookup } from './ebay-lookup.js';
 import type { EtsyLookup } from './etsy-lookup.js';
 import type { LookupResult } from './lookup-result.js';
 import type { MetadataFetcher } from './metadata-fetcher.js';
@@ -20,10 +22,13 @@ import type { PageFetcher } from './page-fetcher.js';
 export const AMAZON_DEADLINE_MS = 30_000;
 /** One Etsy lookup, `etsy.me` hops included: the same 5 seconds as the page fetch (§5.3). */
 export const ETSY_DEADLINE_MS = 5_000;
+/** One eBay lookup: the token and up to two calls after it, measured at about 1.6 s (eBay lookups §5.2). */
+export const EBAY_DEADLINE_MS = 5_000;
 
 export interface RetailerLookups {
   amazon: AmazonLookup | null;
   etsy: EtsyLookup | null;
+  ebay: EbayLookup | null;
 }
 
 /** How each retailer's links are read, and how a refused lookup is reported. */
@@ -45,20 +50,37 @@ const RETAILERS: Record<
     isShortLink: isEtsyShortLink,
     refused: 'Etsy refused a listing lookup',
   },
+  ebay: {
+    idOf: (url) => {
+      const item = ebayItemOf(url);
+      return item ? ebayRef(item) : null;
+    },
+    // ebay.us links keep the page fetch (eBay lookups §5.1).
+    isShortLink: () => false,
+    refused: 'eBay refused a lookup',
+  },
 };
 
 /**
- * etsy.com, any subdomain of it, or etsy.me. Exact or dot-suffix matches only, so `notetsy.com` and
- * `etsy.com.evil.test` are not Etsy.
+ * etsy.com, any subdomain of it, etsy.me, ebay.com or www.ebay.com: the shops whose details are for
+ * the prefill only, so none of their descriptions is ever passed on (D69, D111). Exact or
+ * dot-suffix matches only, so `notetsy.com`, `etsy.com.evil.test` and `www.ebay.com.evil.test` are
+ * not these shops.
  */
-function isEtsyHost(url: string): boolean {
+function dropsDescription(url: string): boolean {
   let host: string;
   try {
     host = new URL(url).hostname;
   } catch {
     return false;
   }
-  return host === 'etsy.me' || host === 'etsy.com' || host.endsWith('.etsy.com');
+  return (
+    host === 'etsy.me' ||
+    host === 'etsy.com' ||
+    host.endsWith('.etsy.com') ||
+    host === 'ebay.com' ||
+    host === 'www.ebay.com'
+  );
 }
 
 /**
@@ -81,12 +103,13 @@ export class RoutingMetadataFetcher implements MetadataFetcher {
     private readonly deadlines: Record<Retailer, number> = {
       amazon: AMAZON_DEADLINE_MS,
       etsy: ETSY_DEADLINE_MS,
+      ebay: EBAY_DEADLINE_MS,
     },
   ) {}
 
   async fetch(url: string): Promise<UnfurlResponse> {
     const response = await this.route(url);
-    if (!isEtsyHost(url)) return response;
+    if (!dropsDescription(url)) return response;
     const { description: _dropped, ...rest } = response;
     return rest;
   }

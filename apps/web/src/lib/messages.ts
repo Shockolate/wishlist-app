@@ -132,7 +132,7 @@ export const UNFURL_MESSAGES: Readonly<Record<UnfurlFailureReason, string>> = {
   LOOKUP_UNAVAILABLE: 'We couldn’t get the details just now. Add them below.',
 };
 /** LOOKUP_UNAVAILABLE for a retailer's link names the shop (retailer lookups §5.4). */
-const RETAILER_NAMES: Record<Retailer, string> = { amazon: 'Amazon', etsy: 'Etsy' };
+const RETAILER_NAMES: Record<Retailer, string> = { amazon: 'Amazon', etsy: 'Etsy', ebay: 'eBay' };
 export const UNFURL_RATE_LIMITED =
   'You’ve added a lot of links this hour. Add the details below for now.';
 export const UNFURL_FAILED = 'We couldn’t read that page. Add the details below.';
