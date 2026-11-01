@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Hanker social preview</title>
+    <style>
+      /* The fonts the share-link preview already ships (apps/web/assets/fonts). */
+      @font-face {
+        font-family: 'Instrument Serif';
+        src: url('../../../apps/web/assets/fonts/InstrumentSerif-Regular.ttf');
+      }
+      @font-face {
+        font-family: 'Geist';
+        src: url('../../../apps/web/assets/fonts/Geist-Regular.ttf');
+      }
+
+      /* The theme tokens from apps/web/src/app/globals.css. */
+      :root {
+        --background: #fbf9f5;
+        --foreground: #1f1a17;
+        --primary: #a63d20;
+        --muted-foreground: #5c554e;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+
+      html,
+      body {
+        width: 1280px;
+        height: 640px;
+        overflow: hidden;
+        background: var(--background);
+      }
+
+      .card {
+        position: relative;
+        width: 1280px;
+        height: 640px;
+      }
+
+      /* Everything that matters stays 80px inside the edges: GitHub asks for a safe border, and
+         LinkedIn crops link cards to a slightly wider shape than 2:1. */
+      .copy {
+        position: absolute;
+        left: 80px;
+        top: 0;
+        bottom: 0;
+        width: 600px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+
+      .name {
+        font-family: 'Instrument Serif', serif;
+        font-size: 176px;
+        line-height: 1;
+        letter-spacing: -2px;
+        color: var(--foreground);
+      }
+
+      .tagline {
+        margin-top: 28px;
+        font-family: 'Instrument Serif', serif;
+        font-size: 50px;
+        line-height: 1.12;
+        color: var(--foreground);
+        /* Two even lines, not one long line and a lone word. */
+        text-wrap: balance;
+      }
+
+      .pitch {
+        margin-top: 24px;
+        font-family: 'Geist', sans-serif;
+        font-size: 28px;
+        line-height: 1.35;
+        color: var(--muted-foreground);
+      }
+
+      .url {
+        margin-top: 40px;
+        font-family: 'Geist', sans-serif;
+        font-size: 28px;
+        color: var(--primary);
+      }
+
+      /* The share page on a phone, rising from the bottom edge so only the part that explains the
+         product is shown: a taken item beside one that is still free. */
+      .phone {
+        position: absolute;
+        left: 760px;
+        top: 40px;
+        width: 420px;
+        height: 700px;
+        padding: 10px;
+        border: 3px solid var(--foreground);
+        border-radius: 52px;
+        background: var(--foreground);
+      }
+
+      .screen {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        border-radius: 42px;
+        background: var(--background);
+      }
+
+      .screen img {
+        display: block;
+        width: 394px;
+        /* Skip the app's own wordmark and start at the list's title. */
+        margin-top: -92px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="copy">
+        <div class="name">Hanker</div>
+        <div class="tagline">For when someone asks what you’d like.</div>
+        <div class="pitch">One list, one secret link, no doubled-up gifts.</div>
+        <div class="url">hanker.dev</div>
+      </div>
+      <div class="phone">
+        <div class="screen">
+          <img src="../share.png" alt="" />
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
