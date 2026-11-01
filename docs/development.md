@@ -56,6 +56,14 @@ Testcontainers looks for Docker at `/var/run/docker.sock`. With Docker Desktop o
 scripts/e2e.sh --config playwright.screenshots.config.ts
 ```
 
+### Refreshing the social preview
+
+`docs/images/social-preview.png` is the 1280 x 640 card GitHub shows when the repository is linked (Settings → General → Social preview, which has no API, so upload it by hand). It is `docs/images/social-preview/card.html`, drawn with the share-preview fonts and the theme colours, around `share.png`. It needs no app and no Docker, only Playwright's Chromium (`pnpm --filter @wishlist/e2e exec playwright install chromium`). Refresh `share.png` first if the share page changed, then:
+
+```bash
+node docs/images/social-preview/render.mjs
+```
+
 ## Database
 
 - Change the schema in `apps/api/src/db/schema.ts`, then generate a migration: `pnpm --filter @wishlist/api db:generate --name <what_changed>`.
