@@ -11,6 +11,8 @@ allowBuilds:
   cpu-features: false
   protobufjs: false
   ssh2: false
+  # Optional dependency of the Vercel CLI's @vercel/cli-auth; the CLI works without its install script.
+  koffi: false
 overrides:
   # GHSA-mrhx-c7xc-m3w5: zod before 4.6.6 can exhaust memory. @vercel/cli-config (under
   # @vercel/functions, so it ships) pins zod 4.1.11 exactly, even in its latest release.
