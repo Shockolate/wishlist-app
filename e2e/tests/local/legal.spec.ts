@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { verifiedOwner } from '../../support/owner.js';
 
 test('/privacy names who runs Hanker and how to reach them', async ({ page }) => {
   await page.goto('/privacy');
@@ -114,4 +115,19 @@ test('/privacy says what drawing a share link’s preview fetches and keeps (sha
   await expect(page.getByRole('main')).toContainText(
     'When you share your list’s link, Hanker’s server fetches photos of up to eight of your items from the shops to draw up to four in the link’s preview picture, and keeps none of them. Apps that show the preview, like Messages, Slack or Discord, keep their own copy.',
   );
+});
+
+test('/terms and /privacy link a signed-in owner back to their list, and no one else', async ({
+  page,
+  baseURL,
+}) => {
+  await page.goto('/terms');
+  await expect(page.getByRole('link', { name: 'Edit your list' })).toHaveCount(0);
+  await verifiedOwner(page, baseURL ?? '', 'legal-back');
+  for (const path of ['/terms', '/privacy']) {
+    await page.goto(path);
+    await expect(
+      page.getByRole('banner').getByRole('link', { name: 'Edit your list' }),
+    ).toHaveAttribute('href', '/list');
+  }
 });
