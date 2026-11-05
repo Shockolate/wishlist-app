@@ -185,9 +185,16 @@ describe('UpdateWishlistRequestSchema (spec §5, D33)', () => {
     });
   });
 
+  it('takes the price-conversion setting alone (price conversion design §5.1)', () => {
+    expect(UpdateWishlistRequestSchema.parse({ convertPrices: false })).toEqual({
+      convertPrices: false,
+    });
+  });
+
   it.each([
     {},
     { suggestTags: 'yes' },
+    { convertPrices: 'yes' },
     { showClaimsToOwner: 'yes' },
     { title: '' },
     { title: '  ' },
@@ -217,6 +224,13 @@ describe('UnfurlRequestSchema and UnfurlResponseSchema (spec §5, §6.8)', () =>
       description: 'Y',
     });
     expect(UnfurlResponseSchema.safeParse({ title: 'X' }).success).toBe(true);
+  });
+
+  it('carries an optional convertedFrom, the price as the shop showed it (price conversion design §5.5)', () => {
+    const body = { priceText: '$899.55', convertedFrom: 'TRY 45,000.00' };
+    expect(UnfurlResponseSchema.parse(body)).toEqual(body);
+    expect(UnfurlResponseSchema.safeParse({ priceText: '$899.55' }).success).toBe(true);
+    expect(UnfurlResponseSchema.safeParse({ convertedFrom: 45000 }).success).toBe(false);
   });
 
   it('knows LOOKUP_UNAVAILABLE, for a lookup service that can’t answer (retailer lookups §5.4)', () => {
@@ -355,5 +369,27 @@ describe('the suggestTags setting on the wishlist responses (tag suggestions des
       expect(schema.safeParse({ ...base, items: [], suggestTags: false }).success).toBe(true);
       expect(schema.safeParse({ ...base, items: [], suggestTags: 'no' }).success).toBe(false);
     }
+  });
+});
+
+describe('the convertPrices setting on the wishlist responses (price conversion design §5.1)', () => {
+  const base = { title: 'Birthday', shareUrl: 'https://hanker.example/s/abc' };
+
+  it('is optional, for expand/contract, and a boolean when present', () => {
+    for (const schema of [WishlistResponseSchema, WishlistSettingsResponseSchema]) {
+      expect(schema.safeParse({ ...base, items: [] }).success).toBe(true);
+      expect(schema.safeParse({ ...base, items: [], convertPrices: false }).success).toBe(true);
+      expect(schema.safeParse({ ...base, items: [], convertPrices: 'no' }).success).toBe(false);
+    }
+  });
+
+  it('is kept when sent', () => {
+    expect(
+      WishlistSettingsResponseSchema.parse({
+        title: 'T',
+        shareUrl: 'https://hanker.dev/s/x',
+        convertPrices: true,
+      }).convertPrices,
+    ).toBe(true);
   });
 });
