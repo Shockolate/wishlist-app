@@ -608,6 +608,10 @@ eBay item links are looked up through eBay's Browse API (D107), only while both 
 
 **To rotate the keys,** create a new keyset in the eBay developer console, `env rm` then step 2, redeploy, then retire the old keyset.
 
+## Price conversion
+
+Price conversion (D114–D116) needs no key or variable, and it's always on in production: the API reads Frankfurter's public rates. Owners switch it per list in Settings.
+
 ## Turning on tag suggestions
 
 Tag suggestions come from Cloudflare Workers AI (D70), only while `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AI_TOKEN` are both set on the API. `/privacy` and `/terms` say what is sent, so set both **before** merging the release that carries those pages (Plan 9). Previews and CI never hold them, so they show no suggestions.

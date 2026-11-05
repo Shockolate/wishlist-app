@@ -33,7 +33,7 @@ flowchart LR
   B[Browser] -->|hanker.dev| W["Next.js<br/>apps/web"]
   W -->|"rewrite /api/*"| A["NestJS on Express<br/>apps/api, one Vercel Function"]
   A -->|pg, pooled| D[("Postgres 17<br/>Neon")]
-  A -.->|ports| X["Resend · Turnstile · Have I Been Pwned<br/>Bright Data · Etsy · eBay · Workers AI"]
+  A -.->|ports| X["Resend · Turnstile · Have I Been Pwned<br/>Bright Data · Etsy · eBay · Frankfurter · Workers AI"]
   W & A -.->|scrubbed errors| S[Sentry]
   C[Vercel Cron, daily] --> A
   A -.->|heartbeat| U[Better Stack]
@@ -50,18 +50,19 @@ flowchart LR
 | Cloudflare Turnstile            | CAPTCHA on sign-up and email requests                       | Those requests answer `503`; everything else works        |
 | Have I Been Pwned               | Breached-password check (k-anonymity: only a hash prefix)   | The check is skipped                                      |
 | Bright Data, Etsy API, eBay API | Title and price for Amazon, Etsy and eBay links             | The owner types the details in                            |
+| Frankfurter                     | Exchange rates for converting prices to dollars             | Prices stay in the shop’s currency                        |
 | Workers AI                      | Tag suggestions                                             | No suggestions; nothing else changes                      |
 | Sentry                          | Error reports, scrubbed of tokens and emails before sending | Errors go unreported; the app is unaffected               |
 | Better Stack                    | Uptime monitors and heartbeats, alerting by email           | Nobody is alerted                                         |
 | Cloudflare R2                   | Nightly `age`-encrypted backups, kept 30 days               | That night's backup fails, and its heartbeat raises it    |
 
-| Path                 | What                                                                                                                                                                                                             |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web`           | Next.js App Router, Tailwind, Radix, TanStack Query                                                                                                                                                              |
-| `apps/api`           | NestJS 12, Drizzle ORM, SQL migrations. Email, CAPTCHA, breached-password checks, link metadata and shop lookups, tag suggestions, error reporting and the cron heartbeat sit behind ports, with fakes for tests |
-| `packages/contracts` | Zod schemas and error codes for every request and response, the only code the two apps share                                                                                                                     |
-| `e2e`                | Playwright golden paths, accessibility checks, and post-deploy smoke tests                                                                                                                                       |
-| `infra`              | OpenTofu for Cloudflare DNS and Turnstile, GitHub settings, the Better Stack monitors and the Vercel projects, with state encrypted in R2                                                                        |
+| Path                 | What                                                                                                                                                                                                                             |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web`           | Next.js App Router, Tailwind, Radix, TanStack Query                                                                                                                                                                              |
+| `apps/api`           | NestJS 12, Drizzle ORM, SQL migrations. Email, CAPTCHA, breached-password checks, link metadata and shop lookups, exchange rates, tag suggestions, error reporting and the cron heartbeat sit behind ports, with fakes for tests |
+| `packages/contracts` | Zod schemas and error codes for every request and response, the only code the two apps share                                                                                                                                     |
+| `e2e`                | Playwright golden paths, accessibility checks, and post-deploy smoke tests                                                                                                                                                       |
+| `infra`              | OpenTofu for Cloudflare DNS and Turnstile, GitHub settings, the Better Stack monitors and the Vercel projects, with state encrypted in R2                                                                                        |
 
 TypeScript and ESM throughout, in a pnpm + Turborepo monorepo. It is designed to run on free tiers (hosting, database, email, CAPTCHA, error reporting, monitoring, backups, AI), so the only recurring cost is the domain.
 
@@ -87,7 +88,7 @@ The work was planned and delivered in order: a spec, a [roadmap](docs/superpower
 Hanker is run by one person, in spare time, on free tiers. So the strategy is to make it cheap to keep running and hard to break quietly. The runbooks are in [docs/operations.md](docs/operations.md) and [docs/deployment.md](docs/deployment.md).
 
 - **Nothing fails silently.** Three uptime monitors watch the site, the API and the database. The nightly backup and the daily cleanup each ping a heartbeat, so a job that stops running raises an alert, not just one that fails. Every credential with an expiry is in [a table](docs/operations.md#credentials) with its date, what it unlocks and how to rotate it.
-- **Optional things degrade; they never break the rest.** Shop lookups, tag suggestions and error reporting sit behind ports. An unset key turns a feature off, and a failing service falls back: an Amazon link the lookup can't fill is typed in by hand. Only the database and email are load-bearing.
+- **Optional things degrade; they never break the rest.** Shop lookups, price conversion, tag suggestions and error reporting sit behind ports. An unset key turns a feature off, and a failing service falls back: an Amazon link the lookup can't fill is typed in by hand. Only the database and email are load-bearing.
 - **Recovery is rehearsed, not assumed.** Neon restores the last 6 hours to a point in time. Older than that, nightly dumps encrypted with `age` sit in R2 for 30 days. A restore drill decrypts a real dump into a throwaway Postgres and checks it, every quarter and after any change to the backup path. Rolling back code is Vercel's instant rollback, web before API.
 - **Shipping is boring.** Every change is a small pull request in a stack, with its own preview on a database in a separate Neon project that never holds production data. Production deploys only `main`'s tip and refuses a stale commit. Migrations are expand, then contract, so a deploy never needs the database and the code to change at the same moment.
 - **The pipeline is guarded like production.** Jobs holding deploy secrets run only lockfile-pinned tools. Renovate merges only dev-only tooling on its own; everything that ships waits for review. The [policy test](scripts/workflow-policy.test.mjs) fails the build if a later edit loosens any of this.
