@@ -44,12 +44,20 @@ export class UnfurlService {
     return { ...response, priceText: converted, convertedFrom: response.priceText };
   }
 
-  /** No list row (the account was deleted after the session check) means don't convert. */
+  /**
+   * No list row (the account was deleted after the session check) means don't convert, and so does
+   * a read that fails: the fetch already succeeded, and unfurl never turns that into an error.
+   * Nothing is logged: the only detail to hand is the owner's ID or the driver's message.
+   */
   private async convertsPrices(ownerId: string): Promise<boolean> {
-    const [list] = await this.db
-      .select({ convertPrices: wishlists.convertPrices })
-      .from(wishlists)
-      .where(eq(wishlists.ownerId, ownerId));
-    return list?.convertPrices ?? false;
+    try {
+      const [list] = await this.db
+        .select({ convertPrices: wishlists.convertPrices })
+        .from(wishlists)
+        .where(eq(wishlists.ownerId, ownerId));
+      return list?.convertPrices ?? false;
+    } catch {
+      return false;
+    }
   }
 }

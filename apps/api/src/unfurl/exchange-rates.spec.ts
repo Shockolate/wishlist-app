@@ -114,6 +114,19 @@ describe('FrankfurterExchangeRates (price conversion design §5.3)', () => {
     expect(fetchFn).toHaveBeenCalledTimes(1);
   });
 
+  it('gives every concurrent caller null when the shared refresh fails, and asks again next time', async () => {
+    const { fetchFn, rates } = setup();
+    let fail!: (reason: Error) => void;
+    fetchFn.mockReturnValueOnce(new Promise<Response>((_resolve, reject) => (fail = reject)));
+    const calls = [rates.usdPer('TRY'), rates.usdPer('TRY'), rates.usdPer('XYZ')];
+    fail(new TypeError('fetch failed'));
+    expect(await Promise.all(calls)).toEqual([null, null, null]);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    fetchFn.mockResolvedValueOnce(json(TABLE));
+    expect(await rates.usdPer('TRY')).toBe(50.025);
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+
   it('gives up after 2 seconds, and a hung request is aborted', async () => {
     vi.useFakeTimers();
     const { fetchFn, rates, reporter } = setup();
