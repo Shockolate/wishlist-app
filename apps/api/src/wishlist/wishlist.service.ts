@@ -41,6 +41,7 @@ export class WishlistService {
           shareToken: wishlists.shareToken,
           showClaims: wishlists.showClaimsToOwner,
           suggestTags: wishlists.suggestTags,
+          convertPrices: wishlists.convertPrices,
         })
         .from(wishlists)
         .where(eq(wishlists.ownerId, ownerId));
@@ -60,13 +61,14 @@ export class WishlistService {
         shareUrl: this.shareUrl(list.shareToken),
         showClaimsToOwner: list.showClaims,
         suggestTags: list.suggestTags,
+        convertPrices: list.convertPrices,
         tags: await readTags(tx, list.id, { usedOnly: false }),
         items: projectWishlist(tagged, claimRows, viewer),
       };
     }, SNAPSHOT);
   }
 
-  /** A new title, the spoiler setting, tag suggestions, or any mix (spec §5, D33). One UPDATE takes the row lock. */
+  /** A new title, the spoiler setting, tag suggestions, price conversion, or any mix (spec §5, D33). One UPDATE takes the row lock. */
   async updateSettings(
     ownerId: string,
     changes: UpdateWishlistRequest,
@@ -79,6 +81,7 @@ export class WishlistService {
           showClaimsToOwner: changes.showClaimsToOwner,
         }),
         ...(changes.suggestTags !== undefined && { suggestTags: changes.suggestTags }),
+        ...(changes.convertPrices !== undefined && { convertPrices: changes.convertPrices }),
         updatedAt: this.clock.now(),
       })
       .where(eq(wishlists.ownerId, ownerId))
@@ -87,6 +90,7 @@ export class WishlistService {
         shareToken: wishlists.shareToken,
         showClaimsToOwner: wishlists.showClaimsToOwner,
         suggestTags: wishlists.suggestTags,
+        convertPrices: wishlists.convertPrices,
       });
     if (!list) throw unauthenticated();
     return {
@@ -94,6 +98,7 @@ export class WishlistService {
       shareUrl: this.shareUrl(list.shareToken),
       showClaimsToOwner: list.showClaimsToOwner,
       suggestTags: list.suggestTags,
+      convertPrices: list.convertPrices,
     };
   }
 

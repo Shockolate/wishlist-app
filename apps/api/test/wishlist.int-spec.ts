@@ -76,6 +76,7 @@ describe('GET /wishlist (spec §5)', () => {
       shareUrl: expect.stringMatching(/^http:\/\/localhost:3000\/s\/[A-Za-z0-9_-]{22}$/) as string,
       showClaimsToOwner: false,
       suggestTags: true,
+      convertPrices: true,
       tags: [],
       items: [],
     });
@@ -126,6 +127,7 @@ describe('GET /wishlist (spec §5)', () => {
     await seedClaim(db, kettle, 'Sue', 1);
     const res = await client(t.app, cookie).get('/wishlist');
     expect(Object.keys(res.body as object).sort()).toEqual([
+      'convertPrices',
       'items',
       'shareUrl',
       'showClaimsToOwner',
@@ -231,7 +233,38 @@ describe('PATCH /wishlist (spec §5)', () => {
     });
   });
 
-  it.each([{}, { showClaimsToOwner: 'yes' }, { suggestTags: 'no' }])(
+  it('turns price conversion off and on, and the next read agrees (Plan 16)', async () => {
+    const cookie = await owner();
+
+    const off = await client(t.app, cookie).patch('/wishlist', { convertPrices: false });
+    expect(off.status).toBe(200);
+    expect(WishlistSettingsResponseSchema.parse(off.body)).toMatchObject({ convertPrices: false });
+    const offList = WishlistResponseSchema.parse(
+      (await client(t.app, cookie).get('/wishlist')).body,
+    );
+    expect(offList.convertPrices).toBe(false);
+
+    const on = await client(t.app, cookie).patch('/wishlist', { convertPrices: true });
+    expect(WishlistSettingsResponseSchema.parse(on.body)).toMatchObject({ convertPrices: true });
+    const onList = WishlistResponseSchema.parse(
+      (await client(t.app, cookie).get('/wishlist')).body,
+    );
+    expect(onList.convertPrices).toBe(true);
+  });
+
+  it('leaves price conversion alone when only another setting changes (Plan 16)', async () => {
+    const cookie = await owner();
+    await client(t.app, cookie).patch('/wishlist', { convertPrices: false });
+    const res = await client(t.app, cookie).patch('/wishlist', { suggestTags: false });
+    expect(WishlistSettingsResponseSchema.parse(res.body)).toMatchObject({
+      suggestTags: false,
+      convertPrices: false,
+    });
+    const list = WishlistResponseSchema.parse((await client(t.app, cookie).get('/wishlist')).body);
+    expect(list.convertPrices).toBe(false);
+  });
+
+  it.each([{}, { showClaimsToOwner: 'yes' }, { suggestTags: 'no' }, { convertPrices: 'no' }])(
     'refuses %j with 400',
     async (body) => {
       const res = await client(t.app, await owner()).patch('/wishlist', body);
