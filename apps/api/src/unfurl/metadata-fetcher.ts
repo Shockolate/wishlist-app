@@ -1,11 +1,17 @@
 import { Logger } from '@nestjs/common';
 import type { UnfurlFailureReason, UnfurlResponse } from '@wishlist/contracts';
-import { extractMetadata, type PageMetadata } from './metadata.js';
+import { extractMetadata, type PageMetadata, type Price } from './metadata.js';
 import { PageFetcher } from './page-fetcher.js';
+
+/**
+ * What a fetcher returns: the response, plus the structured price behind its `priceText` (Plan 16).
+ * Internal: `UnfurlService` converts from `price` and removes it, so it never reaches the browser.
+ */
+export type UnfurlResult = UnfurlResponse & { price?: Price };
 
 /** The unfurl port (spec §8): a prefill for a product link. Never throws; a failure has a reason. */
 export interface MetadataFetcher {
-  fetch(url: string): Promise<UnfurlResponse>;
+  fetch(url: string): Promise<UnfurlResult>;
 }
 
 export const METADATA_FETCHER = Symbol('METADATA_FETCHER');
@@ -20,7 +26,7 @@ export class HttpMetadataFetcher implements MetadataFetcher {
     private readonly extract: (html: string, pageUrl: URL) => PageMetadata = extractMetadata,
   ) {}
 
-  async fetch(url: string): Promise<UnfurlResponse> {
+  async fetch(url: string): Promise<UnfurlResult> {
     const page = await this.pages.fetch(url);
     // `=== false`, not `!page.ok`: Vercel's builder type-checks without strictNullChecks, where `!ok` doesn't narrow.
     if (page.ok === false) return this.failed(page.reason, page.host);
@@ -39,7 +45,7 @@ export class HttpMetadataFetcher implements MetadataFetcher {
   }
 
   /** Logs the reason and the host only: a path or a query string can carry personal data. */
-  private failed(reason: UnfurlFailureReason, host?: string): UnfurlResponse {
+  private failed(reason: UnfurlFailureReason, host?: string): UnfurlResult {
     this.logger.log(host ? `unfurl ${reason} host=${host}` : `unfurl ${reason}`);
     return { failureReason: reason };
   }

@@ -1,6 +1,6 @@
 import { PriceTextSchema } from '@wishlist/contracts';
 import { describe, expect, it } from 'vitest';
-import { extractMetadata, formatPrice, productMetadata } from './metadata.js';
+import { extractMetadata, formatPrice, productMetadata, readPrice } from './metadata.js';
 
 const SHOP = new URL('https://shop.example/products/kettle');
 
@@ -37,6 +37,7 @@ describe('extractMetadata (spec §6.8, Plan 3a rule 11)', () => {
       title: 'Stovetop Kettle & Lid',
       imageUrl: 'https://cdn.shop.example/kettle.jpg',
       priceText: '$40.00',
+      price: { amount: '40.00', currency: 'USD' },
     });
   });
 
@@ -45,6 +46,7 @@ describe('extractMetadata (spec §6.8, Plan 3a rule 11)', () => {
       title: 'Linen Throw & Pillow',
       imageUrl: 'https://cdn.shop.example/throw.jpg',
       priceText: '€19.00',
+      price: { amount: '19', currency: 'EUR' },
     });
   });
 
@@ -123,6 +125,7 @@ describe('description (Plan 9, for tag suggestions only)', () => {
       title: 'Stovetop Kettle & Lid',
       imageUrl: 'https://cdn.shop.example/kettle.jpg',
       priceText: '$40.00',
+      price: { amount: '40.00', currency: 'USD' },
       description: 'From Open Graph',
     });
   });
@@ -176,6 +179,73 @@ describe('formatPrice (spec §2: prices are display strings)', () => {
     ['9'.repeat(60), 'USD', undefined],
   ])('formats %j %j as %j', (amount, currency, expected) => {
     expect(formatPrice(amount, currency)).toBe(expected);
+  });
+});
+
+describe('readPrice (Plan 16: the amount and currency behind the display text)', () => {
+  it('keeps a known code and a plain decimal amount', () => {
+    expect(readPrice('45000.00', 'TRY')).toEqual({
+      priceText: 'TRY\u00a045,000.00',
+      price: { amount: '45000.00', currency: 'TRY' },
+    });
+    expect(readPrice(1299, 'USD')?.price).toEqual({ amount: '1299', currency: 'USD' });
+  });
+
+  it('uppercases the code', () => {
+    expect(readPrice('24.99', 'usd')?.price?.currency).toBe('USD');
+  });
+
+  it.each([
+    ['1,299.00', 'EUR'],
+    ['from 20', 'EUR'],
+    ['24.99', 'ABC'],
+    ['24.99', undefined],
+  ])('gives the display text and no price for %j %j', (amount, currency) => {
+    const read = readPrice(amount, currency);
+    expect(read?.priceText).toBe(formatPrice(amount, currency));
+    expect(read).not.toHaveProperty('price');
+  });
+
+  it('gives nothing when there is no display text', () => {
+    expect(readPrice('', 'USD')).toBeUndefined();
+    expect(readPrice('9'.repeat(60), 'USD')).toBeUndefined();
+  });
+});
+
+describe('a page’s structured price (Plan 16)', () => {
+  it('keeps the amount and currency from product meta tags, uppercased', () => {
+    const html = `<meta property="og:title" content="Kettle">
+<meta property="product:price:amount" content="45000">
+<meta property="product:price:currency" content="try">`;
+    expect(extractMetadata(html, SHOP)).toEqual({
+      title: 'Kettle',
+      priceText: 'TRY\u00a045,000.00',
+      price: { amount: '45000', currency: 'TRY' },
+    });
+  });
+
+  it('keeps the amount and currency from a JSON-LD offer', () => {
+    expect(extractMetadata(JSON_LD_GRAPH, SHOP).price).toEqual({ amount: '19', currency: 'EUR' });
+  });
+
+  it('has no price when the amount is not a plain decimal or the code is unknown', () => {
+    const page = (amount: string, currency: string) =>
+      extractMetadata(
+        `<meta property="og:title" content="Kettle">
+<meta property="product:price:amount" content="${amount}">
+<meta property="product:price:currency" content="${currency}">`,
+        SHOP,
+      );
+    expect(page('1,299.00', 'EUR')).toEqual({ title: 'Kettle', priceText: '1,299.00 EUR' });
+    expect(page('24.99', 'ABC')).toEqual({ title: 'Kettle', priceText: '24.99 ABC' });
+  });
+
+  it('keeps a lookup service’s structured price', () => {
+    const AMAZON = new URL('https://www.amazon.com/dp/B08FK7B2SC');
+    expect(productMetadata({ amount: 45000, currency: 'TRY' }, AMAZON).price).toEqual({
+      amount: '45000',
+      currency: 'TRY',
+    });
   });
 });
 
@@ -296,7 +366,12 @@ describe('productMetadata (retailer lookups §5.2)', () => {
         },
         AMAZON,
       ),
-    ).toEqual({ title: 'Cephalofair Games: Frosthaven', imageUrl: IMAGE, priceText: '$240.00' });
+    ).toEqual({
+      title: 'Cephalofair Games: Frosthaven',
+      imageUrl: IMAGE,
+      priceText: '$240.00',
+      price: { amount: '240', currency: 'USD' },
+    });
   });
 
   it('drops an http image and a missing price', () => {

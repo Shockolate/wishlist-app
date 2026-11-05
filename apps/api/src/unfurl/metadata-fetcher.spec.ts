@@ -74,7 +74,11 @@ const at = (path: string) => `http://shop.test:${port}${path}`;
 
 describe('HttpMetadataFetcher (spec §6.8)', () => {
   it("returns the page's metadata", async () => {
-    expect(await fetcher().fetch(at('/kettle'))).toEqual({ title: 'Kettle', priceText: '$40.00' });
+    expect(await fetcher().fetch(at('/kettle'))).toEqual({
+      title: 'Kettle',
+      priceText: '$40.00',
+      price: { amount: '40', currency: 'USD' },
+    });
   });
 
   it('says NO_METADATA when a page has nothing usable', async () => {

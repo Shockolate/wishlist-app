@@ -7,7 +7,6 @@ import {
   isEtsyShortLink,
   type Retailer,
   type UnfurlFailureReason,
-  type UnfurlResponse,
   type UrlLike,
 } from '@wishlist/contracts';
 import type { ErrorReporter } from '../observability/error-reporter.js';
@@ -15,7 +14,7 @@ import type { AmazonLookup } from './amazon-lookup.js';
 import { ebayRef, type EbayLookup } from './ebay-lookup.js';
 import type { EtsyLookup } from './etsy-lookup.js';
 import type { LookupResult } from './lookup-result.js';
-import type { MetadataFetcher } from './metadata-fetcher.js';
+import type { MetadataFetcher, UnfurlResult } from './metadata-fetcher.js';
 import type { PageFetcher } from './page-fetcher.js';
 
 /** One Amazon lookup, short-link hops included: the waiting panel promises half a minute. */
@@ -107,14 +106,14 @@ export class RoutingMetadataFetcher implements MetadataFetcher {
     },
   ) {}
 
-  async fetch(url: string): Promise<UnfurlResponse> {
+  async fetch(url: string): Promise<UnfurlResult> {
     const response = await this.route(url);
     if (!dropsDescription(url)) return response;
     const { description: _dropped, ...rest } = response;
     return rest;
   }
 
-  private async route(url: string): Promise<UnfurlResponse> {
+  private async route(url: string): Promise<UnfurlResult> {
     const retailer = (Object.keys(RETAILERS) as Retailer[]).find(
       (name) => RETAILERS[name].idOf(url) !== null || RETAILERS[name].isShortLink(url),
     );
@@ -147,7 +146,7 @@ export class RoutingMetadataFetcher implements MetadataFetcher {
     return { failureReason: 'LOOKUP_UNAVAILABLE' };
   }
 
-  private failed(reason: UnfurlFailureReason, host: string): UnfurlResponse {
+  private failed(reason: UnfurlFailureReason, host: string): UnfurlResult {
     this.logger.log(`unfurl ${reason} host=${host}`);
     return { failureReason: reason };
   }

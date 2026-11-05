@@ -58,7 +58,21 @@ describe('EtsyOpenApiLookup (retailer lookups §5.3)', () => {
   it('prefills the decoded title, the first image by rank and the price', async () => {
     expect(await lookUp(() => json(LISTING))).toEqual({
       ok: true,
-      metadata: { title: "Hand'thrown mug & saucer", imageUrl: IMAGE_1, priceText: '$24.50' },
+      metadata: {
+        title: "Hand'thrown mug & saucer",
+        imageUrl: IMAGE_1,
+        priceText: '$24.50',
+        price: { amount: '24.5', currency: 'USD' },
+      },
+    });
+  });
+
+  it('keeps the price’s amount and currency for conversion (Plan 16)', async () => {
+    const price = { amount: 4500000, divisor: 100, currency_code: 'TRY' };
+    const result = await lookUp(() => json({ ...LISTING, price }));
+    expect(result).toMatchObject({
+      ok: true,
+      metadata: { priceText: 'TRY\u00a045,000.00', price: { amount: '45000', currency: 'TRY' } },
     });
   });
 
@@ -66,7 +80,12 @@ describe('EtsyOpenApiLookup (retailer lookups §5.3)', () => {
     const result = await lookUp(() => json({ ...LISTING, description: 'A lovely handmade mug.' }));
     expect(result).toEqual({
       ok: true,
-      metadata: { title: "Hand'thrown mug & saucer", imageUrl: IMAGE_1, priceText: '$24.50' },
+      metadata: {
+        title: "Hand'thrown mug & saucer",
+        imageUrl: IMAGE_1,
+        priceText: '$24.50',
+        price: { amount: '24.5', currency: 'USD' },
+      },
     });
   });
 

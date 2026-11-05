@@ -11,6 +11,17 @@ export interface PageMetadata {
   imageUrl?: string;
   priceText?: string;
   description?: string;
+  /**
+   * The amount and currency behind `priceText`, only when both are well formed (see `readPrice`).
+   * Internal (Plan 16): the unfurl service converts from it and removes it before the answer.
+   */
+  price?: Price;
+}
+
+/** A price as read: a plain decimal `amount` and an uppercase `currency` that Intl knows. */
+export interface Price {
+  amount: string;
+  currency: string;
 }
 
 const TITLE_MAX = 200;
@@ -43,8 +54,8 @@ export function extractMetadata(html: string, pageUrl: URL): PageMetadata {
   ]
     .map((candidate) => httpsUrl(candidate, pageUrl))
     .find((url) => url !== undefined);
-  const priceText =
-    formatPrice(
+  const read =
+    readPrice(
       page.meta.get('product:price:amount') ?? page.meta.get('og:price:amount'),
       page.meta.get('product:price:currency') ?? page.meta.get('og:price:currency'),
     ) ?? offerPrice(product);
@@ -56,7 +67,7 @@ export function extractMetadata(html: string, pageUrl: URL): PageMetadata {
     text(page.meta.get('description')),
   ].find((candidate) => candidate !== undefined);
 
-  return assemble(title, imageUrl, priceText, description);
+  return assemble(title, imageUrl, read?.priceText, description, read?.price);
 }
 
 /**
@@ -74,11 +85,13 @@ export function productMetadata(
   },
   base: URL,
 ): PageMetadata {
+  const read = readPrice(fields.amount, fields.currency);
   return assemble(
     typeof fields.title === 'string' ? text(fields.title) : undefined,
     httpsUrl(fields.imageUrl, base),
-    formatPrice(fields.amount, fields.currency),
+    read?.priceText,
     typeof fields.description === 'string' ? text(fields.description) : undefined,
+    read?.price,
   );
 }
 
@@ -87,12 +100,14 @@ function assemble(
   imageUrl?: string,
   priceText?: string,
   description?: string,
+  price?: Price,
 ): PageMetadata {
   const metadata: PageMetadata = {};
   if (title) metadata.title = truncate(title, TITLE_MAX);
   if (imageUrl) metadata.imageUrl = imageUrl;
   if (priceText) metadata.priceText = priceText;
   if (description) metadata.description = truncate(description, DESCRIPTION_MAX);
+  if (price) metadata.price = price;
   return metadata;
 }
 
@@ -102,21 +117,36 @@ function assemble(
  * Intl knows, it reads "<amount> <CODE>". Over 50 characters, it's dropped.
  */
 export function formatPrice(amount: unknown, currency: unknown): string | undefined {
+  return readPrice(amount, currency)?.priceText;
+}
+
+/**
+ * `formatPrice`'s display text, plus the structured price behind it (Plan 16). `price` is set
+ * exactly when the text was Intl-formatted: a plain decimal amount and a known currency code, so a
+ * price that can be converted never differs from the one shown. Anything else has text only.
+ */
+export function readPrice(
+  amount: unknown,
+  currency: unknown,
+): { priceText: string; price?: Price } | undefined {
   const value =
     typeof amount === 'number' ? String(amount) : typeof amount === 'string' ? text(amount) : '';
   if (!value) return undefined;
   const code = typeof currency === 'string' ? (text(currency)?.toUpperCase() ?? '') : '';
   let formatted = code ? `${value} ${code}` : value;
+  let price: Price | undefined;
   if (KNOWN_CURRENCIES.has(code) && /^\d+(\.\d+)?$/.test(value)) {
     try {
       formatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: code }).format(
         Number(value),
       );
+      price = { amount: value, currency: code };
     } catch {
       // Belt and braces: KNOWN_CURRENCIES should rule this out. Keep "<amount> <CODE>".
     }
   }
-  return formatted.length <= PRICE_MAX ? formatted : undefined;
+  if (formatted.length > PRICE_MAX) return undefined;
+  return price ? { priceText: formatted, price } : { priceText: formatted };
 }
 
 /** One pass over the page: its <meta> tags, its JSON-LD blocks and its first <title>. */
@@ -222,13 +252,15 @@ function imagesOf(product: JsonObject | undefined): unknown[] {
   return images.map((entry) => (isObject(entry) ? (entry.url ?? entry.contentUrl) : entry));
 }
 
-function offerPrice(product: JsonObject | undefined): string | undefined {
+function offerPrice(
+  product: JsonObject | undefined,
+): { priceText: string; price?: Price } | undefined {
   if (!product) return undefined;
   const offers = Array.isArray(product.offers) ? product.offers : [product.offers];
   for (const offer of offers) {
     if (!isObject(offer)) continue;
-    const price = formatPrice(offer.price ?? offer.lowPrice, offer.priceCurrency);
-    if (price) return price;
+    const read = readPrice(offer.price ?? offer.lowPrice, offer.priceCurrency);
+    if (read) return read;
   }
   return undefined;
 }

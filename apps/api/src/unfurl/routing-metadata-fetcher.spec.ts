@@ -195,6 +195,23 @@ describe('RoutingMetadataFetcher (retailer lookups §5.1–§5.4)', () => {
       expect(pages.urls).toEqual([]);
     });
 
+    it('keeps an Etsy price while still dropping its description (Plan 16)', async () => {
+      etsy.next = {
+        ok: true,
+        metadata: {
+          title: 'Hand-thrown mug',
+          description: 'A lovely mug.',
+          priceText: 'TRY\u00a045,000.00',
+          price: { amount: '45000', currency: 'TRY' },
+        },
+      };
+      expect(await router().fetch(LISTING)).toEqual({
+        title: 'Hand-thrown mug',
+        priceText: 'TRY\u00a045,000.00',
+        price: { amount: '45000', currency: 'TRY' },
+      });
+    });
+
     it('follows an etsy.me link to its listing, then looks it up', async () => {
       etsy.next = listing;
       links.next = {

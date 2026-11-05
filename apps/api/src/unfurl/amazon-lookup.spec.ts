@@ -55,7 +55,12 @@ describe('BrightDataAmazonLookup (retailer lookups §5.2)', () => {
     };
     expect(await lookUp(() => json([record]))).toEqual({
       ok: true,
-      metadata: { title: 'Cephalofair Games: Frosthaven', imageUrl: IMAGE, priceText: '$240.00' },
+      metadata: {
+        title: 'Cephalofair Games: Frosthaven',
+        imageUrl: IMAGE,
+        priceText: '$240.00',
+        price: { amount: '240', currency: 'USD' },
+      },
     });
   });
 
