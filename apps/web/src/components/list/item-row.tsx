@@ -13,7 +13,8 @@ const ARROW = 'inline-flex size-11 items-center justify-center rounded-control d
 /**
  * One row of the list (D37). The handle drags it, and only the handle: touch-action is off there
  * alone, so a thumb can still scroll the page anywhere else (Plan 3b rule 12). The arrows move it
- * one place. While its form is open, it can't be dragged.
+ * one place. While its form is open, it can't be dragged. A lone item has nothing to move past, so
+ * it gets neither the handle nor the arrows.
  */
 export function ItemRow({
   item,
@@ -44,7 +45,8 @@ export function ItemRow({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: item.id, disabled: open });
+  } = useSortable({ id: item.id, disabled: open || count < 2 });
+  const movable = !open && count > 1;
   const formId = `edit-${item.id}`;
   return (
     <li
@@ -59,7 +61,7 @@ export function ItemRow({
       )}
     >
       <div className="flex items-center gap-1 py-2 pr-1 pl-0.5">
-        {open ? (
+        {!movable ? (
           <span className="size-11 shrink-0" />
         ) : (
           <button
@@ -84,28 +86,30 @@ export function ItemRow({
         >
           <ItemSummary item={item} />
         </button>
-        <div className="flex shrink-0 flex-col">
-          <button
-            ref={arrowRef('up')}
-            type="button"
-            aria-label={`Move “${item.title}” up`}
-            disabled={index === 0}
-            onClick={() => onMove(-1)}
-            className={ARROW}
-          >
-            <ChevronUpIcon />
-          </button>
-          <button
-            ref={arrowRef('down')}
-            type="button"
-            aria-label={`Move “${item.title}” down`}
-            disabled={index === count - 1}
-            onClick={() => onMove(1)}
-            className={ARROW}
-          >
-            <ChevronDownIcon />
-          </button>
-        </div>
+        {count > 1 ? (
+          <div className="flex shrink-0 flex-col">
+            <button
+              ref={arrowRef('up')}
+              type="button"
+              aria-label={`Move “${item.title}” up`}
+              disabled={index === 0}
+              onClick={() => onMove(-1)}
+              className={ARROW}
+            >
+              <ChevronUpIcon />
+            </button>
+            <button
+              ref={arrowRef('down')}
+              type="button"
+              aria-label={`Move “${item.title}” down`}
+              disabled={index === count - 1}
+              onClick={() => onMove(1)}
+              className={ARROW}
+            >
+              <ChevronDownIcon />
+            </button>
+          </div>
+        ) : null}
       </div>
       {open ? <div id={formId}>{children}</div> : null}
     </li>

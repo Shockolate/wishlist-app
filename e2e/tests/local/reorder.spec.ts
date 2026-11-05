@@ -20,6 +20,21 @@ async function ownerWith(page: Page, baseURL: string, label: string, titles: str
 const arrow = (page: Page, title: string, way: 'up' | 'down') =>
   page.getByRole('button', { name: `Move “${title}” ${way}` });
 
+test('a lone item has nothing to reorder: no arrows and no drag handle', async ({
+  page,
+  baseURL,
+}) => {
+  await ownerWith(page, baseURL ?? '', 'lone', ['A']);
+  await expect(page.getByRole('listitem').first()).toContainText('A');
+  await expect(arrow(page, 'A', 'up')).toHaveCount(0);
+  await expect(arrow(page, 'A', 'down')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Drag “A” to reorder' })).toHaveCount(0);
+  await addItemViaApi(page.request, baseURL ?? '', { title: 'B' });
+  await page.reload();
+  await expect(arrow(page, 'A', 'down')).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Drag “A” to reorder' })).toBeVisible();
+});
+
 test('moves an item with the arrows, keeping focus, and the order is saved', async ({
   page,
   baseURL,
