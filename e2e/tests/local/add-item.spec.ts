@@ -226,6 +226,30 @@ test('an Etsy link reads like any shop, and an unavailable lookup names Etsy (re
   await expect(page.getByLabel('Link', { exact: true })).toHaveValue(ETSY);
 });
 
+test('says when a price was converted (price conversion §5.2)', async ({ page, baseURL }) => {
+  await verifiedOwner(page, baseURL ?? '', 'converted');
+  await page.route('**/api/wishlist/unfurl', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        title: 'Walnut table',
+        priceText: '$899.55',
+        convertedFrom: 'TRY\u00a045,000.00',
+      }),
+    }),
+  );
+  await page.goto('/list');
+  await addThroughTheBox(page, 'https://www.etsy.com/listing/1234567890');
+  await expect(
+    status(
+      page,
+      'Filled in from etsy.com. We converted TRY\u00a045,000.00 to dollars at today’s rate. Check it, then add it.',
+    ),
+  ).toBeVisible();
+  await expect(page.getByLabel('Price')).toHaveValue('$899.55');
+});
+
 const EBAY = 'https://www.ebay.com/itm/Valve-Steam-Deck-OLED/960110182451?_skw=steam+deck';
 
 test('an eBay link reads like any shop, and an unavailable lookup names eBay (eBay lookups §5.4, §5.5)', async ({

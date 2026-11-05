@@ -307,3 +307,31 @@ test('turns tag suggestions off and on, and a reload keeps the choice', async ({
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
   await expectAccessible(page);
 });
+
+test('the convert-prices switch saves and survives a reload (price conversion §5.1)', async ({
+  page,
+  baseURL,
+}) => {
+  await verifiedOwner(page, baseURL ?? '', 'convert-prices');
+  await page.goto('/settings');
+  const toggle = page.getByRole('switch', { name: 'Convert prices to dollars' });
+  // On by default.
+  await expect(page.getByRole('heading', { name: 'Prices' })).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await expectAccessible(page);
+
+  await toggle.click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Prices will stay in the shop’s currency.' }),
+  ).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await page.reload();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+
+  await toggle.click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Hanker will convert prices to dollars.' }),
+  ).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await expectAccessible(page);
+});
