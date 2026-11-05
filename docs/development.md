@@ -6,7 +6,7 @@
 | ----------------- | ---------------------------------- | --------------------------------------- |
 | Node              | 24 (see `.nvmrc`)                  | `nvm install`                           |
 | pnpm              | 12.15.0 (pinned in `package.json`) | `npm i -g pnpm@12.15.0`                 |
-| Docker            | with Compose v2                    | Docker Desktop or Engine                |
+| Docker            | with Compose v2                    | Colima (or Docker Engine)               |
 | gh + gh-stack     | latest                             | `gh extension install github/gh-stack`  |
 | jq, python3, curl | any recent                         | OS package manager (used by `scripts/`) |
 
@@ -46,7 +46,9 @@ This starts Postgres, rebuilds `packages/contracts` on change, and runs the API 
 | `pnpm test:e2e`                 | Playwright against production builds on ports 3100/3101 and the `wishlist_e2e` database | Yes          |
 | `pnpm turbo run lint typecheck` | ESLint and TypeScript                                                                   | No           |
 
-Testcontainers looks for Docker at `/var/run/docker.sock`. With Docker Desktop on Linux, point it at Desktop's socket: `DOCKER_HOST=unix://$HOME/.docker/desktop/docker.sock TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock pnpm test:integration`.
+Testcontainers looks for Docker at `/var/run/docker.sock` and ignores the Docker CLI's context. With Colima, point it at Colima's socket, and tell it the socket's path inside the VM so its Ryuk reaper can mount it: `DOCKER_HOST=unix://$HOME/.config/colima/default/docker.sock TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock pnpm test:integration`. `colima status` prints the socket's path if yours differs.
+
+Start Colima with `colima start --cpu 4 --memory 8`, which leaves room for the compose stack and the test containers together (the default VM is 2 CPUs and 2 GiB). Colima mounts your home directory, so the compose file's `./docker/postgres/init` mount works only for a checkout under `$HOME`.
 
 ### Refreshing the README screenshots
 
