@@ -25,7 +25,7 @@ export interface Price {
 }
 
 const TITLE_MAX = 200;
-const PRICE_MAX = 50;
+export const PRICE_MAX = 50;
 const URL_MAX = 2048;
 
 /** Intl formats an unknown but well-formed code ("ABC") as "ABC 24.99", so only known codes go to it. */

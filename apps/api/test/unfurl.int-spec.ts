@@ -58,6 +58,87 @@ describe('POST /wishlist/unfurl (spec §5, §6.8)', () => {
     expect([res.status, res.body]).toEqual([200, { failureReason: 'BLOCKED_BY_SITE' }]);
   });
 
+  describe('price conversion (price conversion design §5.4)', () => {
+    const TRY_PRICE = {
+      title: 'Walnut table',
+      priceText: 'TRY 45,000.00',
+      price: { amount: '45000.00', currency: 'TRY' },
+    };
+    const URL_BODY = { url: 'https://shop.example/table' };
+
+    it('converts a foreign price when the setting is on', async () => {
+      t.unfurl.next = { ...TRY_PRICE };
+      t.rates.rates.set('TRY', 50.025);
+      const res = await unfurl(await owner(), URL_BODY);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        title: 'Walnut table',
+        priceText: '$899.55',
+        convertedFrom: 'TRY 45,000.00',
+      });
+      expect(res.body).not.toHaveProperty('price');
+      expect(t.rates.asked).toEqual(['TRY']);
+    });
+
+    it('leaves it alone when the setting is off', async () => {
+      const cookie = await owner();
+      const off = await client(t.app, cookie).patch('/wishlist', { convertPrices: false });
+      expect(off.status).toBe(200);
+      t.unfurl.next = { ...TRY_PRICE };
+      t.rates.rates.set('TRY', 50.025);
+      const res = await unfurl(cookie, URL_BODY);
+      expect(res.body).toEqual({ title: 'Walnut table', priceText: 'TRY 45,000.00' });
+      expect(res.body).not.toHaveProperty('price');
+      expect(t.rates.asked).toEqual([]);
+    });
+
+    it('leaves it alone when no rate is known', async () => {
+      t.unfurl.next = { ...TRY_PRICE };
+      const res = await unfurl(await owner(), URL_BODY);
+      expect(res.body).toEqual({ title: 'Walnut table', priceText: 'TRY 45,000.00' });
+      expect(res.body).not.toHaveProperty('price');
+      expect(res.body).not.toHaveProperty('convertedFrom');
+    });
+
+    it('never asks for USD', async () => {
+      t.unfurl.next = {
+        title: 'Kettle',
+        priceText: '$24.99',
+        price: { amount: '24.99', currency: 'USD' },
+      };
+      const res = await unfurl(await owner(), URL_BODY);
+      expect(res.body).toEqual({ title: 'Kettle', priceText: '$24.99' });
+      expect(res.body).not.toHaveProperty('price');
+      expect(t.rates.asked).toEqual([]);
+    });
+
+    it('leaves a price that would round to zero dollars alone', async () => {
+      t.unfurl.next = {
+        title: 'Bead',
+        priceText: '€0.00',
+        price: { amount: '0.001', currency: 'EUR' },
+      };
+      t.rates.rates.set('EUR', 0.9);
+      const res = await unfurl(await owner(), URL_BODY);
+      expect(res.body).toEqual({ title: 'Bead', priceText: '€0.00' });
+      expect(res.body).not.toHaveProperty('price');
+    });
+
+    it('strips price from an answer with no priceText to convert', async () => {
+      t.unfurl.next = { title: 'Odd', price: { amount: '5', currency: 'USD' } };
+      const res = await unfurl(await owner(), URL_BODY);
+      expect(res.body).toEqual({ title: 'Odd' });
+      expect(res.body).not.toHaveProperty('price');
+    });
+
+    it('a failure is untouched', async () => {
+      t.unfurl.next = { failureReason: 'BLOCKED_BY_SITE' };
+      const res = await unfurl(await owner(), URL_BODY);
+      expect(res.body).toEqual({ failureReason: 'BLOCKED_BY_SITE' });
+      expect(t.rates.asked).toEqual([]);
+    });
+  });
+
   it.each([{}, { url: '' }, { url: 'a'.repeat(2049) }])(
     'refuses %j with 400 (Plan 3a rule 6)',
     async (body) => {
