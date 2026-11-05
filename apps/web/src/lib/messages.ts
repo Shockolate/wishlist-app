@@ -162,7 +162,12 @@ export function prefillMessage(
     return `We couldn’t get the details from ${RETAILER_NAMES[retailer]} just now. Add them below.`;
   }
   if (failureReason) return UNFURL_MESSAGES[failureReason];
-  return `Filled in from ${shopName(url) ?? 'the page'}. Check it, then add it.`;
+  const shop = shopName(url) ?? 'the page';
+  const { convertedFrom } = outcome.response;
+  if (convertedFrom) {
+    return `Filled in from ${shop}. We converted ${convertedFrom} to dollars at today’s rate. Check it, then add it.`;
+  }
+  return `Filled in from ${shop}. Check it, then add it.`;
 }
 
 /** On /settings, when a list change made on /list failed after the owner left it. */

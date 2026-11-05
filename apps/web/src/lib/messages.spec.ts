@@ -121,6 +121,21 @@ describe('prefillMessage (Plan 3b rule 6)', () => {
     ).toBe('Filled in from hearthware.example. Check it, then add it.');
   });
 
+  it('says when a price was converted (price conversion §5.2)', () => {
+    const url = 'https://www.etsy.com/listing/1';
+    expect(
+      prefillMessage(
+        { response: { priceText: '$899.55', convertedFrom: 'TRY\u00a045,000.00' } },
+        url,
+      ),
+    ).toBe(
+      'Filled in from etsy.com. We converted TRY\u00a045,000.00 to dollars at today’s rate. Check it, then add it.',
+    );
+    expect(prefillMessage({ response: { priceText: '$899.55' } }, url)).toBe(
+      'Filled in from etsy.com. Check it, then add it.',
+    );
+  });
+
   it('names Amazon when its lookup couldn’t answer (retailer lookups §5.4)', () => {
     const response = { failureReason: 'LOOKUP_UNAVAILABLE' } as const;
     expect(prefillMessage({ response }, 'https://www.amazon.com/dp/B08FK7B2SC')).toBe(

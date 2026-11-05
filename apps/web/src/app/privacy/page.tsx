@@ -10,7 +10,7 @@ const Contact = () => <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>;
 /** `/privacy` (D54). Every claim here was checked against the code and the services (Plan 6). */
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Privacy" updated="2026-11-01">
+    <LegalPage title="Privacy" updated="2026-11-05">
       <p>
         Hanker is a small wishlist site run by Ted Armstrong in Portland, Maine, USA. This page says
         what Hanker keeps about you, who else handles it, and for how long. Questions go to{' '}
@@ -27,7 +27,9 @@ export default function PrivacyPage() {
         and sends only the product’s ID (and, for eBay, the option’s ID when the link names one).
         Unless you turn it off in Settings, Hanker sends an item’s title, note, the shop’s web
         address (not the full link) and the shop’s product description, with your list’s tag names,
-        to Cloudflare’s AI to suggest tags for it.
+        to Cloudflare’s AI to suggest tags for it. If a price is in another currency, Hanker
+        converts it to US dollars before you see it, unless you turn that off in{' '}
+        <Link href="/settings">Settings</Link>.
       </p>
       <p>
         When you share your list’s link, Hanker’s server fetches photos of up to eight of your items
@@ -116,6 +118,11 @@ export default function PrivacyPage() {
         <li>
           eBay looks up eBay item links. It sees the item’s ID, and the option’s when the link names
           one, and nothing about who pasted it.
+        </li>
+        <li>
+          Frankfurter provides daily exchange rates. Hanker downloads the whole table, so
+          Frankfurter sees only that Hanker asked for the day’s rates, never what you added or who
+          you are.
         </li>
         <li>
           GitHub runs the nightly backup, which is encrypted before it leaves GitHub’s machine.
