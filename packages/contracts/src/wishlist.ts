@@ -108,20 +108,22 @@ export const ReorderItemsRequestSchema = z.object({
 export type ReorderItemsRequest = z.infer<typeof ReorderItemsRequestSchema>;
 
 /**
- * A new title, the spoiler setting, the tag-suggestions setting, or any mix (spec §5, D33; tag
- * suggestions design §5.2).
+ * A new title, the spoiler setting, the tag-suggestions setting, the price-conversion setting, or
+ * any mix (spec §5, D33; tag suggestions design §5.2; price conversion design §5.1).
  */
 export const UpdateWishlistRequestSchema = z
   .object({
     title: WishlistTitleSchema.optional(),
     showClaimsToOwner: z.boolean().optional(),
     suggestTags: z.boolean().optional(),
+    convertPrices: z.boolean().optional(),
   })
   .refine(
     (body) =>
       body.title !== undefined ||
       body.showClaimsToOwner !== undefined ||
-      body.suggestTags !== undefined,
+      body.suggestTags !== undefined ||
+      body.convertPrices !== undefined,
     { message: 'Change the title or a setting.' },
   );
 export type UpdateWishlistRequest = z.infer<typeof UpdateWishlistRequestSchema>;
@@ -182,6 +184,8 @@ export const WishlistResponseSchema = z.object({
   showClaimsToOwner: z.boolean().optional(),
   /** Optional for expand/contract (tag suggestions design §5.2). */
   suggestTags: z.boolean().optional(),
+  /** Optional for expand/contract; absent means on (price conversion design §5.1). */
+  convertPrices: z.boolean().optional(),
   tags: z.array(TagSchema).optional(),
   items: z.array(ItemSchema),
 });
@@ -193,6 +197,8 @@ export const WishlistSettingsResponseSchema = z.object({
   showClaimsToOwner: z.boolean().optional(),
   /** Optional for expand/contract (tag suggestions design §5.2). */
   suggestTags: z.boolean().optional(),
+  /** Optional for expand/contract; absent means on (price conversion design §5.1). */
+  convertPrices: z.boolean().optional(),
 });
 export type WishlistSettingsResponse = z.infer<typeof WishlistSettingsResponseSchema>;
 
@@ -226,6 +232,11 @@ export const UnfurlResponseSchema = z.object({
   priceText: z.string().optional(),
   /** The page's own description, a hint for tag suggestions only (tag suggestions design §5.3). */
   description: z.string().optional(),
+  /**
+   * The price as the shop showed it, set only when `priceText` was converted to dollars (price
+   * conversion design §5.5).
+   */
+  convertedFrom: z.string().optional(),
   failureReason: UnfurlFailureReasonSchema.optional(),
 });
 export type UnfurlResponse = z.infer<typeof UnfurlResponseSchema>;
