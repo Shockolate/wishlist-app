@@ -57,6 +57,13 @@
       "when": 1793208175551,
       "tag": "0007_stats_views",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793895360841,
+      "tag": "0008_convert_prices",
+      "breakpoints": true
     }
   ]
 }

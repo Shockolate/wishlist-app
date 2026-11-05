@@ -1,4 +1,3 @@
-import type { UnfurlResponse } from '@wishlist/contracts';
 import type { Clock } from '../core/clock.js';
 import type { EmailMessage, EmailSender } from '../email/email-sender.js';
 import type { ErrorContext, ErrorReporter } from '../observability/error-reporter.js';
@@ -10,8 +9,9 @@ import type { SuggestInput, SuggestResult, TagSuggester } from '../tag-suggest/t
 import type { AmazonLookup } from '../unfurl/amazon-lookup.js';
 import type { EbayLookup } from '../unfurl/ebay-lookup.js';
 import type { EtsyLookup } from '../unfurl/etsy-lookup.js';
+import type { ExchangeRates } from '../unfurl/exchange-rates.js';
 import type { LookupResult } from '../unfurl/lookup-result.js';
-import type { MetadataFetcher } from '../unfurl/metadata-fetcher.js';
+import type { MetadataFetcher, UnfurlResult } from '../unfurl/metadata-fetcher.js';
 import type { FetchedPhoto } from '../unfurl/page-fetcher.js';
 import type { PhotoFetcher } from '../unfurl/photo-fetcher.js';
 
@@ -79,10 +79,10 @@ export class FakeEmailSender implements EmailSender {
 
 /** Unfurl stand-in. Set `next`; `urls` records every URL asked for. */
 export class FakeMetadataFetcher implements MetadataFetcher {
-  next: UnfurlResponse = { failureReason: 'NO_METADATA' };
+  next: UnfurlResult = { failureReason: 'NO_METADATA' };
   readonly urls: string[] = [];
 
-  fetch(url: string): Promise<UnfurlResponse> {
+  fetch(url: string): Promise<UnfurlResult> {
     this.urls.push(url);
     return Promise.resolve(this.next);
   }
@@ -140,6 +140,17 @@ export class FakeTagSuggester implements TagSuggester {
   suggest(input: SuggestInput): Promise<SuggestResult> {
     this.inputs.push(input);
     return Promise.resolve(this.next);
+  }
+}
+
+/** Exchange rate stand-in: units of each currency per 1 USD, `null` for one not in `rates`. Records every code asked. */
+export class FakeExchangeRates implements ExchangeRates {
+  readonly rates = new Map<string, number>();
+  readonly asked: string[] = [];
+
+  usdPer(currency: string): Promise<number | null> {
+    this.asked.push(currency);
+    return Promise.resolve(this.rates.get(currency) ?? null);
   }
 }
 

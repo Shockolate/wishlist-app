@@ -12,12 +12,14 @@ import {
   FakeClock,
   FakeCronHeartbeat,
   FakeEmailSender,
+  FakeExchangeRates,
   FakeMetadataFetcher,
   FakePhotoFetcher,
   FakeQuotaCheck,
   FakeTagSuggester,
 } from '../../src/testing/fakes.js';
 import { TAG_SUGGESTER } from '../../src/tag-suggest/tag-suggester.js';
+import { EXCHANGE_RATES } from '../../src/unfurl/exchange-rates.js';
 import { METADATA_FETCHER } from '../../src/unfurl/metadata-fetcher.js';
 import { PHOTO_FETCHER } from '../../src/unfurl/photo-fetcher.js';
 import { createTestApp } from './app.js';
@@ -32,6 +34,7 @@ export interface AuthTestApp {
   breaches: FakeBreachedPasswords;
   unfurl: FakeMetadataFetcher;
   photos: FakePhotoFetcher;
+  rates: FakeExchangeRates;
   suggester: FakeTagSuggester;
   heartbeat: FakeCronHeartbeat;
   quota: FakeQuotaCheck;
@@ -50,6 +53,7 @@ export async function createAuthTestApp(
   const breaches = new FakeBreachedPasswords();
   const unfurl = new FakeMetadataFetcher();
   const photos = new FakePhotoFetcher();
+  const rates = new FakeExchangeRates();
   const suggester = new FakeTagSuggester();
   const heartbeat = new FakeCronHeartbeat();
   const quota = new FakeQuotaCheck();
@@ -70,6 +74,8 @@ export async function createAuthTestApp(
         .useValue(unfurl)
         .overrideProvider(PHOTO_FETCHER)
         .useValue(photos)
+        .overrideProvider(EXCHANGE_RATES)
+        .useValue(rates)
         .overrideProvider(TAG_SUGGESTER)
         .useValue(suggester)
         .overrideProvider(CRON_HEARTBEAT)
@@ -85,6 +91,7 @@ export async function createAuthTestApp(
     breaches,
     unfurl,
     photos,
+    rates,
     suggester,
     heartbeat,
     quota,
@@ -100,6 +107,8 @@ export async function createAuthTestApp(
       unfurl.urls.length = 0;
       photos.next = { ok: false, reason: 'UNREACHABLE' };
       photos.urls.length = 0;
+      rates.rates.clear();
+      rates.asked.length = 0;
       suggester.next = { ok: true, names: [] };
       suggester.inputs.length = 0;
       heartbeat.pings.length = 0;

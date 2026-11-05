@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module.js';
 import { RateLimitModule } from '../rate-limit/rate-limit.module.js';
+import { CLOCK, type Clock } from '../core/clock.js';
 import { ENV, type Env } from '../core/env.js';
 import { ERROR_REPORTER, type ErrorReporter } from '../observability/error-reporter.js';
 import { BrightDataAmazonLookup } from '../unfurl/amazon-lookup.js';
 import { ebayLookupFrom } from '../unfurl/ebay-lookup.js';
 import { EtsyOpenApiLookup } from '../unfurl/etsy-lookup.js';
+import { EXCHANGE_RATES, FrankfurterExchangeRates } from '../unfurl/exchange-rates.js';
 import { HttpMetadataFetcher, METADATA_FETCHER } from '../unfurl/metadata-fetcher.js';
 import { PageFetcher } from '../unfurl/page-fetcher.js';
 import { RoutingMetadataFetcher } from '../unfurl/routing-metadata-fetcher.js';
@@ -26,6 +28,13 @@ import { WishlistService } from './wishlist.service.js';
     ItemsService,
     TagsService,
     UnfurlService,
+    {
+      // One instance per app, so its cached table is shared by every request.
+      provide: EXCHANGE_RATES,
+      inject: [CLOCK, ERROR_REPORTER],
+      useFactory: (clock: Clock, reporter: ErrorReporter) =>
+        new FrankfurterExchangeRates(clock, reporter),
+    },
     {
       provide: METADATA_FETCHER,
       inject: [ENV, ERROR_REPORTER],

@@ -32,6 +32,7 @@ const PRIMED = {
   title: ITEM.title,
   imageUrl: IMAGE,
   priceText: '$230.00',
+  price: { amount: '230.00', currency: 'USD' },
 };
 
 const OPTION_A = { ...ITEM, title: 'iPhone 14', price: { value: '287.99', currency: 'USD' } };
@@ -191,7 +192,12 @@ describe('EbayBrowseLookup (eBay lookups §5.2)', () => {
       const { result } = await lookUp(toGroup(() => json(GROUP_SAME)));
       expect(result).toEqual({
         ok: true,
-        metadata: { title: 'iPhone 14', imageUrl: IMAGE, priceText: '$287.99' },
+        metadata: {
+          title: 'iPhone 14',
+          imageUrl: IMAGE,
+          priceText: '$287.99',
+          price: { amount: '287.99', currency: 'USD' },
+        },
       });
     });
 
