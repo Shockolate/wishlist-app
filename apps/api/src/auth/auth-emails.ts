@@ -26,7 +26,7 @@ const ESCAPES: Readonly<Record<string, string>> = {
 
 const escapeHtml = (value: string): string => value.replace(/[&<>"']/g, (c) => ESCAPES[c] ?? c);
 
-/** Plain text first; the HTML says the same words, with every value escaped. */
+/** Plain text first; the HTML says the same words, plus each link's address, with every value escaped. */
 function compose(
   subject: string,
   intro: readonly string[],
@@ -38,7 +38,12 @@ function compose(
     text: [...intro, ...links.map((l) => `${l.label}: ${l.href}`), footer].join('\n\n'),
     html: [
       ...intro.map((p) => `<p>${escapeHtml(p)}</p>`),
-      ...links.map((l) => `<p><a href="${escapeHtml(l.href)}">${escapeHtml(l.label)}</a></p>`),
+      // The address is also shown as text: a client that disables links (Yahoo does in its spam
+      // folder) still leaves it there to copy.
+      ...links.map(
+        (l) =>
+          `<p><a href="${escapeHtml(l.href)}">${escapeHtml(l.label)}</a><br>Or paste this into your browser: ${escapeHtml(l.href)}</p>`,
+      ),
       `<p>${escapeHtml(footer)}</p>`,
     ].join('\n'),
   };
