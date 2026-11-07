@@ -30,7 +30,7 @@ Hanker is a wishlist app for family and friends: Next.js (web), NestJS (API), Po
 
 ## Environment
 
-- Node 24 (`.nvmrc`; run `nvm use`). Other versions fail in confusing ways, such as Turbo's `Exec format error`.
+- Node 26 (`.nvmrc`; run `nvm use`). Other versions fail in confusing ways, such as Turbo's `Exec format error`.
 - pnpm 12.15.0, pinned by `packageManager`.
 - Docker for `pnpm dev`, integration tests (Testcontainers) and E2E.
 - Turbo builds `packages/contracts` before its dependents. If you run Vitest directly and `@wishlist/contracts` won't import, run `pnpm --filter @wishlist/contracts build`.

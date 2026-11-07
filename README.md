@@ -110,7 +110,7 @@ Behavior changes are written test-first. CI runs all of the above on every pull 
 
 ## Run it locally
 
-You need Node 24 (`nvm use`), pnpm 12.15.0 (pinned by `packageManager`) and Docker.
+You need Node 26 (`nvm use`), pnpm 12.15.0 (pinned by `packageManager`) and Docker.
 
 ```bash
 pnpm install

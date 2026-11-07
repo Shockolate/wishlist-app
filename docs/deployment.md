@@ -75,9 +75,9 @@ Both projects were created and configured from the CLI, so the setup is reproduc
 pnpm vercel project add wishlist-api --scope shockolate
 pnpm vercel project add wishlist-web --scope shockolate
 
-printf '%s' '{"rootDirectory":"apps/api","sourceFilesOutsideRootDirectory":true,"nodeVersion":"24.x","framework":"nestjs","ssoProtection":null}' \
+printf '%s' '{"rootDirectory":"apps/api","sourceFilesOutsideRootDirectory":true,"nodeVersion":"26.x","framework":"nestjs","ssoProtection":null}' \
   | pnpm vercel api /v9/projects/wishlist-api -X PATCH --input - --scope shockolate
-printf '%s' '{"rootDirectory":"apps/web","sourceFilesOutsideRootDirectory":true,"nodeVersion":"24.x","framework":"nextjs","ssoProtection":{"deploymentType":"preview"}}' \
+printf '%s' '{"rootDirectory":"apps/web","sourceFilesOutsideRootDirectory":true,"nodeVersion":"26.x","framework":"nextjs","ssoProtection":{"deploymentType":"preview"}}' \
   | pnpm vercel api /v9/projects/wishlist-web -X PATCH --input - --scope shockolate
 ```
 
@@ -86,7 +86,7 @@ printf '%s' '{"rootDirectory":"apps/web","sourceFilesOutsideRootDirectory":true,
 | Root Directory                   | `apps/api`   | `apps/web`                                    |
 | Include files outside root       | On           | On                                            |
 | Framework preset                 | NestJS       | Next.js                                       |
-| Node.js                          | 24.x         | 24.x                                          |
+| Node.js                          | 26.x         | 26.x                                          |
 | Vercel Authentication            | Disabled     | **Previews only** (`deploymentType: preview`) |
 | Protection Bypass for Automation | —            | Enabled (secret in GitHub `preview` env)      |
 
@@ -870,4 +870,4 @@ R2 has no object versioning, so there's no older state to roll back to. Nothing 
 
 Renovate opens provider bumps; they wait for review because they run next to secrets. Plan a bump locally before merging it, since Renovate's PRs get no CI plan. OpenTofu itself moves by hand: the Quarterly row in [operations.md](operations.md#recurring).
 
-**The Vercel provider isn't signed on OpenTofu's registry** (`tofu init` says signature validation was skipped). Before merging a bump, check its hash by hand: take the signing key from `https://registry.terraform.io/v1/providers/vercel/vercel/<version>/download/linux/amd64` (`signing_keys`), verify the release's `SHA256SUMS.sig` on GitHub with it, and confirm the `linux_amd64` hash is among the lockfile's `zh:` entries. 5.24.1 was checked this way (key `1ADC 8CB0 1C6E 6C19 532E 6EEC 6545 E9CB 7A48 C1FA`).
+**The Vercel provider isn't signed on OpenTofu's registry** (`tofu init` says signature validation was skipped). Before merging a bump, check its hash by hand: take the signing key from `https://registry.terraform.io/v1/providers/vercel/vercel/<version>/download/linux/amd64` (`signing_keys`), verify the release's `SHA256SUMS.sig` on GitHub with it, and confirm the `linux_amd64` hash is among the lockfile's `zh:` entries. 5.25.0 was checked this way (key `1ADC 8CB0 1C6E 6C19 532E 6EEC 6545 E9CB 7A48 C1FA`).

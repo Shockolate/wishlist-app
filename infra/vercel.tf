@@ -20,7 +20,7 @@ resource "vercel_project" "api" {
   git_fork_protection                               = true
   git_lfs                                           = false
   name                                              = "wishlist-api"
-  node_version                                      = "24.x"
+  node_version                                      = "26.x"
   oidc_token_config = {
     issuer_mode = "team"
   }
@@ -60,7 +60,7 @@ resource "vercel_project" "web" {
   git_fork_protection                               = true
   git_lfs                                           = false
   name                                              = "wishlist-web"
-  node_version                                      = "24.x"
+  node_version                                      = "26.x"
   oidc_token_config = {
     issuer_mode = "team"
   }
