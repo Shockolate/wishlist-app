@@ -4,7 +4,7 @@
 
 | Tool              | Version                            | Install                                 |
 | ----------------- | ---------------------------------- | --------------------------------------- |
-| Node              | 24 (see `.nvmrc`)                  | `nvm install`                           |
+| Node              | 26 (see `.nvmrc`)                  | `nvm install`                           |
 | pnpm              | 12.15.0 (pinned in `package.json`) | `npm i -g pnpm@12.15.0`                 |
 | Docker            | with Compose v2                    | Colima (or Docker Engine)               |
 | gh + gh-stack     | latest                             | `gh extension install github/gh-stack`  |

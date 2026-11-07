@@ -175,7 +175,7 @@ wishlist-app/
 |---|---|---|
 | Package manager | pnpm (pinned via the `packageManager` field) | Workspaces. Installed through npm rather than corepack, because Node 25+ doesn't bundle corepack |
 | Monorepo | Turborepo | Affected-only builds and tests, plus Vercel's free remote cache |
-| Runtime | Node 24 LTS (`.nvmrc`, `engines`, Vercel project setting) | The current LTS that Vercel supports |
+| Runtime | Node 26 LTS (`.nvmrc`, `engines`, Vercel project setting) | The current LTS that Vercel supports |
 | Module system | ESM everywhere: `"type": "module"` in every package | NestJS 12 ships its packages as ESM only. Nest's own generator pairs ESM projects with Vitest |
 | TypeScript | Pinned to 6.0.x. **Not 7** | TS 7, the native Go port, no longer exports the JavaScript compiler API. `@nestjs/cli` (which pins `~6.0.2`), typescript-eslint (`<6.1`) and Next's build-time typecheck all depend on that API. Renovate holds a major for approval on its Dependency Dashboard |
 | Linting | ESLint 9.x. **Not 10** | eslint-config-next's plugins (`react`, `import`, `jsx-a11y`) declare peer support only up to ESLint 9. Renovate holds a major for approval on its Dependency Dashboard |
