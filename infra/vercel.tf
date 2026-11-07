@@ -26,8 +26,7 @@ resource "vercel_project" "api" {
   }
   on_demand_concurrent_builds = false
   passport = {
-    deployment_type = "all"
-    enabled         = false
+    enabled = false
   }
   preview_deployments_disabled = false
   prioritise_production_builds = true
@@ -66,8 +65,7 @@ resource "vercel_project" "web" {
   }
   on_demand_concurrent_builds = false
   passport = {
-    deployment_type = "all"
-    enabled         = false
+    enabled = false
   }
   preview_deployments_disabled = false
   prioritise_production_builds = true
