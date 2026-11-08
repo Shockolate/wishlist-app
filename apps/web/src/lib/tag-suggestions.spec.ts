@@ -130,6 +130,15 @@ describe('SuggestionAsker (tag suggestions design §5.1, ruling 2)', () => {
     asker.ask({ title: '' });
     expect(changes).toEqual([[{ id: KITCHEN }]]);
   });
+
+  it('posts again for the same title once a pasted link brings a description (D117)', () => {
+    const { asker, calls } = setup();
+    asker.ask({ title: 'Kettle' });
+    asker.ask({ title: 'Kettle', url: 'https://shop.example/k', description: 'Pour-over kettle.' });
+    expect(calls).toHaveLength(2);
+    asker.ask({ title: 'Kettle', url: 'https://shop.example/k', description: 'Pour-over kettle.' });
+    expect(calls).toHaveLength(2);
+  });
 });
 
 describe('suggestionRequest (tag suggestions design §5.2, §5.3)', () => {

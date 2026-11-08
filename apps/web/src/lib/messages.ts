@@ -170,5 +170,25 @@ export function prefillMessage(
   return `Filled in from ${shop}. Check it, then add it.`;
 }
 
+/**
+ * The sentence above the add form after a link pasted into its Link field was read (D117). Only
+ * what was filled in is claimed: the conversion is mentioned only when the price was filled, and
+ * when the owner had already typed everything the page had, the form's own sentence comes back.
+ */
+export function pasteMessage(
+  outcome: { response: UnfurlResponse } | { error: unknown },
+  url: string,
+  filled: { title?: string; imageUrl?: string; priceText?: string },
+): string {
+  if ('error' in outcome || outcome.response.failureReason) return prefillMessage(outcome, url);
+  if (Object.keys(filled).length === 0) return IDEA_FORM;
+  const { convertedFrom, ...rest } = outcome.response;
+  const response = filled.priceText && convertedFrom ? outcome.response : rest;
+  return prefillMessage({ response }, url);
+}
+
+/** While the add box or the add form's Link field reads a page that isn't Amazon's. */
+export const READING_PAGE = 'Reading the page…';
+
 /** On /settings, when a list change made on /list failed after the owner left it. */
 export const LIST_CHANGE_NOT_SAVED = 'A change to your list didn’t save.';

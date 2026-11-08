@@ -63,6 +63,44 @@ export function prefill(
   };
 }
 
+/** The longest link the add box or the add form's Link field will read. */
+export const LINK_MAX = 2048;
+
+/**
+ * The link to read when text is pasted into the add form's Link field (D117), with any text a phone
+ * app shared alongside it as a title hint; null when the field holds no link, or one too long to save.
+ */
+export function pastedLink(text: string): { url: string; titleHint: string | null } | null {
+  const input = classifyAddInput(text);
+  if (input.kind !== 'link' || input.url.length > LINK_MAX) return null;
+  return { url: input.url, titleHint: input.titleHint };
+}
+
+/** The fields a page read can fill in. */
+export type FillableValues = Pick<ItemFormValues, 'title' | 'imageUrl' | 'priceText'>;
+
+/**
+ * What a read of a pasted link fills in (D117): each field that is still empty, from the page, and
+ * the title from the shared text when the page has none. What the owner typed is never replaced.
+ */
+export function fillEmpty(
+  current: FillableValues,
+  response: UnfurlResponse | null,
+  titleHint: string | null,
+): Partial<FillableValues> {
+  const found: Partial<FillableValues> = {
+    title: response?.title ?? titleHint ?? undefined,
+    imageUrl: response?.imageUrl,
+    priceText: response?.priceText,
+  };
+  const filled: Partial<FillableValues> = {};
+  for (const name of ['title', 'imageUrl', 'priceText'] as const) {
+    const value = found[name];
+    if (value && current[name].trim() === '') filled[name] = value;
+  }
+  return filled;
+}
+
 /** An existing item's form. */
 export function formValuesOf(item: Item): ItemFormValues {
   return {
