@@ -2,13 +2,13 @@
 
 ## Prerequisites
 
-| Tool              | Version                            | Install                                 |
-| ----------------- | ---------------------------------- | --------------------------------------- |
-| Node              | 26 (see `.nvmrc`)                  | `nvm install`                           |
-| pnpm              | 12.15.0 (pinned in `package.json`) | `npm i -g pnpm@12.15.0`                 |
-| Docker            | with Compose v2                    | Colima (or Docker Engine)               |
-| gh + gh-stack     | latest                             | `gh extension install github/gh-stack`  |
-| jq, python3, curl | any recent                         | OS package manager (used by `scripts/`) |
+| Tool              | Version                                          | Install                                                                             |
+| ----------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| Node              | the version in `.nvmrc`                          | `nvm install`                                                                       |
+| pnpm              | the version in `packageManager` (`package.json`) | `npm i -g pnpm@$(node -p "require('./package.json').packageManager.split('@')[1]")` |
+| Docker            | with Compose v2                                  | Colima (or Docker Engine)                                                           |
+| gh + gh-stack     | latest                                           | `gh extension install github/gh-stack`                                              |
+| jq, python3, curl | any recent                                       | OS package manager (used by `scripts/`)                                             |
 
 ## First-time setup
 
