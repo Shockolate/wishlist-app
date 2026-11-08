@@ -133,6 +133,40 @@ test('stops sending the description once the link is edited', async ({ page, bas
   expect(requests[1]).toEqual({ title: 'Glass teapot', url: otherLink });
 });
 
+test('asks again, with the description, when a link is pasted into an idea’s form (D117)', async ({
+  context,
+  page,
+  baseURL,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const base = baseURL ?? '';
+  const kitchenId = await ownerWithKitchen(page, base, 'suggest-paste');
+  await stubUnfurl(page, { title: 'Stagg EKG kettle', description: 'Electric pour-over kettle.' });
+  const requests = await stubSuggestions(page, [{ id: kitchenId }]);
+  await page.goto('/list');
+  await addThroughTheBox(page, 'Kettle');
+  await expect.poll(() => requests.length).toBe(1);
+
+  await page.evaluate(
+    (value) =>
+      (
+        globalThis as unknown as {
+          navigator: { clipboard: { writeText(text: string): Promise<void> } };
+        }
+      ).navigator.clipboard.writeText(value),
+    URL_PASTED,
+  );
+  await page.getByLabel('Link', { exact: true }).focus();
+  await page.keyboard.press('ControlOrMeta+V');
+  await expect.poll(() => requests.length).toBe(2);
+  // The title the owner typed is kept, and asked about with the page's description.
+  expect(requests[1]).toEqual({
+    title: 'Kettle',
+    url: URL_PASTED,
+    description: 'Electric pour-over kettle.',
+  });
+});
+
 test('suggestions left untapped are dropped when the item is saved', async ({ page, baseURL }) => {
   const base = baseURL ?? '';
   const kitchenId = await ownerWithKitchen(page, base, 'suggest-untapped');

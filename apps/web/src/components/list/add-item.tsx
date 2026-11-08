@@ -11,7 +11,13 @@ import {
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { classifyAddInput, prefill, type AddInput, type ItemFormValues } from '@/lib/add-input';
+import {
+  classifyAddInput,
+  LINK_MAX,
+  prefill,
+  type AddInput,
+  type ItemFormValues,
+} from '@/lib/add-input';
 import { browserApi } from '@/lib/browser-api';
 import { formErrorMap } from '@/lib/form-errors';
 import {
@@ -23,6 +29,7 @@ import {
   LOOKUP_SKIPPED,
   OTHER_SCHEME_LINK,
   prefillMessage,
+  READING_PAGE,
 } from '@/lib/messages';
 import { AddForm } from './add-form';
 import { LookupWait } from './lookup-wait';
@@ -92,7 +99,7 @@ export function AddItem() {
       });
       return;
     }
-    if (input.url.length > 2048) return refuse(LINK_TOO_LONG);
+    if (input.url.length > LINK_MAX) return refuse(LINK_TOO_LONG);
     const abort = new AbortController();
     setStep({ step: 'reading', link: input, retailer: retailerOf(input.url), abort });
     try {
@@ -147,7 +154,7 @@ export function AddItem() {
         ) : null}
         {reading ? (
           <p className="mt-1 text-sm text-muted-foreground">
-            {amazon ? AMAZON_WAIT : 'Reading the page…'}
+            {amazon ? AMAZON_WAIT : READING_PAGE}
           </p>
         ) : null}
       </div>
@@ -155,6 +162,9 @@ export function AddItem() {
         <AddForm
           initial={step.values}
           description={step.description}
+          onMessage={(message) =>
+            setStep((current) => (current.step === 'form' ? { ...current, message } : current))
+          }
           onAdded={added}
           onCancel={cancel}
         />

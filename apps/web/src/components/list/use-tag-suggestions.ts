@@ -74,6 +74,12 @@ export function useTagSuggestions(form: ItemForm, unfurled: Unfurled): TagSugges
     };
   }, [on]);
 
+  // A link pasted into the add form brings its own description (D117), so ask again. On mount
+  // this repeats the ask above, which the asker skips.
+  useEffect(() => {
+    ask();
+  }, [ask, url, description]);
+
   return { suggestions: on ? suggestions : [], onTitleBlur: ask };
 }
 

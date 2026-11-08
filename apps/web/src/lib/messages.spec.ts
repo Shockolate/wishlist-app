@@ -9,7 +9,9 @@ import {
   fieldErrors,
   hasCode,
   ITEM_GONE,
+  IDEA_FORM,
   listErrorMessage,
+  pasteMessage,
   prefillMessage,
   UNFURL_FAILED,
   UNFURL_MESSAGES,
@@ -185,5 +187,36 @@ describe('claimChangeConflictMessage', () => {
     expect(claimChangeConflictMessage(2)).toBe(
       'Someone else claimed some, so you can have up to 2 now. We’ve set how many to 2.',
     );
+  });
+});
+
+describe('pasteMessage (D117)', () => {
+  const url = 'https://www.etsy.com/listing/1';
+
+  it('says where the filled fields came from', () => {
+    expect(pasteMessage({ response: { title: 'Kettle' } }, url, { title: 'Kettle' })).toBe(
+      'Filled in from etsy.com. Check it, then add it.',
+    );
+  });
+
+  it('says a price was converted only when it filled the price', () => {
+    const response = { title: 'Rug', priceText: '$899.55', convertedFrom: 'TRY 45,000.00' };
+    expect(pasteMessage({ response }, url, { priceText: '$899.55' })).toBe(
+      'Filled in from etsy.com. We converted TRY 45,000.00 to dollars at today’s rate. Check it, then add it.',
+    );
+    expect(pasteMessage({ response }, url, { title: 'Rug' })).toBe(
+      'Filled in from etsy.com. Check it, then add it.',
+    );
+  });
+
+  it('claims nothing was filled in when every field already had the owner’s text', () => {
+    expect(pasteMessage({ response: { title: 'Kettle' } }, url, {})).toBe(IDEA_FORM);
+  });
+
+  it('explains a failed read as the add box does', () => {
+    expect(pasteMessage({ response: { failureReason: 'NO_METADATA' } }, url, {})).toBe(
+      UNFURL_MESSAGES.NO_METADATA,
+    );
+    expect(pasteMessage({ error: new TypeError('offline') }, url, {})).toBe(UNFURL_FAILED);
   });
 });

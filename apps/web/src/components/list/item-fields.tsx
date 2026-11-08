@@ -1,7 +1,7 @@
 'use client';
 
 import type { CreateItemRequestSchema } from '@wishlist/contracts';
-import type { Ref } from 'react';
+import type { ChangeEvent, ReactNode, Ref } from 'react';
 import { Controller, type UseFormReturn } from 'react-hook-form';
 import type { z } from 'zod';
 import { Field } from '@/components/ui/field';
@@ -40,6 +40,8 @@ export function ItemFields({
   idPrefix,
   tagBox,
   suggestions,
+  onLinkInput,
+  afterLink,
 }: {
   form: ItemForm;
   idPrefix: string;
@@ -47,6 +49,10 @@ export function ItemFields({
   tagBox?: Ref<TagBox>;
   /** Suggested tags for the "Suggested:" row, and the title field's blur that asks again. */
   suggestions?: TagSuggestions;
+  /** Each change to the Link field, and whether it was a paste. Only the add form reads links (D117). */
+  onLinkInput?: (value: string, pasted: boolean) => void;
+  /** Shown under the Link field, such as the Amazon wait while a pasted link is read. */
+  afterLink?: ReactNode;
 }) {
   const {
     register,
@@ -67,9 +73,22 @@ export function ItemFields({
       </Field>
       <Field id={id('url')} label="Link" error={errors.url?.message}>
         {(props) => (
-          <Input {...props} {...register('url')} type="url" inputMode="url" autoComplete="off" />
+          <Input
+            {...props}
+            {...register('url', {
+              onChange: (event: ChangeEvent<HTMLInputElement>) => {
+                // `inputType` tells a paste (keyboard, menu or a phone's long press) from typing.
+                const { inputType } = event.nativeEvent as InputEvent;
+                onLinkInput?.(event.target.value, inputType === 'insertFromPaste');
+              },
+            })}
+            type="url"
+            inputMode="url"
+            autoComplete="off"
+          />
         )}
       </Field>
+      {afterLink}
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-0 flex-[1_1_140px]">
           <Field id={id('priceText')} label="Price" error={errors.priceText?.message}>

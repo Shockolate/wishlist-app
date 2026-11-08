@@ -47,7 +47,8 @@ export function suggestionRequest(
  * web's Vitest runs in Node with no component renderer.
  */
 export class SuggestionAsker {
-  private lastTitle: string | undefined;
+  /** The title and description last asked about. */
+  private lastAsked: string | undefined;
   private inFlight: AbortController | undefined;
   private disposed = false;
   /** Whether the last `onChange` gave any suggestions, which a re-ask then clears. */
@@ -62,15 +63,18 @@ export class SuggestionAsker {
   ) {}
 
   /**
-   * Skips an empty title, or the same title as last asked. Otherwise aborts the older request,
-   * clears suggestions shown for the old title (the row isn't shown while waiting), and asks again;
-   * only this request's answer reaches `onChange`. Any failure gives `[]`: a suggestion is a
-   * convenience, so the form never shows an error for it.
+   * Skips an empty title, or the same title and description as last asked, so a note edit never
+   * re-asks but a description from a link pasted into the add form does (D117). Otherwise aborts
+   * the older request, clears suggestions shown for the old title (the row isn't shown while
+   * waiting), and asks again; only this request's answer reaches `onChange`. Any failure gives
+   * `[]`: a suggestion is a convenience, so the form never shows an error for it.
    */
   ask(body: TagSuggestionsRequest): void {
     const title = body.title.trim();
-    if (this.disposed || title === '' || title === this.lastTitle) return;
-    this.lastTitle = title;
+    // JSON keeps the two apart, whatever either one holds.
+    const asked = JSON.stringify([title, body.description ?? '']);
+    if (this.disposed || title === '' || asked === this.lastAsked) return;
+    this.lastAsked = asked;
 
     this.inFlight?.abort();
     const request = new AbortController();
