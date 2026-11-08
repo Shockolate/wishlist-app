@@ -32,7 +32,7 @@ Two Vercel projects sit behind one origin, joined by a Next.js rewrite. The brow
 flowchart LR
   B[Browser] -->|hanker.dev| W["Next.js<br/>apps/web"]
   W -->|"rewrite /api/*"| A["NestJS on Express<br/>apps/api, one Vercel Function"]
-  A -->|pg, pooled| D[("Postgres 17<br/>Neon")]
+  A -->|pg, pooled| D[("Postgres<br/>Neon")]
   A -.->|ports| X["Resend · Turnstile · Have I Been Pwned<br/>Bright Data · Etsy · eBay · Frankfurter · Workers AI"]
   W & A -.->|scrubbed errors| S[Sentry]
   C[Vercel Cron, daily] --> A
@@ -56,13 +56,13 @@ flowchart LR
 | Better Stack                    | Uptime monitors and heartbeats, alerting by email           | Nobody is alerted                                         |
 | Cloudflare R2                   | Nightly `age`-encrypted backups, kept 30 days               | That night's backup fails, and its heartbeat raises it    |
 
-| Path                 | What                                                                                                                                                                                                                             |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web`           | Next.js App Router, Tailwind, Radix, TanStack Query                                                                                                                                                                              |
-| `apps/api`           | NestJS 12, Drizzle ORM, SQL migrations. Email, CAPTCHA, breached-password checks, link metadata and shop lookups, exchange rates, tag suggestions, error reporting and the cron heartbeat sit behind ports, with fakes for tests |
-| `packages/contracts` | Zod schemas and error codes for every request and response, the only code the two apps share                                                                                                                                     |
-| `e2e`                | Playwright golden paths, accessibility checks, and post-deploy smoke tests                                                                                                                                                       |
-| `infra`              | OpenTofu for Cloudflare DNS and Turnstile, GitHub settings, the Better Stack monitors and the Vercel projects, with state encrypted in R2                                                                                        |
+| Path                 | What                                                                                                                                                                                                                          |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web`           | Next.js App Router, Tailwind, Radix, TanStack Query                                                                                                                                                                           |
+| `apps/api`           | NestJS, Drizzle ORM, SQL migrations. Email, CAPTCHA, breached-password checks, link metadata and shop lookups, exchange rates, tag suggestions, error reporting and the cron heartbeat sit behind ports, with fakes for tests |
+| `packages/contracts` | Zod schemas and error codes for every request and response, the only code the two apps share                                                                                                                                  |
+| `e2e`                | Playwright golden paths, accessibility checks, and post-deploy smoke tests                                                                                                                                                    |
+| `infra`              | OpenTofu for Cloudflare DNS and Turnstile, GitHub settings, the Better Stack monitors and the Vercel projects, with state encrypted in R2                                                                                     |
 
 TypeScript and ESM throughout, in a pnpm + Turborepo monorepo. It is designed to run on free tiers (hosting, database, email, CAPTCHA, error reporting, monitoring, backups, AI), so the only recurring cost is the domain.
 
@@ -110,7 +110,7 @@ Behavior changes are written test-first. CI runs all of the above on every pull 
 
 ## Run it locally
 
-You need Node 26 (`nvm use`), pnpm 12.15.0 (pinned by `packageManager`) and Docker.
+You need the Node version in `.nvmrc` (`nvm use`), the pnpm version in `packageManager` and Docker.
 
 ```bash
 pnpm install

@@ -1,6 +1,6 @@
 # Deployment
 
-Production runs on free tiers: **Vercel Hobby** (two projects), **Neon Free** (Postgres 17) and **GitHub Actions**. GitHub Actions is the only thing that deploys; Vercel's Git integration is disabled (`apps/*/vercel.json`). See spec §3 and §10 for the reasoning.
+Production runs on free tiers: **Vercel Hobby** (two projects), **Neon Free** (Postgres) and **GitHub Actions**. GitHub Actions is the only thing that deploys; Vercel's Git integration is disabled (`apps/*/vercel.json`). See spec §3 and §10 for the reasoning.
 
 ```
 Browser ──► wishlist-web (Next.js) ──rewrite /api/*──► wishlist-api (NestJS, one Vercel Function) ──► Neon
@@ -15,11 +15,11 @@ Vercel assigned these names because `wishlist-web.vercel.app` and `wishlist-api.
 
 ## Accounts
 
-| Service | Plan                                                               | Used for                     |
-| ------- | ------------------------------------------------------------------ | ---------------------------- |
-| GitHub  | Free (public repo)                                                 | Code, Actions, rulesets      |
-| Vercel  | Hobby (non-commercial), team `shockolate`                          | Hosting both apps            |
-| Neon    | Free, created in the **Neon console** (not the Vercel integration) | Postgres 17, per-PR branches |
+| Service | Plan                                                               | Used for                  |
+| ------- | ------------------------------------------------------------------ | ------------------------- |
+| GitHub  | Free (public repo)                                                 | Code, Actions, rulesets   |
+| Vercel  | Hobby (non-commercial), team `shockolate`                          | Hosting both apps         |
+| Neon    | Free, created in the **Neon console** (not the Vercel integration) | Postgres, per-PR branches |
 
 **Why Neon is set up directly, not through the Vercel integration:** our GitHub Actions own preview branching and env wiring. The integration would add a second system creating branches against Neon's 10-branch cap, and it would inject database credentials into projects outside our control. It would also tie the database account to the hosting account.
 
@@ -27,8 +27,8 @@ Later plans add: domain and DNS, Resend and Turnstile (Plan 2); Cloudflare R2 ba
 
 ## Neon
 
-- Project `wishlist`, Postgres 17, region AWS us-east-1 (next to Vercel's `iad1`).
-- **Previews live in a second project, `wishlist-preview`** (D87), in the same organization, Postgres 17, AWS us-east-1. It holds `preview-seed` and the `pr-*` branches and never any production data. Its key is a project-scoped organization API key, so the preview environment can't reach production's project, and previews get their own compute quota and 10-branch cap. Neon's Free plan allows 100 projects, with compute, branches and data transfer counted per project.
+- Project `wishlist`, on the Postgres major that `docker-compose.yml`'s `postgres` image uses, region AWS us-east-1 (next to Vercel's `iad1`).
+- **Previews live in a second project, `wishlist-preview`** (D87), in the same organization, on the same Postgres major, AWS us-east-1. It holds `preview-seed` and the `pr-*` branches and never any production data. Its key is a project-scoped organization API key, so the preview environment can't reach production's project, and previews get their own compute quota and 10-branch cap. Neon's Free plan allows 100 projects, with compute, branches and data transfer counted per project.
 - **Pooled** connection string → the API's runtime `DATABASE_URL` (stored in Vercel as a sensitive variable).
 - **Direct** connection string → migrations only (`DATABASE_URL_DIRECT`).
 - Both end in **`sslmode=verify-full`**, not the console's `sslmode=require`. See [TLS: `sslmode=verify-full`](#tls-sslmodeverify-full).
@@ -67,7 +67,7 @@ read -rs URL && URL=${URL/sslmode=require/sslmode=verify-full} \
 
 ## Vercel projects
 
-**Managed in [`infra/vercel.tf`](../infra/vercel.tf) since 2026-10-27 (D100):** the settings below and both domains. Change them in a PR ([Infrastructure as code](#infrastructure-as-code)), not with these commands. Env vars and the automation bypass stay here: Vercel can't read sensitive values back, and managing the bypass (the provider's separate `vercel_project_protection_bypass` resource) would put its secret in state (D96).
+**Managed in [`infra/vercel.tf`](../infra/vercel.tf) since 2026-10-27 (D100):** the settings below and both domains. Change them in a PR ([Infrastructure as code](#infrastructure-as-code)), not with these commands. Env vars and the automation bypass stay here. `<node-major>` below is the major in `.nvmrc`: Vercel can't read sensitive values back, and managing the bypass (the provider's separate `vercel_project_protection_bypass` resource) would put its secret in state (D96).
 
 Both projects were created and configured from the CLI, so the setup is reproducible and checkable through the API instead of dashboard clicks:
 
@@ -75,20 +75,20 @@ Both projects were created and configured from the CLI, so the setup is reproduc
 pnpm vercel project add wishlist-api --scope shockolate
 pnpm vercel project add wishlist-web --scope shockolate
 
-printf '%s' '{"rootDirectory":"apps/api","sourceFilesOutsideRootDirectory":true,"nodeVersion":"26.x","framework":"nestjs","ssoProtection":null}' \
+printf '%s' '{"rootDirectory":"apps/api","sourceFilesOutsideRootDirectory":true,"nodeVersion":"<node-major>.x","framework":"nestjs","ssoProtection":null}' \
   | pnpm vercel api /v9/projects/wishlist-api -X PATCH --input - --scope shockolate
-printf '%s' '{"rootDirectory":"apps/web","sourceFilesOutsideRootDirectory":true,"nodeVersion":"26.x","framework":"nextjs","ssoProtection":{"deploymentType":"preview"}}' \
+printf '%s' '{"rootDirectory":"apps/web","sourceFilesOutsideRootDirectory":true,"nodeVersion":"<node-major>.x","framework":"nextjs","ssoProtection":{"deploymentType":"preview"}}' \
   | pnpm vercel api /v9/projects/wishlist-web -X PATCH --input - --scope shockolate
 ```
 
-| Setting                          | wishlist-api | wishlist-web                                  |
-| -------------------------------- | ------------ | --------------------------------------------- |
-| Root Directory                   | `apps/api`   | `apps/web`                                    |
-| Include files outside root       | On           | On                                            |
-| Framework preset                 | NestJS       | Next.js                                       |
-| Node.js                          | 26.x         | 26.x                                          |
-| Vercel Authentication            | Disabled     | **Previews only** (`deploymentType: preview`) |
-| Protection Bypass for Automation | —            | Enabled (secret in GitHub `preview` env)      |
+| Setting                          | wishlist-api     | wishlist-web                                  |
+| -------------------------------- | ---------------- | --------------------------------------------- |
+| Root Directory                   | `apps/api`       | `apps/web`                                    |
+| Include files outside root       | On               | On                                            |
+| Framework preset                 | NestJS           | Next.js                                       |
+| Node.js                          | `<node-major>.x` | `<node-major>.x`                              |
+| Vercel Authentication            | Disabled         | **Previews only** (`deploymentType: preview`) |
+| Protection Bypass for Automation | —                | Enabled (secret in GitHub `preview` env)      |
 
 **Why the protection settings look like this:**
 
@@ -271,11 +271,13 @@ R2 keeps each dump for 30 days. Only the private `age` key, which never leaves y
 
 Do these in order. Each secret goes into the GitHub `production` environment with `gh secret set <NAME> --env production`, which prompts for the value without echoing it.
 
-**1. The `age` key pair.** On your machine, install the same release the workflow uses:
+**1. The `age` key pair.** On your machine, install the same release the workflow uses. Run this from the repo root: it reads the version and checksum from the workflow's `AGE_VERSION` and `AGE_SHA256`, so there is one place to change them.
 
 ```bash
-curl -fsSL -o /tmp/age.tar.gz https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-linux-amd64.tar.gz
-echo "cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10  /tmp/age.tar.gz" | sha256sum -c -
+AGE_VERSION=$(sed -n 's/^ *AGE_VERSION: //p' .github/workflows/backup.yml)
+AGE_SHA256=$(sed -n 's/^ *AGE_SHA256: //p' .github/workflows/backup.yml)
+curl -fsSL -o /tmp/age.tar.gz "https://github.com/FiloSottile/age/releases/download/$AGE_VERSION/age-$AGE_VERSION-linux-amd64.tar.gz"
+echo "$AGE_SHA256  /tmp/age.tar.gz" | sha256sum -c -
 tar -xzf /tmp/age.tar.gz -C /tmp && sudo install /tmp/age/age /tmp/age/age-keygen /usr/local/bin/
 ```
 
@@ -356,7 +358,7 @@ The heartbeat emails you: right away if a run failed, or after the grace period 
 | `permission denied for table …`                    | A migration added a table `hanker_backup` can't read. Only possible with the explicit-grant fallback: re-run its `GRANT SELECT ON ALL …` lines. |
 | `curl: (22) The requested URL returned error: 403` | The R2 token was revoked, expired or scoped to another bucket. Create a new one and update the two `R2_*_KEY*` secrets.                         |
 | `age: error: …`                                    | `age` refused to encrypt, usually because `AGE_RECIPIENT` isn't a valid `age1…` public key. Set it again from your key pair.                    |
-| `the dump isn't age-encrypted`                     | `age` exited cleanly but wrote no header. That shouldn't happen; check the "Install age" step installed v1.3.2.                                 |
+| `the dump isn't age-encrypted`                     | `age` exited cleanly but wrote no header. That shouldn't happen; check the "Install age" step installed the `AGE_VERSION` it names.             |
 | No run at all                                      | GitHub disables scheduled workflows in a public repository after 60 days without activity. Re-enable it with `gh workflow enable backup.yml`.   |
 
 ### Rotation and upgrades
@@ -369,7 +371,7 @@ The heartbeat emails you: right away if a run failed, or after the grace period 
 
 A backup job that passes proves only that bytes reached R2. The drill proves they come back as the data: that the dump is complete, that `AGE_RECIPIENT` matches the key you kept, and that you can still find and unlock that key (D49). Plan 5a counts as done only once a drill passes against a real nightly dump.
 
-**Needs:** Docker running, `age` v1.3.2 ([Backups](#backups) step 1), `curl`, `jq`, and your identity file and its passphrase.
+**Needs:** Docker running, `age`, the release from [Backups](#backups) step 1, `curl`, `jq`, and your identity file and its passphrase.
 
 **Run the drill:**
 
@@ -870,4 +872,4 @@ R2 has no object versioning, so there's no older state to roll back to. Nothing 
 
 Renovate opens provider bumps; they wait for review because they run next to secrets. Plan a bump locally before merging it, since Renovate's PRs get no CI plan. OpenTofu itself moves by hand: the Quarterly row in [operations.md](operations.md#recurring).
 
-**The Vercel provider isn't signed on OpenTofu's registry** (`tofu init` says signature validation was skipped). Before merging a bump, check its hash by hand: take the signing key from `https://registry.terraform.io/v1/providers/vercel/vercel/<version>/download/linux/amd64` (`signing_keys`), verify the release's `SHA256SUMS.sig` on GitHub with it, and confirm the `linux_amd64` hash is among the lockfile's `zh:` entries. 5.26.1 was checked this way (key `1ADC 8CB0 1C6E 6C19 532E 6EEC 6545 E9CB 7A48 C1FA`).
+**The Vercel provider isn't signed on OpenTofu's registry** (`tofu init` says signature validation was skipped). Before merging a bump, check its hash by hand: take the signing key from `https://registry.terraform.io/v1/providers/vercel/vercel/<version>/download/linux/amd64` (`signing_keys`), verify the release's `SHA256SUMS.sig` on GitHub with it, and confirm the `linux_amd64` hash is among the lockfile's `zh:` entries. The key checked this way was `1ADC 8CB0 1C6E 6C19 532E 6EEC 6545 E9CB 7A48 C1FA`.
