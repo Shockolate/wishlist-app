@@ -22,3 +22,8 @@ overrides:
   # @nestjs/platform-express 12.2.0 (the latest) pins multer 2.4.0 exactly. Hanker takes no
   # uploads, but the API ships it. Drop this once platform-express allows 2.5.0 or later.
   'multer@>=2.0.0 <2.5.0': 2.5.0
+  # GHSA-23hp-3jrh-7fpw (critical) and five more: tar before 7.5.21 can be stalled or crashed by a
+  # crafted archive, and before 7.5.16 it can misread long-name headers. @vercel/container (under the
+  # Vercel CLI, so it never ships) pins tar 7.5.11 exactly, even in its latest release. Drop this once
+  # it allows 7.5.21 or later.
+  'tar@>=7.0.0 <7.5.21': 7.5.22
