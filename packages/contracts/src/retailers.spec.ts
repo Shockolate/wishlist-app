@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import fc from 'fast-check';
 import {
   amazonProductOf,
   amazonProductUrl,
@@ -173,5 +174,93 @@ describe('ebayItemOf (eBay lookups §5.1)', () => {
     expect(retailerOf('https://www.ebay.com/itm/366025273219')).toBe('ebay');
     expect(retailerOf('https://www.etsy.com/listing/1234567890')).toBe('etsy');
     expect(retailerOf('https://www.amazon.com/dp/B08FK7B2SC')).toBe('amazon');
+  });
+});
+
+// Property tests (fast-check): links built from the shops' hosts and path shapes, lookalike hosts
+// and random URLs, to check that only a shop's own host routes to it and that only an ID ever
+// leaves (AGENTS.md, retailer lookups).
+const KNOWN_HOSTS = new Set([
+  'amazon.com',
+  'www.amazon.com',
+  'amzn.to',
+  'a.co',
+  'etsy.com',
+  'www.etsy.com',
+  'etsy.me',
+  'ebay.com',
+  'www.ebay.com',
+]);
+const knownHost = fc.constantFrom(...KNOWN_HOSTS);
+const host = fc.oneof(
+  knownHost,
+  fc.tuple(knownHost, fc.domain()).map(([shop, other]) => `${shop}.${other}`),
+  fc.tuple(fc.domain(), knownHost).map(([other, shop]) => `${other}.${shop}`),
+  fc.tuple(fc.domain(), knownHost).map(([other, shop]) => `${shop}@${other}`),
+  fc.domain(),
+);
+const digits = fc.stringMatching(/^\d{1,20}$/);
+const path = fc.oneof(
+  fc.stringMatching(/^[A-Za-z0-9]{8,12}$/).map((asin) => `/dp/${asin}`),
+  fc.stringMatching(/^[A-Za-z0-9]{8,12}$/).map((asin) => `/x-slug/gp/product/${asin}/ref=1`),
+  fc
+    .tuple(fc.constantFrom('', '/uk', '/en-gb', '/x'), digits)
+    .map(([locale, id]) => `${locale}/listing/${id}/slug`),
+  fc.tuple(fc.constantFrom('', 'slug/'), digits).map(([slug, id]) => `/itm/${slug}${id}`),
+  fc.webPath(),
+);
+const query = fc.oneof(
+  fc.constant(''),
+  digits.map((option) => `?var=${option}`),
+  fc.tuple(digits, digits).map(([a, b]) => `?var=${a}&var=${b}`),
+  fc.webQueryParameters().map((q) => `?${q}`),
+);
+const link = fc.oneof(
+  fc
+    .tuple(fc.constantFrom('https://', 'http://', 'HTTPS://', ''), host, path, query)
+    .map((parts) => parts.join('')),
+  fc.webUrl({ withQueryParameters: true, withFragments: true }),
+  fc.string(),
+);
+const INT64_MAX = 2n ** 63n - 1n;
+/** The runtime's URL parser; this package compiles without DOM or Node types (see retailers.ts). */
+const WhatwgUrl = (globalThis as unknown as { URL: new (input: string) => { hostname: string } })
+  .URL;
+
+describe('retailer link properties', () => {
+  it('never throws, and routes a link only from its shop’s own host', () => {
+    fc.assert(
+      fc.property(link, (url) => {
+        const retailer = retailerOf(url);
+        if (retailer !== null) expect(KNOWN_HOSTS).toContain(new WhatwgUrl(url).hostname);
+      }),
+    );
+  });
+
+  it('takes only an ID of the expected shape from any link', () => {
+    fc.assert(
+      fc.property(link, (url) => {
+        const amazon = amazonProductOf(url);
+        if (amazon) expect(amazon.asin).toMatch(/^[A-Z0-9]{10}$/);
+        const etsy = etsyListingOf(url);
+        if (etsy) {
+          expect(etsy.listingId).toMatch(/^[1-9]\d{0,17}$/);
+          expect(BigInt(etsy.listingId) <= INT64_MAX).toBe(true);
+        }
+        const ebay = ebayItemOf(url);
+        if (ebay) {
+          expect(ebay.itemId).toMatch(/^[1-9]\d{8,14}$/);
+          if (ebay.variationId !== undefined) expect(ebay.variationId).toMatch(/^[1-9]\d{5,14}$/);
+        }
+      }),
+    );
+  });
+
+  it('reads back the ASIN from the product link sent to Bright Data', () => {
+    fc.assert(
+      fc.property(fc.stringMatching(/^[A-Z0-9]{10}$/), (asin) => {
+        expect(amazonProductOf(amazonProductUrl(asin))).toEqual({ asin });
+      }),
+    );
   });
 });

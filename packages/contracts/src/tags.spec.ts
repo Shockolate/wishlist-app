@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import fc from 'fast-check';
 import {
   CreateTagRequestSchema,
   ItemTagsSchema,
@@ -121,6 +122,40 @@ describe('ItemTagsSchema (design §3)', () => {
     );
     expect(ItemTagsSchema.safeParse(Array.from({ length: 11 }, (_, n) => entry(n))).success).toBe(
       false,
+    );
+  });
+});
+
+// Property tests (fast-check): names mixing any UTF-16, the whitespace \s matches, and a `#`.
+const tagInput = fc
+  .array(
+    fc.oneof(
+      fc.string({ unit: 'binary', maxLength: 6 }),
+      fc.constantFrom(' ', '  ', '\t', '\n', ' ', ' ', '　', '﻿', '​', '#'),
+      fc.constantFrom('İ', 'ẞ', 'Σ', 'ǅ', 'ﬀ'),
+    ),
+    { maxLength: 8 },
+  )
+  .map((pieces) => pieces.join(''));
+
+describe('tag name properties', () => {
+  it('cleans to single spaces with no space at either end, and cleaning again changes nothing', () => {
+    fc.assert(
+      fc.property(tagInput, (raw) => {
+        const clean = cleanTagName(raw);
+        expect(clean).not.toMatch(/^\s|\s$|\s{2}|[^\S ]/u);
+        expect(cleanTagName(clean)).toBe(clean);
+      }),
+    );
+  });
+
+  it('keys raw and cleaned spellings alike, and keying a key changes nothing', () => {
+    fc.assert(
+      fc.property(tagInput, (raw) => {
+        const key = tagKey(raw);
+        expect(tagKey(cleanTagName(raw))).toBe(key);
+        expect(tagKey(key)).toBe(key);
+      }),
     );
   });
 });

@@ -50,6 +50,8 @@ Testcontainers looks for Docker at `/var/run/docker.sock` and ignores the Docker
 
 Start Colima with `colima start --cpu 4 --memory 8`, which leaves room for the compose stack and the test containers together (the default VM is 2 CPUs and 2 GiB). Colima mounts your home directory, so the compose file's `./docker/postgres/init` mount works only for a checkout under `$HOME`.
 
+Some unit tests are property tests ([fast-check](https://fast-check.dev/)): a property holds for every input in a generated set, and each run tries new random inputs. A failure prints the shrunk counterexample, a `seed` and a `path`. To replay it, pass them as the property's options for a moment, `fc.assert(property, { seed, path, endOnFailure: true })`, and keep the counterexample as an example test once it's fixed. Don't pin a seed to make a property pass. Fix the code, or fix the generator if the input can't really happen.
+
 ### Refreshing the README screenshots
 
 `docs/images/*.png` come from `e2e/screenshots/readme.spec.ts`, which seeds a made-up list through the API, stubs the link preview and the tag suggestions, and writes the five images. It is not part of CI. Run it the way `scripts/e2e.sh` runs the tests, then look at each image before committing:
