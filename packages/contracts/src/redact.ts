@@ -34,12 +34,17 @@ const EMAIL_TOKEN = new RegExp(
  */
 const EMAIL = new RegExp(unanchored(EMAIL_PATTERN), 'g');
 
+/**
+ * Addresses go first: an address can end right where a token starts (`a@b.co` then a token), or
+ * start a `?token=` value with a quote, and the token rules only see those boundaries once the
+ * address is gone. In this order one pass leaves nothing a second pass would change.
+ */
 export function redactTokens(text: string): string {
   return text
+    .replace(EMAIL, '[email]')
     .replace(PATH_TOKEN, `$1${REDACTED}`)
     .replace(QUERY_TOKEN, `$1${REDACTED}`)
-    .replace(EMAIL_TOKEN, REDACTED)
-    .replace(EMAIL, '[email]');
+    .replace(EMAIL_TOKEN, REDACTED);
 }
 
 /** A copy of `value` with every string, and every object key, passed through redactTokens. */

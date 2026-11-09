@@ -75,6 +75,20 @@ describe('redactTokens', () => {
   });
 });
 
+describe('redactTokens, where an address meets a token (found by the idempotence property)', () => {
+  it('redacts an email token right after an address', () => {
+    // The address ends at its TLD, `Aa`; the 43 characters after it are an email token only once
+    // the address is gone, so addresses are redacted before email tokens.
+    const token = '---_aA_aAA-A_000A__0a_0_a--_0-A-a_0__-_a_a_';
+    expect(token).toMatch(EMAIL_TOKEN_PATTERN);
+    expect(redactTokens(`+@a.Aa${token}`)).toBe('[email][redacted]');
+  });
+
+  it('redacts a query token that starts with a quoted address', () => {
+    expect(redactTokens("?token='a.0@a.Aa")).toBe('?token=[redacted]');
+  });
+});
+
 describe('redactDeep', () => {
   it('redacts strings and keys at any depth, and leaves other values as they are', () => {
     const input = {
@@ -110,6 +124,20 @@ describe('redactDeep', () => {
 const capabilityToken = fc.stringMatching(CAPABILITY_TOKEN_PATTERN);
 const emailToken = fc.stringMatching(EMAIL_TOKEN_PATTERN);
 const emailAddress = fc.stringMatching(EMAIL_PATTERN);
+/** Text built from the pieces redaction looks for, so they meet far more often than at random. */
+const text = fc
+  .array(
+    fc.oneof(
+      capabilityToken,
+      emailToken,
+      emailAddress,
+      fc.constantFrom('/s/', '/c/', '/shared/', '/claims/', '?token=', '&token=', '@', '.', '-'),
+      fc.constantFrom(' ', '/', '#', '"', '[redacted]', '[email]'),
+      fc.string({ maxLength: 8 }),
+    ),
+    { maxLength: 10 },
+  )
+  .map((pieces) => pieces.join(''));
 /** A character no token or address contains, so whatever follows it can't extend one. */
 const stop = fc.constantFrom(' ', '"', "'", '<', '>', '#', '?', '/', ',', '\n');
 /** The end of the text, or a stop and then anything. */
@@ -124,6 +152,15 @@ const head = fc.oneof(
 );
 
 describe('redactTokens properties', () => {
+  it('leaves nothing that a second pass would redact', () => {
+    fc.assert(
+      fc.property(text, (input) => {
+        const once = redactTokens(input);
+        expect(redactTokens(once)).toBe(once);
+      }),
+    );
+  });
+
   it('removes a share or manage token from every route that carries one', () => {
     fc.assert(
       fc.property(
