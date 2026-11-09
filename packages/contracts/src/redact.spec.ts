@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import fc from 'fast-check';
 import { EmailSchema } from './auth.js';
+import { CAPABILITY_TOKEN_PATTERN, EMAIL_PATTERN, EMAIL_TOKEN_PATTERN } from './patterns.js';
 import { redactDeep, redactTokens } from './redact.js';
 
 const CAPABILITY = 'AbCdEfGhIjKlMnOpQrStUv'; // 22 base64url characters
@@ -100,5 +102,59 @@ describe('redactDeep', () => {
     expect(input.path).toBe(`/c/${CAPABILITY}`);
     expect(output.path).toBe('/c/[redacted]');
     expect(output.self).toBe(output);
+  });
+});
+
+// Property tests (fast-check): a token or address planted in arbitrary text, at the boundaries
+// redaction depends on.
+const capabilityToken = fc.stringMatching(CAPABILITY_TOKEN_PATTERN);
+const emailToken = fc.stringMatching(EMAIL_TOKEN_PATTERN);
+const emailAddress = fc.stringMatching(EMAIL_PATTERN);
+/** A character no token or address contains, so whatever follows it can't extend one. */
+const stop = fc.constantFrom(' ', '"', "'", '<', '>', '#', '?', '/', ',', '\n');
+/** The end of the text, or a stop and then anything. */
+const tail = fc.oneof(
+  fc.constant(''),
+  fc.tuple(stop, fc.string()).map(([s, rest]) => s + rest),
+);
+/** The start of the text, or anything and then a stop. */
+const head = fc.oneof(
+  fc.constant(''),
+  fc.tuple(fc.string(), stop).map(([rest, s]) => rest + s),
+);
+
+describe('redactTokens properties', () => {
+  it('removes a share or manage token from every route that carries one', () => {
+    fc.assert(
+      fc.property(
+        fc.string(),
+        fc.constantFrom('s', 'c', 'shared', 'claims'),
+        capabilityToken,
+        tail,
+        (before, route, token, after) => {
+          fc.pre(!before.includes(token) && !after.includes(token));
+          expect(redactTokens(`${before}/${route}/${token}${after}`)).not.toContain(token);
+        },
+      ),
+    );
+  });
+
+  it('removes an email token wherever it stands alone', () => {
+    fc.assert(
+      fc.property(head, emailToken, tail, (before, token, after) => {
+        fc.pre(!before.includes(token) && !after.includes(token));
+        expect(redactTokens(`${before}${token}${after}`)).not.toContain(token);
+      }),
+    );
+  });
+
+  it('removes every address EmailSchema accepts, whatever comes before it', () => {
+    fc.assert(
+      fc.property(fc.string(), emailAddress, tail, (before, address, after) => {
+        fc.pre(EmailSchema.safeParse(address).success);
+        fc.pre(!before.includes(address) && !after.includes(address));
+        expect(redactTokens(`${before}${address}${after}`)).not.toContain(address);
+      }),
+    );
   });
 });
