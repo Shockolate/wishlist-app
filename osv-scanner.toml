@@ -1,0 +1,232 @@
+# Advisories OpenSSF Scorecard (.github/workflows/scorecard.yml) should not count, because they are
+# only in tools that never ship in Hanker. Scorecard reads this file through osv-scanner. CI's audit gate
+# (`pnpm audit --prod --audit-level high`) doesn't, so it still checks production dependencies.
+#
+# Entries match by advisory ID, not by package or path: before adding one, check that `pnpm audit --prod`
+# doesn't report it. Each lapses on its ignoreUntil date, and Scorecard then raises it again. The monthly
+# dev-tooling audit (docs/operations.md) removes the entries that are fixed and renews the rest.
+
+[[IgnoredVulns]]
+id = "GHSA-gxm5-99cw-xjw9" # @fastify/busboy 2.1.1
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-x8mw-p69m-v3mx" # @fastify/busboy 2.1.1
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-2g4f-4pwh-qvx6" # ajv 8.6.3
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-67mh-4wv8-2f99" # esbuild 0.18.20
+ignoreUntil = 2027-02-09
+reason = "esbuild 0.18.20 under drizzle-kit (@esbuild-kit/esm-loader), a development tool that uses esbuild to load its config, never its dev server, which is what the advisory needs. Never ships."
+
+[[IgnoredVulns]]
+id = "GHSA-3g3m-2fjr-6pw4" # glob 10.5.0, 13.0.6
+ignoreUntil = 2027-02-09
+reason = "glob 10 and 13 under testcontainers (integration tests) and the Vercel CLI, globbing this repo’s own paths. Never ships. The fix is glob 14."
+
+[[IgnoredVulns]]
+id = "GHSA-2883-xcg3-v3hh" # js-yaml 4.1.1
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-52cp-r559-cp3m" # js-yaml 4.1.1
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-5p4m-2wfm-xmqj" # js-yaml 4.1.1
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-h67p-54hq-rp68" # js-yaml 4.1.1
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-23c5-xmqv-rm74" # minimatch 10.1.1
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-3ppc-4f35-3m26" # minimatch 10.1.1
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-7r86-cg39-jmmj" # minimatch 10.1.1
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-g3hv-75wg-m249" # minimatch 10.1.1, 10.2.6, 9.0.9
+ignoreUntil = 2027-02-09
+reason = "minimatch 9 and 10 under typescript-eslint, eslint-config-next, testcontainers and the Vercel CLI: lint, test and deploy tools matching this repo’s own patterns. Never ships. The fix is minimatch 11, and typescript-eslint 8.72.1, the latest, still needs ^10.2.2."
+
+[[IgnoredVulns]]
+id = "GHSA-27v5-c462-wpq7" # path-to-regexp 8.3.0
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-9wv6-86v2-598j" # path-to-regexp 6.1.0
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-j3q9-mxjg-w52f" # path-to-regexp 8.3.0
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-fm4j-4xhm-xpwx" # sandbox 4.11.1
+ignoreUntil = 2027-02-09
+reason = "False positive. The advisory is for gf3/sandbox (0.x and the 2.0.0 alphas). Releases 1.0.0 and 2.0.0 onward are Vercel’s Sandbox CLI, different code, and it is only under the Vercel CLI."
+
+[[IgnoredVulns]]
+id = "GHSA-gc25-3vc5-2jf9" # sandbox 4.11.1
+ignoreUntil = 2027-02-09
+reason = "False positive. The advisory is for gf3/sandbox (0.x and the 2.0.0 alphas). Releases 1.0.0 and 2.0.0 onward are Vercel’s Sandbox CLI, different code, and it is only under the Vercel CLI."
+
+[[IgnoredVulns]]
+id = "GHSA-7w5x-hrqm-74c2" # smol-toml 1.5.2
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-r4xh-jqrq-34v2" # smol-toml 1.5.2
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-v3rj-xjv7-4jmq" # smol-toml 1.5.2
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-2m5v-pch6-74hx" # undici 5.28.4, 5.29.0, 6.29.0, 7.30.0
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-2mjp-6q6p-2qxm" # undici 5.28.4, 5.29.0
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-35p6-xmwp-9g52" # undici 5.28.4, 5.29.0
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-4992-7rv2-5pvq" # undici 5.28.4, 5.29.0
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-4qv8-2p9j-2685" # undici 6.29.0, 7.30.0
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-4w7w-5xrc-9h26" # undici 7.30.0
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-55wc-3pg8-jfw6" # undici 7.30.0
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-8xcm-r25x-g524" # undici 5.28.4, 5.29.0
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-9fm3-97px-rjf6" # undici 5.28.4, 5.29.0, 6.29.0, 7.30.0
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-c76h-2ccp-4975" # undici 5.28.4
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-cxrh-j4jr-qwg3" # undici 5.28.4
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-f72v-6w45-q472" # undici 7.30.0
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-g8m3-5g58-fq7m" # undici 5.28.4, 5.29.0
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-g9mf-h72j-4rw9" # undici 5.28.4, 5.29.0
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-m8rv-5g2x-5cg5" # undici 5.28.4, 5.29.0
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-p88m-4jfj-68fv" # undici 5.28.4, 5.29.0
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-qrxm-fqhp-jwvm" # undici 5.28.4, 5.29.0, 6.29.0, 7.30.0
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-r53p-7pc4-xj5r" # undici 5.28.4, 5.29.0
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-v3r7-h72x-cjcm" # undici 5.28.4, 5.29.0
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-v9p9-hfj2-hcw8" # undici 5.28.4, 5.29.0
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-vrm6-8vpv-qv8q" # undici 5.28.4, 5.29.0
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-vxpw-j846-p89q" # undici 5.28.4, 5.29.0
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-xjj6-f33q-929c" # undici 6.29.0, 7.30.0
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
+
+[[IgnoredVulns]]
+id = "GHSA-mrhx-c7xc-m3w5" # zod 3.22.4
+ignoreUntil = 2027-02-09
+reason = "Only under the Vercel CLI (tools/vercel-cli, a devDependency), which deploys Hanker and never ships in it. It runs in deploy jobs on this repo’s own files, with --ignore-scripts (D85). vercel 65.12.1, the latest, still pins this version."
