@@ -89,6 +89,36 @@ describe('redactTokens, where an address meets a token (found by the idempotence
   });
 });
 
+describe('redactTokens on long text', () => {
+  // Every Sentry event's strings pass through here, so no input may make it slow. A quadratic scan
+  // takes seconds on 50,000 characters; a linear one, tens of milliseconds.
+  const LENGTH = 50_000;
+  const fill = (unit: string) => unit.repeat(Math.ceil(LENGTH / unit.length)).slice(0, LENGTH);
+  it.each([
+    ['letters', fill('a')],
+    ['letters and dots', fill('a.')],
+    ['letters and dashes', fill('a-')],
+    ['a long run, then @', `${fill('a')}@`],
+    ['@, then a long domain', `a@${fill('a-')}`],
+    ['many @ far apart', fill(`${'a'.repeat(300)}@`)],
+  ])('takes linear time on %s', (_, text) => {
+    const start = Date.now();
+    redactTokens(text);
+    expect(Date.now() - start).toBeLessThan(1000);
+  });
+
+  it('still redacts the longest address EmailSchema accepts whole', () => {
+    const address = `${'a'.repeat(242)}@example.com`;
+    expect(address).toHaveLength(254);
+    expect(EmailSchema.safeParse(address).success).toBe(true);
+    expect(redactTokens(`<${address}>`)).toBe('<[email]>');
+  });
+
+  it('redacts only the last 254 characters of a longer run before an @', () => {
+    expect(redactTokens(`${'a'.repeat(300)}@example.com`)).toBe(`${'a'.repeat(46)}[email]`);
+  });
+});
+
 describe('redactDeep', () => {
   it('redacts strings and keys at any depth, and leaves other values as they are', () => {
     const input = {
