@@ -1,28 +1,28 @@
 import { z } from 'zod';
+import { maxUnits, minUnits } from './lengths.js';
 import { EMAIL_TOKEN_PATTERN } from './patterns.js';
 import { VISIBLE_ONLY_MESSAGE, visibleOnly } from './text.js';
 
 /** Emails are stored and compared lowercased (spec §4). 254 characters is the longest valid address. */
-export const EmailSchema = z.string().trim().toLowerCase().max(254).pipe(z.email());
+export const EmailSchema = z.string().trim().toLowerCase().check(maxUnits(254)).pipe(z.email());
 
 /** Spec §6.4. The upper cap stops oversized inputs being used to burn hashing CPU. */
-export const PasswordSchema = z.string().min(10).max(128);
+export const PasswordSchema = z.string().check(minUnits(10), maxUnits(128));
 
 /** For checking a password someone already has: never reveal the policy, but still cap the cost. */
-const ExistingPasswordSchema = z.string().min(1).max(128);
+const ExistingPasswordSchema = z.string().check(minUnits(1), maxUnits(128));
 
 /** Visible characters only; see `visibleOnly`. */
 export const DisplayNameSchema = z
   .string()
   .trim()
-  .min(1)
-  .max(50)
+  .check(minUnits(1), maxUnits(50))
   .refine(visibleOnly, VISIBLE_ONLY_MESSAGE);
 
 /** An email-link token; see EMAIL_TOKEN_PATTERN. */
 export const EmailTokenSchema = z.string().regex(EMAIL_TOKEN_PATTERN, 'Invalid token');
 
-const TurnstileTokenSchema = z.string().min(1).max(2048);
+const TurnstileTokenSchema = z.string().check(minUnits(1), maxUnits(2048));
 
 export const SignupRequestSchema = z.object({
   email: EmailSchema,

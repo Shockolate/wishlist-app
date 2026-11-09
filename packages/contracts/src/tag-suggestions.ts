@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { maxUnits } from './lengths.js';
 import { ItemTagRefSchema, MAX_TAGS_PER_ITEM } from './tags.js';
 import { ItemTitleSchema, NoteSchema } from './wishlist.js';
 
@@ -15,8 +16,8 @@ export const DESCRIPTION_MAX = 1000;
 export const TagSuggestionsRequestSchema = z.object({
   title: ItemTitleSchema,
   note: NoteSchema.optional(),
-  url: z.string().max(2048).optional(),
-  description: z.string().max(DESCRIPTION_MAX).optional(),
+  url: z.string().check(maxUnits(2048)).optional(),
+  description: z.string().check(maxUnits(DESCRIPTION_MAX)).optional(),
   tagIds: z.array(z.uuid()).max(MAX_TAGS_PER_ITEM).optional(),
 });
 export type TagSuggestionsRequest = z.infer<typeof TagSuggestionsRequestSchema>;

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { maxUnits, minUnits } from './lengths.js';
 import { ItemTagsSchema, TagSchema } from './tags.js';
 import { VISIBLE_ONLY_MESSAGE, visibleOnly } from './text.js';
 
@@ -9,8 +10,7 @@ export const MAX_ITEMS = 200;
 export const WishlistTitleSchema = z
   .string()
   .trim()
-  .min(1)
-  .max(100)
+  .check(minUnits(1), maxUnits(100))
   .refine(visibleOnly, VISIBLE_ONLY_MESSAGE);
 
 /** The title sign-up gives a new list (spec §2). Any valid display name makes a valid title. */
@@ -21,8 +21,7 @@ export function defaultWishlistTitle(displayName: string): string {
 export const ItemTitleSchema = z
   .string()
   .trim()
-  .min(1)
-  .max(200)
+  .check(minUnits(1), maxUnits(200))
   .refine(visibleOnly, VISIBLE_ONLY_MESSAGE);
 export const QuantitySchema = z.number().int().min(1).max(99);
 
@@ -47,7 +46,7 @@ function link(protocol: RegExp, message: string) {
     z
       .string()
       .trim()
-      .max(2048)
+      .check(maxUnits(2048))
       // First, and aborting: `new URL()` percent-encodes a NUL in the path, so the URL check alone
       // accepts it while the raw string is what gets stored.
       .refine(hasNoNul, { message: NUL_MESSAGE, abort: true })
@@ -67,14 +66,14 @@ export const ImageUrlSchema = link(/^https$/, 'Enter an image link that starts w
 export const PriceTextSchema = z
   .string()
   .trim()
-  .max(50)
+  .check(maxUnits(50))
   .refine(visibleOnly, VISIBLE_ONLY_MESSAGE)
   .nullable()
   .transform(blankToNull);
 export const NoteSchema = z
   .string()
   .trim()
-  .max(1000)
+  .check(maxUnits(1000))
   .refine(hasNoNul, NUL_MESSAGE)
   .nullable()
   .transform(blankToNull);
@@ -222,7 +221,9 @@ export const UNFURL_FAILURE_REASONS = [
 export const UnfurlFailureReasonSchema = z.enum(UNFURL_FAILURE_REASONS);
 export type UnfurlFailureReason = z.infer<typeof UnfurlFailureReasonSchema>;
 
-export const UnfurlRequestSchema = z.object({ url: z.string().trim().min(1).max(2048) });
+export const UnfurlRequestSchema = z.object({
+  url: z.string().trim().check(minUnits(1), maxUnits(2048)),
+});
 export type UnfurlRequest = z.infer<typeof UnfurlRequestSchema>;
 
 /** A prefill only: nothing is saved (spec §5). Always 200; a failure carries its reason. */
