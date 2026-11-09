@@ -29,6 +29,11 @@
       "groupName": "playwright"
     },
     {
+      "description": "MCR tags carry no release timestamp, so under the default timestamp-required minimumReleaseAge always holds the image, and a group with a ready update drops held ones: the group shipped @playwright/test alone (#253, #371). The image skips the age check; @playwright/test keeps it and Rule 13 blocks merging either half alone",
+      "matchPackageNames": ["mcr.microsoft.com/playwright"],
+      "minimumReleaseAgeBehaviour": "timestamp-optional"
+    },
+    {
       "description": "Node is 26, Vercel's runtime (AGENTS.md). Pinning engines would set it to the newest Node, and .nvmrc keeps the major only, so both change by hand (quarterly in docs/operations.md)",
       "matchDepTypes": ["engines"],
       "enabled": false
