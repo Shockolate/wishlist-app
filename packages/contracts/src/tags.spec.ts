@@ -158,4 +158,18 @@ describe('tag name properties', () => {
       }),
     );
   });
+
+  it('accepts a name it has already accepted, unchanged, so a saved name always saves again', () => {
+    fc.assert(
+      fc.property(tagInput, (raw) => {
+        const parsed = TagNameSchema.safeParse(raw);
+        fc.pre(parsed.success);
+        const name = parsed.data ?? '';
+        expect(name).toBe(cleanTagName(raw));
+        expect(name.length).toBeGreaterThanOrEqual(1);
+        expect(name.length).toBeLessThanOrEqual(30);
+        expect(TagNameSchema.parse(name)).toBe(name);
+      }),
+    );
+  });
 });

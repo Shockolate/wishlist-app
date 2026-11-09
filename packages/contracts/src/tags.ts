@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { maxUnits, minUnits } from './lengths.js';
 import { VISIBLE_ONLY_MESSAGE, visibleOnly } from './text.js';
 
 /** An item carries at most this many tags (design §3). */
@@ -32,7 +33,7 @@ export function tagKey(raw: string): string {
 export const TagNameSchema = z
   .string()
   .transform(cleanTagName)
-  .pipe(z.string().min(1).max(30).refine(visibleOnly, VISIBLE_ONLY_MESSAGE));
+  .pipe(z.string().check(minUnits(1), maxUnits(30)).refine(visibleOnly, VISIBLE_ONLY_MESSAGE));
 
 /** A tag as the owner and the list's gifters see it (design §5). */
 export const TagSchema = z.object({ id: z.uuid(), name: z.string() });
