@@ -31,8 +31,12 @@ const EMAIL_TOKEN = new RegExp(
  * An email address, as z.email() (EmailSchema) accepts one. Its domain ends in letters, so pnpm's
  * `@sentry+node@11.8.0/…` paths in stack traces are left alone. There's no boundary before it: a
  * run that isn't a valid address as a whole still gets its valid tail redacted.
+ *
+ * The lookahead lets a match start only within 254 characters of an `@`, EmailSchema's longest
+ * address, so every address it accepts is still matched whole. Without it, each start in a long
+ * run with no `@` scans to the run's end, which is quadratic: seconds on 50,000 characters.
  */
-const EMAIL = new RegExp(unanchored(EMAIL_PATTERN), 'g');
+const EMAIL = new RegExp(`(?=[A-Za-z0-9_'+.\\-]{1,254}@)${unanchored(EMAIL_PATTERN)}`, 'g');
 
 /**
  * Addresses go first: an address can end right where a token starts (`a@b.co` then a token), or
