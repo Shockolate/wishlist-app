@@ -26,4 +26,4 @@ overrides:
   # crafted archive, and before 7.5.16 it can misread long-name headers. @vercel/container (under the
   # Vercel CLI, so it never ships) pins tar 7.5.11 exactly, even in its latest release. Drop this once
   # it allows 7.5.21 or later.
-  'tar@>=7.0.0 <7.5.21': 7.5.22
+  'tar@>=7.0.0 <7.5.21': 7.5.23
