@@ -344,3 +344,64 @@ test('Cancel puts the text back in the box', async ({ page, baseURL }) => {
   await expect(box).toHaveValue('https://hanker-e2e.invalid/kettle');
   await expect(box).toBeFocused();
 });
+
+/** Pastes `text` into the focused field through the clipboard, as the owner would. */
+async function paste(page: Page, text: string) {
+  await page.evaluate(
+    (value) =>
+      (
+        globalThis as unknown as {
+          navigator: { clipboard: { writeText(text: string): Promise<void> } };
+        }
+      ).navigator.clipboard.writeText(value),
+    text,
+  );
+  await page.keyboard.press('ControlOrMeta+V');
+}
+
+test('a pasted link loses its tracking, and keeps its variant (D118)', async ({
+  page,
+  baseURL,
+}) => {
+  const base = baseURL ?? '';
+  await verifiedOwner(page, base, 'clean-box');
+  const unfurled: string[] = [];
+  await page.route('**/api/wishlist/unfurl', async (route) => {
+    unfurled.push((route.request().postDataJSON() as { url: string }).url);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ title: 'Blue mug' }),
+    });
+  });
+  await page.goto('/list');
+  await addThroughTheBox(page, 'https://hanker-e2e.invalid/mug?variant=4&utm_source=ig&fbclid=1');
+  const clean = 'https://hanker-e2e.invalid/mug?variant=4';
+  await expect(page.getByLabel('Link', { exact: true })).toHaveValue(clean);
+  expect(unfurled).toEqual([clean]);
+  await page.getByRole('button', { name: 'Add to list' }).click();
+  await expect(status(page, 'Added “Blue mug”.')).toBeVisible();
+  const { items } = (await (await page.request.get('/api/wishlist')).json()) as {
+    items: { url: string | null }[];
+  };
+  expect(items[0]?.url).toBe(clean);
+});
+
+test('a link pasted into the add form’s Link field is cleaned (D118)', async ({
+  context,
+  page,
+  baseURL,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await verifiedOwner(page, baseURL ?? '', 'clean-form');
+  await page.route('**/api/wishlist/unfurl', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }),
+  );
+  await page.goto('/list');
+  await addThroughTheBox(page, 'Mug');
+  await page.getByLabel('Link', { exact: true }).focus();
+  await paste(page, 'https://hanker-e2e.invalid/mug?utm_campaign=x');
+  await expect(page.getByLabel('Link', { exact: true })).toHaveValue(
+    'https://hanker-e2e.invalid/mug',
+  );
+});

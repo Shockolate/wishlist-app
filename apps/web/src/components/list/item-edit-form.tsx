@@ -16,7 +16,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { formValuesOf } from '@/lib/add-input';
+import { formValuesOf, pastedLink } from '@/lib/add-input';
 import { formErrorMap } from '@/lib/form-errors';
 import { hasCode } from '@/lib/messages';
 import { itemBody, liveTags } from '@/lib/tag-input';
@@ -57,6 +57,13 @@ export function ItemEditForm({
   const suggestions = useTagSuggestions(form, {});
   const { isDirty } = form.formState;
   const { setFocus } = form;
+
+  // A pasted link loses its tracking (D118); it is never read here (D117), and typing is left alone.
+  function onLinkInput(value: string, pasted: boolean) {
+    const link = pasted ? pastedLink(value) : null;
+    if (link && link.url !== value) form.setValue('url', link.url, { shouldDirty: true });
+  }
+
   // Set when Delete is confirmed, so closing the dialog moves focus on instead of back to Delete.
   const deleting = useRef(false);
 
@@ -109,6 +116,7 @@ export function ItemEditForm({
         idPrefix={`edit-${item.id}`}
         tagBox={tagBox}
         suggestions={suggestions}
+        onLinkInput={onLinkInput}
       />
       <div className="flex flex-wrap items-center gap-2">
         <AlertDialog>

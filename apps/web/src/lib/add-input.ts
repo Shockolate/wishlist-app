@@ -1,4 +1,4 @@
-import type { Item, ItemTagRef, UnfurlResponse } from '@wishlist/contracts';
+import { cleanLink, type Item, type ItemTagRef, type UnfurlResponse } from '@wishlist/contracts';
 
 /** What the add box was given (spec §7 Owner editor, Plan 3b rule 5). */
 export type AddInput =
@@ -12,6 +12,7 @@ const HTTP_LINK = /https?:\/\/\S+/i;
 const SHOP_ADDRESS = /^(?:[a-z\d-]+\.)+[a-z]{2,}(?::\d{1,5})?(?:[/?#]\S*)?$/i;
 const OTHER_SCHEME = /^(?!https?:)[a-z][a-z\d+.-]*:\/\//i;
 
+/** A link found in the text is returned without its tracking parameters (D118). */
 export function classifyAddInput(raw: string): AddInput {
   const text = raw.trim();
   if (!text) return { kind: 'empty' };
@@ -21,11 +22,11 @@ export function classifyAddInput(raw: string): AddInput {
     const rest = `${text.slice(0, link.index)} ${text.slice(link.index + link[0].length)}`
       .replace(/\s+/g, ' ')
       .trim();
-    return { kind: 'link', url: link[0], titleHint: rest || null };
+    return { kind: 'link', url: cleanLink(link[0]), titleHint: rest || null };
   }
   const oneToken = !/\s/.test(text);
   if (oneToken && SHOP_ADDRESS.test(text)) {
-    return { kind: 'link', url: `https://${text}`, titleHint: null };
+    return { kind: 'link', url: cleanLink(`https://${text}`), titleHint: null };
   }
   if (oneToken && OTHER_SCHEME.test(text)) return { kind: 'other-scheme' };
   return { kind: 'idea', title: text };

@@ -213,3 +213,40 @@ test('Cancel waits while a save is in flight', async ({ page, baseURL }) => {
   release();
   await expect(status(page, 'Saved “Kettle, blue”.')).toBeVisible();
 });
+
+test('a link pasted into the edit form is cleaned, and a typed one isn’t (D118)', async ({
+  context,
+  page,
+  baseURL,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const base = baseURL ?? '';
+  await verifiedOwner(page, base, 'clean-edit');
+  await addItemViaApi(page.request, base, { title: 'Mug', url: 'https://hanker-e2e.invalid/mug' });
+  await page.goto('/list');
+  await titleButton(page, 'Mug').click();
+  const link = rowsOf(page).first().getByLabel('Link', { exact: true });
+  await link.fill('');
+  await link.focus();
+  await page.evaluate(
+    (value) =>
+      (
+        globalThis as unknown as {
+          navigator: { clipboard: { writeText(text: string): Promise<void> } };
+        }
+      ).navigator.clipboard.writeText(value),
+    'https://hanker-e2e.invalid/mug?size=l&gclid=9',
+  );
+  await page.keyboard.press('ControlOrMeta+V');
+  await expect(link).toHaveValue('https://hanker-e2e.invalid/mug?size=l');
+
+  const typed = 'https://hanker-e2e.invalid/mug?utm_source=me';
+  await link.fill(typed);
+  await rowsOf(page).first().getByRole('button', { name: 'Save' }).click();
+  await expect(status(page, 'Saved “Mug”.')).toBeVisible();
+  await page.reload();
+  const { items } = (await (await page.request.get('/api/wishlist')).json()) as {
+    items: { url: string | null }[];
+  };
+  expect(items[0]?.url).toBe(typed);
+});

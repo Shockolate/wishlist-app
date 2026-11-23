@@ -1,6 +1,13 @@
 import type { Item } from '@wishlist/contracts';
 import { describe, expect, it } from 'vitest';
-import { classifyAddInput, fillEmpty, formValuesOf, pastedLink, prefill } from './add-input';
+import {
+  classifyAddInput,
+  fillEmpty,
+  formValuesOf,
+  LINK_MAX,
+  pastedLink,
+  prefill,
+} from './add-input';
 
 describe('classifyAddInput (Plan 3b rule 5)', () => {
   it('asks for something when the box is empty', () => {
@@ -171,5 +178,34 @@ describe('fillEmpty (D117)', () => {
   it('fills nothing from a failed read', () => {
     expect(fillEmpty(empty, { failureReason: 'NO_METADATA' }, null)).toEqual({});
     expect(fillEmpty(empty, null, null)).toEqual({});
+  });
+});
+
+describe('cleaning (D118)', () => {
+  it('cleans the link the add box reads', () => {
+    expect(classifyAddInput('https://shop.example/mug?variant=4&utm_source=ig')).toEqual({
+      kind: 'link',
+      url: 'https://shop.example/mug?variant=4',
+      titleHint: null,
+    });
+  });
+
+  it('cleans the link in text a phone app shared, keeping the title hint', () => {
+    expect(classifyAddInput('Mug https://shop.example/mug?fbclid=1')).toEqual({
+      kind: 'link',
+      url: 'https://shop.example/mug',
+      titleHint: 'Mug',
+    });
+  });
+
+  it('cleans a bare shop address', () => {
+    expect(classifyAddInput('shop.example/mug?utm_id=1')).toMatchObject({
+      url: 'https://shop.example/mug',
+    });
+  });
+
+  it('checks the length of the cleaned link (Review Focus 4)', () => {
+    const link = `https://shop.example/mug?utm_content=${'x'.repeat(LINK_MAX)}`;
+    expect(pastedLink(link)).toEqual({ url: 'https://shop.example/mug', titleHint: null });
   });
 });
