@@ -48,7 +48,7 @@
 | --- | --- | --- | --- | --- |
 | Global | any | `fbclid`, `gclid`, `gbraid`, `wbraid`, `dclid`, `msclkid`, `yclid`, `twclid`, `ttclid`, `li_fat_id`, `mc_cid`, `mc_eid`, `_hsenc`, `_hsmi`, `mkt_tok`, `igshid`, `igsh`, `_ga`, `_gl` | `utm_` | none |
 | Share IDs | `youtube.com`, `www.youtube.com`, `m.youtube.com`, `music.youtube.com`, `youtu.be`, `open.spotify.com` | `si` | none | none |
-| Amazon | `AMAZON_HOSTS` | `ref`, `ref_`, `tag`, `ascsubtag`, `linkcode`, `linkid`, `creative`, `creativeasin`, `camp`, `content-id`, `qid`, `sr`, `sprefix`, `crid`, `keywords`, `dib`, `dib_tag`, `social_share`, `starsleft`, `spia`, `sp_csd` | `pd_rd_`, `pf_rd_` | remove each `/ref=[^/?#]*` path segment |
+| Amazon | `AMAZON_HOSTS` | `ref`, `ref_`, `tag`, `ascsubtag`, `linkcode`, `linkid`, `creative`, `creativeasin`, `camp`, `content-id`, `qid`, `sr`, `sprefix`, `crid`, `dib`, `dib_tag`, `social_share`, `starsleft`, `spia`, `sp_csd` | `pd_rd_`, `pf_rd_` | remove each `/ref=[^/?#]*` path segment |
 | eBay | `EBAY_HOSTS` | `_trkparms`, `_trksid`, `_from`, `mkevt`, `mkcid`, `mkrid`, `campid`, `toolid`, `customid` | none | none |
 | Etsy | `ETSY_HOSTS` | `click_key`, `click_sum`, `organic_search_click`, `ref`, `pro`, `frs`, `sts`, `sr_prefetch`, `pf_from` | `ga_` | none |
 

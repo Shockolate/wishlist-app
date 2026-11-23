@@ -16,12 +16,25 @@ describe('cleanLink (D118)', () => {
     expect(cleanLink('https://shop.example/x?si=2')).toBe('https://shop.example/x?si=2');
   });
 
-  it('cleans an Amazon product link, keeping the variant and seller', () => {
+  it('cleans an Amazon product link, keeping the variant, seller and search terms', () => {
     expect(
       cleanLink(
         'https://www.amazon.com/Stagg-Kettle/dp/B08FK7B2SC/ref=sr_1_3?crid=2X&keywords=kettle&qid=17&sr=8-3&th=1&psc=1&smid=A1&tag=someone-20&pd_rd_w=Q&pf_rd_p=Z',
       ),
-    ).toBe('https://www.amazon.com/Stagg-Kettle/dp/B08FK7B2SC?th=1&psc=1&smid=A1');
+    ).toBe('https://www.amazon.com/Stagg-Kettle/dp/B08FK7B2SC?keywords=kettle&th=1&psc=1&smid=A1');
+  });
+
+  it.each([
+    [
+      'https://www.amazon.com/s?keywords=lego+castle&tag=a-20',
+      'https://www.amazon.com/s?keywords=lego+castle',
+    ],
+    [
+      'https://www.amazon.com/gp/search?ie=UTF8&tag=x-20&linkCode=ur2&camp=1789&creative=9325&index=toys-and-games&keywords=lego',
+      'https://www.amazon.com/gp/search?ie=UTF8&index=toys-and-games&keywords=lego',
+    ],
+  ])('keeps an Amazon search’s terms: %s', (input, expected) => {
+    expect(cleanLink(input)).toBe(expected);
   });
 
   it('cleans an eBay item link, keeping var and hash', () => {

@@ -50,7 +50,8 @@ const SHARE_ID: Rules = { names: ['si'], prefixes: [] };
 
 /**
  * Amazon's search, placement and affiliate tags. Kept on purpose: `th` and `psc` (the chosen
- * variant) and `smid` (the seller whose offer was chosen).
+ * variant), `smid` (the seller whose offer was chosen) and `keywords`, which on a search link
+ * (`/s`, `/gp/search`) is the search itself.
  */
 const AMAZON: Rules = {
   names: [
@@ -68,7 +69,6 @@ const AMAZON: Rules = {
     'sr', // search result position
     'sprefix', // search box prefix
     'crid', // search session
-    'keywords', // search terms
     'dib', // search session blob
     'dib_tag',
     'social_share',
