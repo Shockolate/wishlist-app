@@ -1,6 +1,6 @@
 # Clean pasted links (D118)
 
-A short design. Status: draft for Ted's approval, 2026-11-22.
+A short design. Status: approved by Ted, 2026-11-22.
 
 ## Why
 
@@ -61,8 +61,10 @@ Ted chose approach 1 with ClearURLs as a reference: we read its global, Amazon, 
 - `add-input.spec.ts`: the add box and pasted shared text come out cleaned.
 - E2E: paste a tracking-laden link into the add box, then check that the Link field and the saved item show the cleaned link.
 
-## Left to the builder
+## Settled while building
 
-- Final parameter lists, confirmed against ClearURLs and each site's own links. The rule for adding a name: we can show that it's tracking, not just that it looks like tracking.
-- Which hosts `si` is removed on (Spotify and YouTube share IDs). If in doubt, leave it out.
-- The D118 row in the main spec's decision table, and the note on the retailer lookups spec's affiliate non-goal.
+- The final lists are in `packages/contracts/src/links.ts`, each name with why it is tracking.
+- `si` is removed only on `youtube.com`, `www.youtube.com`, `m.youtube.com`, `music.youtube.com`, `youtu.be` and `open.spotify.com`.
+- Amazon, eBay and Etsy rules apply only to the hosts `retailers.ts` routes (`amazon.com`, `ebay.com`, `etsy.com` and their `www.`). Other Amazon countries get only the global rules, so their `tag=` stays.
+- The add box cleans what it is given whether typed or pasted, since it reads links through `classifyAddInput`. Typing in either Link field is never cleaned.
+- `/privacy` is unchanged: it describes what leaves Hanker, and cleaning only reduces that.
