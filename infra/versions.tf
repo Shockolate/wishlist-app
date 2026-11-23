@@ -18,7 +18,7 @@ terraform {
     }
     vercel = {
       source  = "vercel/vercel"
-      version = "5.26.1"
+      version = "5.27.0"
     }
   }
 }
