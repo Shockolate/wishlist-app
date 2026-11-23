@@ -49,7 +49,10 @@ export function ItemFields({
   tagBox?: Ref<TagBox>;
   /** Suggested tags for the "Suggested:" row, and the title field's blur that asks again. */
   suggestions?: TagSuggestions;
-  /** Each change to the Link field, and whether it was a paste. Only the add form reads links (D117). */
+  /**
+   * Each change to the Link field, and whether it was a paste. Both forms clean a pasted link (D118);
+   * only the add form reads links (D117).
+   */
   onLinkInput?: (value: string, pasted: boolean) => void;
   /** Shown under the Link field, such as the Amazon wait while a pasted link is read. */
   afterLink?: ReactNode;
