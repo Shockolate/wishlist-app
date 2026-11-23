@@ -36,7 +36,7 @@ Hanker can't fix this by fetching the page harder. D34 forbids impersonating a b
 - Amazon or Etsy links that aren't a single product, such as search results, shop pages or storefronts. They keep today's page fetch.
 - Refreshing prices or availability after an item is saved. D9's "no price refresh" stands.
 - Paying for lookups. No money is kept on deposit with Bright Data.
-- Affiliate links. Saved links are the ones the owner pasted.
+- Affiliate links. Saved links are the ones the owner pasted. *(Since D118, 2026-11-22, a pasted link's affiliate and tracking parameters are removed before it is saved; see [clean pasted links](2026-11-22-clean-pasted-links-design.md).)*
 - Any other retailer. *(eBay was added on 2026-10-31; see [eBay lookups](2026-10-31-ebay-lookups-design.md).)*
 
 ### Anti-goals
