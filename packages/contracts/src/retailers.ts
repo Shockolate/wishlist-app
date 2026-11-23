@@ -1,15 +1,17 @@
+import { AMAZON_HOSTS, EBAY_HOSTS, ETSY_HOSTS, parse, type UrlLike } from './url.js';
+
+export type { UrlLike } from './url.js';
+
 /**
  * Shops whose links are looked up through a service instead of fetched (retailer lookups design
  * §5.1). The web uses this to choose the waiting state; the API uses it to route the lookup.
  */
 export type Retailer = 'amazon' | 'etsy' | 'ebay';
 
-const AMAZON_HOSTS = new Set(['amazon.com', 'www.amazon.com']);
 const AMAZON_SHORT_HOSTS = new Set(['amzn.to', 'a.co']);
 /** An ASIN after /dp/ or /gp/product/, anywhere in the path: slugs and language prefixes come first. */
 const ASIN_IN_PATH = /\/(?:dp|gp\/product)\/([A-Z0-9]{10})(?:[/?]|$)/i;
 
-const ETSY_HOSTS = new Set(['etsy.com', 'www.etsy.com']);
 const ETSY_SHORT_HOST = 'etsy.me';
 /**
  * `/listing/<id>` at the path's start, after at most one locale segment (`/uk/`, `/en-gb/`). The ID
@@ -17,7 +19,6 @@ const ETSY_SHORT_HOST = 'etsy.me';
  */
 const LISTING_IN_PATH = /^(?:\/[a-z]{2}(?:-[a-z]{2})?)?\/listing\/([1-9]\d{0,17})(?:\/|$)/i;
 
-const EBAY_HOSTS = new Set(['ebay.com', 'www.ebay.com']);
 /**
  * `/itm/<number>` at the path's start, with an optional slug between. The number is positive and 9
  * to 15 digits, so it always fits eBay's 64-bit item numbers (eBay lookups §5.1).
@@ -25,28 +26,6 @@ const EBAY_HOSTS = new Set(['ebay.com', 'www.ebay.com']);
 const ITEM_IN_PATH = /^\/itm\/(?:[^/]+\/)?([1-9]\d{8,14})(?:\/|$)/;
 /** The `?var=` option number: positive, 6 to 15 digits. */
 const OPTION_NUMBER = /^[1-9]\d{5,14}$/;
-
-/** A URL string, or anything that carries one, such as a `URL`. */
-export type UrlLike = string | { readonly href: string };
-
-interface ParsedUrl {
-  readonly hostname: string;
-  readonly pathname: string;
-  readonly searchParams: { getAll(name: string): string[] };
-}
-/**
- * The runtime's WHATWG URL parser, so a host is read exactly as the browser and Node read it. This
- * package compiles without DOM or Node types (see `wishlist.ts`), so it names only what it uses.
- */
-const WhatwgUrl = (globalThis as unknown as { URL: new (input: string) => ParsedUrl }).URL;
-
-function parse(url: UrlLike): ParsedUrl | null {
-  try {
-    return new WhatwgUrl(typeof url === 'string' ? url : url.href);
-  } catch {
-    return null;
-  }
-}
 
 /** The ASIN of an amazon.com product link, or null for any other link. Never throws. */
 export function amazonProductOf(url: UrlLike): { asin: string } | null {
